@@ -306,3 +306,193 @@ The tools export to glTF 2.0 format with MSFS-specific extensions:
 - Animation tags via `MSFS_animation_tags`
 
 All custom properties are preserved during glTF export and recognized by MSFS import tools.
+
+---
+
+## Aircraft Livery Tools
+
+The MCP Blender server includes comprehensive tools for creating and transferring aircraft liveries for virtual airlines.
+
+### Painting Workflow
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_livery_setup_paint_mode` | Set up object for texture painting |
+| `blender_msfs_livery_create_paint_layers` | Create paint layers (primer, base, cheatline, etc.) |
+| `blender_msfs_livery_load_template_overlay` | Load reference template as overlay |
+| `blender_msfs_livery_export_uv_layout` | Export UV layout for external painting |
+| `blender_msfs_livery_set_paint_brush` | Configure brush presets |
+| `blender_msfs_livery_sample_color` | Sample color from reference image |
+| `blender_msfs_livery_get_paint_presets` | Get available presets |
+
+**Paint Layers:**
+- `primer` - Base primer coat (usually white or light gray)
+- `base_color` - Main fuselage color
+- `cheatline` - Window line stripe
+- `belly` - Aircraft belly color (typically gray)
+- `details` - Logos, text, and fine details
+- `decals` - Decals and stickers (registration, flags)
+- `weathering` - Dirt, wear, and weathering effects
+- `clearcoat` - Final clear coat / gloss layer reference
+
+**Brush Presets:**
+- `soft_airbrush` - Soft spray for gradients and large areas
+- `hard_edge` - Hard edge for crisp lines and masks
+- `detail_brush` - Fine detail work
+- `smudge` - Blend and smudge colors
+- `clone` - Clone/stamp from reference
+- `fill` - Fill large areas
+
+### Aircraft Templates
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_livery_get_aircraft_templates` | List supported aircraft |
+| `blender_msfs_livery_get_template_info` | Get detailed template info |
+| `blender_msfs_livery_download_template` | Download/generate templates |
+
+**Supported Aircraft:**
+- **FlyByWire A32NX** (freeware) - 4096x4096 textures, A320neo/A321neo variants
+- **Fenix A320** - 8192x8192 textures, A319/A320/A321 variants
+- **PMDG 737** - 4096x4096 textures, 737-600/700/800/900 variants
+- **PMDG 777** - 4096x4096 textures, 777-200LR/300ER/F variants
+- **iniBuilds A310** - 4096x4096 textures
+- **iniBuilds A320neo** - 4096x4096 textures
+- **Aerosoft CRJ** - CRJ-550/700/900/1000 variants
+- **Just Flight BAe 146** - 146-100/200/300 variants
+- **Generic** - Custom aircraft template
+
+### Livery Transfer
+
+AI-assisted tools for transferring liveries between different aircraft types.
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_livery_analyze` | Analyze livery image for colors and elements |
+| `blender_msfs_livery_transfer` | Transfer livery between aircraft types |
+| `blender_msfs_livery_extract_colors` | Extract color palette from livery |
+| `blender_msfs_livery_map_elements` | Map design elements between templates |
+
+**Example:**
+```python
+# Analyze existing livery
+analysis = blender_msfs_livery_analyze(
+    image_path="/liveries/my_airline_a320.png",
+    aircraft_type="fbw_a32nx"
+)
+
+# Extract color palette
+colors = blender_msfs_livery_extract_colors(
+    image_path="/liveries/my_airline_a320.png",
+    num_colors=8
+)
+
+# Transfer to different aircraft
+blender_msfs_livery_transfer(
+    source_image="/liveries/my_airline_a320.png",
+    source_aircraft="fbw_a32nx",
+    target_aircraft="pmdg_737",
+    output_dir="/output/transferred_livery",
+    preserve_colors=True
+)
+```
+
+### Livery Package Export
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_livery_export_textures` | Export livery textures (PNG, TGA) |
+| `blender_msfs_livery_create_package` | Create MSFS livery package structure |
+| `blender_msfs_livery_convert_to_dds` | Convert textures to DDS format |
+| `blender_msfs_livery_validate_package` | Validate livery package |
+
+**Example:**
+```python
+# Export textures
+blender_msfs_livery_export_textures(
+    object_name="Fuselage",
+    output_dir="/output/textures",
+    texture_types=["albedo"],
+    format="PNG"
+)
+
+# Create livery package
+blender_msfs_livery_create_package(
+    aircraft_id="fbw_a32nx",
+    livery_name="MyAirline",
+    output_dir="/output",
+    airline="My Virtual Airline",
+    author="Your Name"
+)
+
+# Validate package
+result = blender_msfs_livery_validate_package(
+    package_dir="/output/fbw_a32nx-livery-MyAirline"
+)
+```
+
+### Livery Workflow Example
+
+```python
+# 1. Get template for target aircraft
+template = blender_msfs_livery_get_template_info(aircraft_id="fbw_a32nx")
+print(f"Texture size: {template['texture_size']}")
+
+# 2. Download/generate blank template
+blender_msfs_livery_download_template(
+    aircraft_id="fbw_a32nx",
+    output_dir="/templates"
+)
+
+# 3. Set up paint mode on imported model
+blender_msfs_livery_setup_paint_mode(
+    object_name="Fuselage",
+    texture_resolution=[4096, 4096]
+)
+
+# 4. Create paint layers
+blender_msfs_livery_create_paint_layers(
+    object_name="Fuselage",
+    layers=["base_color", "cheatline", "details", "decals"]
+)
+
+# 5. Load reference image as overlay
+blender_msfs_livery_load_template_overlay(
+    image_path="/references/airline_livery.png",
+    object_name="Fuselage",
+    opacity=0.5
+)
+
+# 6. Sample colors from reference
+color = blender_msfs_livery_sample_color(
+    image_path="/references/airline_livery.png",
+    x=100, y=200
+)
+print(f"Sampled color: {color['color_hex']}")
+
+# 7. Set up brush for painting
+blender_msfs_livery_set_paint_brush(
+    preset="soft_airbrush",
+    color=color['color_rgba']
+)
+
+# ... paint the livery in Blender ...
+
+# 8. Export and package
+blender_msfs_livery_export_textures(
+    object_name="Fuselage",
+    output_dir="/output/textures"
+)
+
+blender_msfs_livery_create_package(
+    aircraft_id="fbw_a32nx",
+    livery_name="MyAirline",
+    output_dir="/output",
+    texture_dir="/output/textures",
+    airline="My Virtual Airline"
+)
+
+# 9. Validate
+result = blender_msfs_livery_validate_package(package_dir="/output/fbw_a32nx-livery-MyAirline")
+print(f"Valid: {result['valid']}")
+```

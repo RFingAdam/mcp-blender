@@ -1,11 +1,18 @@
-# MCP Blender
+<p align="center">
+  <img src="assets/banner.svg" alt="MCP Blender Banner" width="800">
+</p>
 
-[![PyPI version](https://badge.fury.io/py/mcp-blender.svg)](https://badge.fury.io/py/mcp-blender)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Blender 4.2+](https://img.shields.io/badge/blender-4.2+-orange.svg)](https://www.blender.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <a href="https://badge.fury.io/py/mcp-blender"><img src="https://badge.fury.io/py/mcp-blender.svg" alt="PyPI version"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/blender-4.2+-orange.svg" alt="Blender 4.2+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
-Control Blender via the Model Context Protocol (MCP). This enables AI assistants like Claude to directly manipulate Blender scenes, create objects, apply materials, render images, and much more.
+<p align="center">
+  <strong>Control Blender via the Model Context Protocol (MCP)</strong><br>
+  Enable AI assistants like Claude to directly manipulate Blender scenes, create objects, apply materials, render images, and much more.
+</p>
 
 **Supports Blender 4.2 LTS and Blender 5.0**
 
