@@ -6,11 +6,7 @@ It provides high-quality results comparable to commercial APIs.
 GitHub: https://github.com/Tencent/Hunyuan3D-2
 """
 
-import os
 import shutil
-import subprocess
-import sys
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
@@ -101,38 +97,22 @@ class Hunyuan3DBackend(BaseBackend):
             missing.append("torch")
 
         # Check for hunyuan3d or hy3dgen package
-        hunyuan_available = False
-        try:
-            import hy3dgen
+        import importlib.util
 
-            hunyuan_available = True
-        except ImportError:
-            pass
-
-        if not hunyuan_available:
-            try:
-                import hunyuan3d
-
-                hunyuan_available = True
-            except ImportError:
-                pass
-
+        hunyuan_available = (
+            importlib.util.find_spec("hy3dgen") is not None
+            or importlib.util.find_spec("hunyuan3d") is not None
+        )
         if not hunyuan_available:
             missing.append("hunyuan3d (see https://github.com/Tencent/Hunyuan3D-2)")
 
-        try:
-            import PIL
-        except ImportError:
+        if importlib.util.find_spec("PIL") is None:
             missing.append("Pillow")
 
-        try:
-            import transformers
-        except ImportError:
+        if importlib.util.find_spec("transformers") is None:
             missing.append("transformers")
 
-        try:
-            import diffusers
-        except ImportError:
+        if importlib.util.find_spec("diffusers") is None:
             missing.append("diffusers")
 
         if missing:
@@ -181,8 +161,8 @@ class Hunyuan3DBackend(BaseBackend):
 
             # Try to import the appropriate module
             try:
-                from hy3dgen.text2mesh import Text2MeshPipeline
                 from hy3dgen.image2mesh import Image2MeshPipeline
+                from hy3dgen.text2mesh import Text2MeshPipeline
 
                 if model_type in ("text", "both") and self._text_model is None:
                     self._text_model = Text2MeshPipeline.from_pretrained(
@@ -331,8 +311,6 @@ class Hunyuan3DBackend(BaseBackend):
         try:
             import torch
             from PIL import Image
-
-            device = self._get_device()
 
             # Quality settings
             quality_settings = {
@@ -555,6 +533,7 @@ class Hunyuan3DBackend(BaseBackend):
         # Force garbage collection
         try:
             import gc
+
             import torch
 
             gc.collect()

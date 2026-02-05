@@ -7,7 +7,6 @@ Requires: ComfyUI running with 3D generation nodes (e.g., TripoSR, InstantMesh)
 """
 
 import json
-import os
 import urllib.error
 import urllib.request
 import uuid
@@ -78,7 +77,7 @@ class ComfyUIBackend(BaseBackend):
         try:
             req = urllib.request.Request(f"{host}/system_stats")
             with urllib.request.urlopen(req, timeout=5) as response:
-                data = json.loads(response.read().decode())
+                response.read()  # Just verify we can read the response
 
             return True, "ComfyUI is running"
 

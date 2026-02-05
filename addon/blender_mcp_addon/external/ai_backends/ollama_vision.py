@@ -9,7 +9,6 @@ This enables a fully local pipeline: image -> description -> 3D model
 
 import base64
 import json
-import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -93,7 +92,7 @@ Be specific and descriptive. The description will be used to generate a 3D model
             if available_vision:
                 return True, f"Vision models available: {', '.join(available_vision)}"
             else:
-                return False, f"No vision models found. Install with: ollama pull llava"
+                return False, "No vision models found. Install with: ollama pull llava"
 
         except urllib.error.URLError:
             return False, f"Cannot connect to Ollama at {host}. Is Ollama running?"

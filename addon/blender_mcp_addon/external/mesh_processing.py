@@ -6,9 +6,8 @@ AI-generated meshes for use in Blender.
 
 from typing import Any
 
-import bpy
 import bmesh
-from mathutils import Vector
+import bpy
 
 
 def get_mesh_object(name: str) -> bpy.types.Object | None:
@@ -55,8 +54,7 @@ def cleanup_mesh(
     initial_verts = len(obj.data.vertices)
     initial_faces = len(obj.data.polygons)
 
-    # Store current mode and active object
-    original_mode = bpy.context.mode
+    # Store current active object
     original_active = bpy.context.view_layer.objects.active
 
     try:
@@ -710,8 +708,7 @@ def get_mesh_stats(object_name: str) -> dict[str, Any]:
     # Materials
     materials = [slot.material.name if slot.material else None for slot in obj.material_slots]
 
-    # Bounding box
-    bbox = obj.bound_box
+    # Dimensions
     dimensions = obj.dimensions[:]
 
     # Check for issues

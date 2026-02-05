@@ -6,11 +6,7 @@ Note: This is a placeholder implementation. The actual Stable Fast 3D
 model needs to be installed separately.
 """
 
-import os
-import shutil
-import uuid
 from pathlib import Path
-from typing import Any
 
 from .base import (
     BackendCapability,
