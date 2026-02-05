@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-Backend AI 3D Generation System** (17 new tools):
+  - Backend Management tools (4): list_backends, set_backend, get_backend_info, configure_backend
+  - Enhanced Generation tools (3): generate_variations, cancel_generation, redo_generation
+  - Mesh Processing tools (7): mesh_cleanup, mesh_decimate, mesh_remesh, mesh_optimize, auto_uv, fix_mesh_issues, mesh_stats
+  - Queue Management tools (3): queue_list, queue_clear, get_history
+- **Multi-backend support** for AI 3D generation:
+  - Cloud backends: Hyper3D Rodin, Meshy.ai, Tripo AI
+  - Local backends: TripoSR, Hunyuan3D 2.1, Stable Fast 3D
+  - Helper backends: Ollama Vision (image understanding), ComfyUI (custom workflows)
+- **Backend Manager** with automatic selection, fallback chains, and preference settings
+- **Mesh Processing Pipeline** for generated models:
+  - Cleanup (remove doubles, fix normals, delete loose geometry)
+  - Decimate (collapse, unsubdiv, planar methods)
+  - Remesh (voxel, quad, sharp methods)
+  - Auto UV unwrap (smart project, lightmap, cube project)
+  - Issue detection and fixing (non-manifold, zero-area faces, etc.)
+- **Persistent Job Queue** with history tracking across Blender sessions
+- Local-only generation mode (no API keys required when using local backends)
+
 - **MSFS 2020/2024 Content Creation Tools** (20 tools):
   - LOD tools (4): create_lod_hierarchy, decimate_for_lod, setup_lod_distances, get_lod_info
   - Material tools (4): setup_material, create_glass_material, create_emissive_material, get_material_presets
@@ -35,7 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Total tool count increased from 48 to 86
+- Total tool count increased from 86 to 103
+- Refactored AI generation system to use pluggable backend architecture
+- Enhanced `blender_ai_generate_model` with backend selection parameter
+- Enhanced `blender_ai_model_status` with auto-import and mesh optimization options
 
 ## [0.1.0] - 2025-02-05
 

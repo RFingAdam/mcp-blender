@@ -18,7 +18,7 @@
 
 ## Features
 
-- **86 tools** for comprehensive Blender control
+- **103 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF
@@ -29,7 +29,8 @@
 - **MSFS 2020/2024 content creation** - LOD systems, collision meshes, MSFS materials, animation events
 - **MSFS aircraft livery tools** - Paint workflows, template support, AI-assisted livery transfer
 - **Poly Haven integration** - Search and download free HDRIs, textures, and models
-- **AI model generation** - Generate 3D models from text or images via Hyper3D Rodin
+- **AI model generation** - Generate 3D models from text or images via multiple backends (Rodin, Meshy, Tripo AI, TripoSR, Hunyuan3D, and more)
+- **Mesh processing** - Cleanup, optimize, decimate, remesh, and auto-UV generated models
 
 ## Architecture
 
@@ -198,14 +199,55 @@ Ask Claude to:
 | `blender_export_stl` | Export to STL format |
 | `blender_import_file` | Import file (auto-detects format) |
 
-### External Integration Tools (4)
+### External Integration Tools (2)
 
 | Tool | Description |
 |------|-------------|
 | `blender_polyhaven_search` | Search Poly Haven for HDRIs, textures, or models |
 | `blender_polyhaven_download` | Download and apply Poly Haven asset |
-| `blender_ai_generate_model` | Generate 3D model from text or image (Hyper3D Rodin) |
-| `blender_ai_model_status` | Check AI generation job status |
+
+### AI 3D Generation Tools (21)
+
+Multi-backend AI model generation with local and cloud options.
+
+**Backend Management (4)**
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_list_backends` | List available AI backends with status |
+| `blender_ai_set_backend` | Set preferred backend (or "auto") |
+| `blender_ai_get_backend_info` | Get backend capabilities and requirements |
+| `blender_ai_configure_backend` | Configure backend-specific settings |
+
+**Generation (5)**
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_generate_model` | Generate 3D model from text or image (multi-backend) |
+| `blender_ai_model_status` | Check generation status (with auto-import option) |
+| `blender_ai_generate_variations` | Generate multiple variations of a prompt |
+| `blender_ai_redo_generation` | Redo last generation with modifications |
+| `blender_ai_cancel_generation` | Cancel in-progress generation |
+
+**Mesh Processing (7)**
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_mesh_cleanup` | Clean up mesh (remove doubles, fix normals) |
+| `blender_ai_mesh_decimate` | Reduce polygon count intelligently |
+| `blender_ai_mesh_remesh` | Retopologize mesh for better geometry |
+| `blender_ai_mesh_optimize` | Full optimization pipeline |
+| `blender_ai_auto_uv` | Generate UV maps for texturing |
+| `blender_ai_fix_mesh_issues` | Auto-fix common mesh problems |
+| `blender_ai_mesh_stats` | Get mesh statistics and analysis |
+
+**Queue Management (3)**
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_queue_list` | List all generation jobs |
+| `blender_ai_queue_clear` | Clear completed/failed jobs |
+| `blender_ai_get_history` | Get generation history |
 
 ### MSFS 2020/2024 Content Creation Tools (20)
 
@@ -286,27 +328,60 @@ blender_polyhaven_download(asset_id="brick_wall_001", resolution="2k")
 
 Assets are cached locally to avoid re-downloading.
 
-### Hyper3D Rodin (AI Model Generation)
+### AI 3D Model Generation
 
-Generate 3D models from text prompts or images using [Hyper3D Rodin](https://hyperhuman.deemos.com).
+Generate 3D models from text prompts or images using multiple backends - both cloud APIs and local models.
 
-**Setup:** Set your API key as an environment variable:
+**Available Backends:**
+
+| Backend | Type | Requirements | Capabilities |
+|---------|------|--------------|--------------|
+| Hyper3D Rodin | Cloud | API key | Text-to-3D, Image-to-3D, High quality |
+| Meshy.ai | Cloud | API key | Text-to-3D, Image-to-3D, Texturing |
+| Tripo AI | Cloud | API key | Text-to-3D, Image-to-3D, Fast |
+| TripoSR | Local | 4GB VRAM | Image-to-3D, Very fast (<1s) |
+| Hunyuan3D | Local | 16GB VRAM | Text-to-3D, Image-to-3D, High quality |
+| Ollama Vision | Local | 8GB VRAM | Image understanding (helper) |
+| ComfyUI | Local | Varies | Custom workflows |
+
+**Setup (Cloud backends):** Set API keys as environment variables:
 
 ```bash
-export RODIN_API_KEY="your-api-key-here"
+export RODIN_API_KEY="your-rodin-key"      # Hyper3D Rodin
+export MESHY_API_KEY="your-meshy-key"      # Meshy.ai
+export TRIPO_API_KEY="your-tripo-key"      # Tripo AI
+```
+
+**Setup (Local backends):** Install the required models:
+
+```bash
+# TripoSR (fast image-to-3D)
+pip install triposr
+
+# Ollama with vision model
+ollama pull llava
 ```
 
 **Usage:**
 
 ```
-# Text-to-3D
-blender_ai_generate_model(prompt="a wooden chair", style="realistic", quality="medium")
+# Auto-select best available backend
+blender_ai_generate_model(prompt="a wooden chair", style="realistic")
 
-# Image-to-3D
-blender_ai_generate_model(image_path="/path/to/image.png")
+# Use specific backend
+blender_ai_generate_model(prompt="a robot", backend="triposr")
 
-# Check status and import when ready
-blender_ai_model_status(job_id="abc123", auto_import=true)
+# Image-to-3D with local model
+blender_ai_generate_model(image_path="/path/to/image.png", backend="triposr")
+
+# Check status and import with optimization
+blender_ai_model_status(job_id="abc123", auto_import=true, optimize_mesh=true)
+
+# Generate variations
+blender_ai_generate_variations(prompt="a coffee mug", count=3)
+
+# Process imported mesh
+blender_ai_mesh_optimize(object_name="imported_model", cleanup=true, decimate=true)
 ```
 
 **Supported styles:** realistic, cartoon, low_poly, sculpture, anime
@@ -373,9 +448,11 @@ The addon panel in the 3D Viewport sidebar offers:
 
 ### AI generation not working
 
-1. Verify `RODIN_API_KEY` environment variable is set
-2. Check API key validity at hyperhuman.deemos.com
-3. Monitor job status with `blender_ai_model_status`
+1. Check available backends with `blender_ai_list_backends`
+2. For cloud backends, verify API keys are set (RODIN_API_KEY, MESHY_API_KEY, TRIPO_API_KEY)
+3. For local backends, verify models are installed and have sufficient VRAM
+4. Monitor job status with `blender_ai_model_status`
+5. Check generation history with `blender_ai_get_history`
 
 ## Development
 
@@ -435,7 +512,18 @@ mcp-blender/
 │   ├── external/              # External integrations
 │   │   ├── cache.py           # Asset caching system
 │   │   ├── polyhaven.py       # Poly Haven API client
-│   │   └── ai_models.py       # Hyper3D Rodin integration
+│   │   ├── ai_models.py       # AI generation orchestration
+│   │   ├── mesh_processing.py # Mesh cleanup and optimization
+│   │   ├── job_queue.py       # Persistent job tracking
+│   │   └── ai_backends/       # AI backend implementations
+│   │       ├── base.py        # Abstract base class
+│   │       ├── rodin.py       # Hyper3D Rodin (cloud)
+│   │       ├── meshy.py       # Meshy.ai (cloud)
+│   │       ├── tripo_ai.py    # Tripo AI (cloud)
+│   │       ├── triposr.py     # TripoSR (local)
+│   │       ├── hunyuan3d.py   # Hunyuan3D (local)
+│   │       ├── ollama_vision.py # Ollama Vision (local)
+│   │       └── comfyui.py     # ComfyUI integration
 │   └── msfs/                  # MSFS content creation tools
 │       ├── lod.py             # LOD hierarchy management
 │       ├── materials.py       # MSFS material extensions
