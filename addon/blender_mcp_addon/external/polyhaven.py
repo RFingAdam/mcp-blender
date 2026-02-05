@@ -3,19 +3,18 @@
 import json
 import os
 import tempfile
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 import bpy
 
 from .cache import (
-    is_cached,
-    get_cached_path,
     cache_asset,
     cache_directory,
-    get_polyhaven_cache_dir,
+    get_cached_path,
+    is_cached,
 )
 
 POLYHAVEN_API_BASE = "https://api.polyhaven.com"

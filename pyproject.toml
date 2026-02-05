@@ -40,9 +40,10 @@ dev = [
 mcp-blender = "mcp_blender.server:main"
 
 [project.urls]
-Homepage = "https://github.com/mcp-blender/mcp-blender"
-Repository = "https://github.com/mcp-blender/mcp-blender"
-Issues = "https://github.com/mcp-blender/mcp-blender/issues"
+Homepage = "https://github.com/RFingAdam/mcp-blender"
+Repository = "https://github.com/RFingAdam/mcp-blender"
+Issues = "https://github.com/RFingAdam/mcp-blender/issues"
+Changelog = "https://github.com/RFingAdam/mcp-blender/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_blender"]
@@ -53,6 +54,13 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+ignore = ["E501"]  # Line length handled pragmatically for readability
+
+[tool.ruff.lint.per-file-ignores]
+# Blender addons require bl_info before imports
+"addon/blender_mcp_addon/__init__.py" = ["E402"]
+# Blender integration test requires conditional imports and has intentional unused results
+"tests/blender_integration_test.py" = ["E402", "F841"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
