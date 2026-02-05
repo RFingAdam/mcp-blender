@@ -722,6 +722,307 @@ TOOLS: list[Tool] = [
             "required": ["job_id"],
         },
     ),
+    # MSFS Content Creation Tools - LOD
+    Tool(
+        name="blender_msfs_create_lod_hierarchy",
+        description="Create LOD (Level of Detail) hierarchy from a base object for flight simulator content optimization",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "base_object_name": {"type": "string", "description": "Name of the base (LOD0) object"},
+                "lod_count": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Number of LOD levels (1-4, default: 4)"},
+                "auto_decimate": {"type": "boolean", "description": "Automatically decimate lower LODs (default: true)"},
+                "decimate_ratios": {
+                    "type": "object",
+                    "description": "Custom decimation ratios per LOD level (e.g., {'LOD1': 0.5, 'LOD2': 0.25})",
+                },
+            },
+            "required": ["base_object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_decimate_for_lod",
+        description="Decimate a mesh to a target ratio for LOD creation",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object to decimate"},
+                "ratio": {"type": "number", "minimum": 0.01, "maximum": 1.0, "description": "Target vertex ratio (0.01-1.0)"},
+                "preserve_uvs": {"type": "boolean", "description": "Try to preserve UV seams (default: true)"},
+                "preserve_vertex_groups": {"type": "boolean", "description": "Preserve vertex group boundaries (default: true)"},
+            },
+            "required": ["object_name", "ratio"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_setup_lod_distances",
+        description="Configure LOD switching distances for flight simulator",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
+                "distances": {
+                    "type": "object",
+                    "description": "LOD switch distances in meters (e.g., {'LOD0': 0, 'LOD1': 50, 'LOD2': 200, 'LOD3': 500})",
+                },
+            },
+            "required": ["base_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_get_lod_info",
+        description="Get information about an LOD hierarchy including vertex counts and distances",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
+            },
+            "required": ["base_name"],
+        },
+    ),
+    # MSFS Content Creation Tools - Materials
+    Tool(
+        name="blender_msfs_setup_material",
+        description="Set up a material with flight simulator-specific PBR properties and extensions",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {"type": "string", "description": "Name of the material to configure"},
+                "msfs_type": {
+                    "type": "string",
+                    "enum": ["standard", "windshield", "clear_coat", "anisotropic", "hair", "sss", "glass", "geo_decal", "fresnel_fade", "parallax_window", "fake_terrain", "invisible", "environment_occluder"],
+                    "description": "Material type for flight simulator rendering",
+                },
+                "base_color": {"type": "array", "items": {"type": "number"}, "description": "RGBA base color"},
+                "metallic": {"type": "number", "minimum": 0, "maximum": 1, "description": "Metallic value (0-1)"},
+                "roughness": {"type": "number", "minimum": 0, "maximum": 1, "description": "Roughness value (0-1)"},
+                "emissive_color": {"type": "array", "items": {"type": "number"}, "description": "RGB emissive color"},
+                "emissive_strength": {"type": "number", "description": "Emissive intensity"},
+                "alpha": {"type": "number", "minimum": 0, "maximum": 1, "description": "Alpha/opacity (0-1)"},
+                "double_sided": {"type": "boolean", "description": "Whether material is double-sided"},
+            },
+            "required": ["material_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_create_glass_material",
+        description="Create a glass material optimized for flight simulator (cockpit glass, windows)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {"type": "string", "description": "Name for the new material"},
+                "tint_color": {"type": "array", "items": {"type": "number"}, "description": "RGB tint color"},
+                "opacity": {"type": "number", "minimum": 0, "maximum": 1, "description": "Glass opacity (0 = fully transparent)"},
+                "ior": {"type": "number", "description": "Index of refraction (default: 1.45)"},
+                "is_windshield": {"type": "boolean", "description": "Enable windshield features (rain effects, wipers)"},
+            },
+            "required": ["material_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_create_emissive_material",
+        description="Create an emissive/light material for flight simulator (gauges, displays, lights)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {"type": "string", "description": "Name for the material"},
+                "base_color": {"type": "array", "items": {"type": "number"}, "description": "RGBA base color (daytime appearance)"},
+                "emissive_color": {"type": "array", "items": {"type": "number"}, "description": "RGB emissive color"},
+                "emissive_strength": {"type": "number", "description": "Emission intensity (default: 1.0)"},
+                "is_day_night": {"type": "boolean", "description": "Emission varies with time of day (night-only glow)"},
+            },
+            "required": ["material_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_get_material_presets",
+        description="Get list of available flight simulator material presets (vehicle_paint, chrome, glass, etc.)",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    # MSFS Content Creation Tools - Collision
+    Tool(
+        name="blender_msfs_create_collision_mesh",
+        description="Create a simplified collision mesh from a source object for physics interactions",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source_object_name": {"type": "string", "description": "Name of the source object"},
+                "collision_type": {
+                    "type": "string",
+                    "enum": ["none", "collider", "road", "water", "trigger"],
+                    "description": "Type of collision behavior",
+                },
+                "simplify": {"type": "boolean", "description": "Simplify the collision mesh (default: true)"},
+                "simplify_ratio": {"type": "number", "minimum": 0.01, "maximum": 1.0, "description": "Simplification ratio (default: 0.3)"},
+            },
+            "required": ["source_object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_create_collision_box",
+        description="Create a box collision primitive for an object (most efficient for physics)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object to create collision for"},
+                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
+                "padding": {"type": "number", "description": "Extra padding around the bounding box"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_create_collision_convex",
+        description="Create a convex hull collision mesh (balance between accuracy and performance)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the source object"},
+                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_tag_collision_type",
+        description="Tag an existing mesh as a collision object",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
+            },
+            "required": ["object_name", "collision_type"],
+        },
+    ),
+    # MSFS Content Creation Tools - Animation
+    Tool(
+        name="blender_msfs_add_animation_tag",
+        description="Add an animation tag/event marker for flight simulator animation events",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the animated object"},
+                "tag_type": {
+                    "type": "string",
+                    "enum": ["start", "end", "loop_start", "loop_end", "sound", "sound_start", "sound_stop", "effect", "effect_start", "effect_stop", "show", "hide", "event"],
+                    "description": "Type of animation tag",
+                },
+                "frame": {"type": "integer", "description": "Frame number for the tag"},
+                "tag_data": {"type": "string", "description": "Optional data string (e.g., sound file name)"},
+            },
+            "required": ["object_name", "tag_type", "frame"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_setup_visibility_animation",
+        description="Set up visibility animation for an object (show/hide during frame ranges)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "visible_range": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Frame range when object is visible [start, end]",
+                },
+                "hidden_range": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Frame range when object is hidden [start, end]",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_configure_animation_loop",
+        description="Configure animation looping behavior for flight simulator",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the animated object"},
+                "behavior": {
+                    "type": "string",
+                    "enum": ["once", "loop", "ping_pong", "hold"],
+                    "description": "Animation playback behavior",
+                },
+                "loop_start": {"type": "integer", "description": "Start frame of loop (defaults to action start)"},
+                "loop_end": {"type": "integer", "description": "End frame of loop (defaults to action end)"},
+                "loop_count": {"type": "integer", "description": "Number of loops (0 = infinite)"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_list_animation_tags",
+        description="List all animation tags in the scene",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Filter by object name (optional)"},
+            },
+            "required": [],
+        },
+    ),
+    # MSFS Content Creation Tools - Export
+    Tool(
+        name="blender_msfs_export_model",
+        description="Export model(s) in flight simulator-compatible glTF format with LODs, collision, and animations",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Output file path (.glb or .gltf)"},
+                "objects": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Object names to export (omit for selected/all)",
+                },
+                "include_lods": {"type": "boolean", "description": "Include LOD variants (default: true)"},
+                "include_collision": {"type": "boolean", "description": "Include collision meshes (default: true)"},
+                "include_animations": {"type": "boolean", "description": "Include animation data (default: true)"},
+                "export_format": {"type": "string", "enum": ["GLB", "GLTF"], "description": "Export format (default: GLB)"},
+            },
+            "required": ["filepath"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_validate_for_export",
+        description="Validate model(s) for flight simulator compatibility and report issues",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Specific object to validate (omit for all selected/all)"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_msfs_get_export_settings",
+        description="Get available flight simulator export settings and recommendations",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_msfs_batch_export_lods",
+        description="Export LOD hierarchy with proper structure (single file or separate files per LOD)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
+                "output_dir": {"type": "string", "description": "Output directory path"},
+                "separate_files": {"type": "boolean", "description": "Export each LOD as separate file (default: false)"},
+            },
+            "required": ["base_name", "output_dir"],
+        },
+    ),
 ]
 
 

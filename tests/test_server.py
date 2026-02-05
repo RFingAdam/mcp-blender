@@ -43,8 +43,8 @@ class TestToolDefinitions:
 
     def test_tool_count(self):
         """Verify expected number of tools."""
-        # 5 scene + 10 object + 6 material + 4 modifier + 5 animation + 5 render + 5 export + 4 external = 44
-        assert len(TOOLS) >= 40, f"Expected at least 40 tools, got {len(TOOLS)}"
+        # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export + 4 external + 20 MSFS = 68
+        assert len(TOOLS) >= 60, f"Expected at least 60 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:
@@ -99,3 +99,25 @@ class TestToolCategories:
         """External integration tools should exist."""
         external_tools = [t for t in TOOLS if t.name.startswith("blender_polyhaven_") or t.name.startswith("blender_ai_")]
         assert len(external_tools) >= 4
+
+    def test_msfs_tools(self):
+        """MSFS content creation tools should exist."""
+        msfs_tools = [t for t in TOOLS if t.name.startswith("blender_msfs_")]
+        # LOD (4) + Materials (4) + Collision (4) + Animation (4) + Export (4) = 20
+        assert len(msfs_tools) >= 18, f"Expected at least 18 MSFS tools, got {len(msfs_tools)}"
+
+        # Verify key MSFS tool categories
+        lod_tools = [t for t in msfs_tools if "lod" in t.name]
+        assert len(lod_tools) >= 4, "Should have LOD tools"
+
+        material_tools = [t for t in msfs_tools if "material" in t.name or "glass" in t.name or "emissive" in t.name]
+        assert len(material_tools) >= 3, "Should have material tools"
+
+        collision_tools = [t for t in msfs_tools if "collision" in t.name]
+        assert len(collision_tools) >= 4, "Should have collision tools"
+
+        animation_tools = [t for t in msfs_tools if "animation" in t.name or "visibility" in t.name]
+        assert len(animation_tools) >= 3, "Should have animation tools"
+
+        export_tools = [t for t in msfs_tools if "export" in t.name or "validate" in t.name]
+        assert len(export_tools) >= 3, "Should have export tools"

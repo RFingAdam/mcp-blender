@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MSFS 2020/2024 Content Creation Tools** (20 tools):
+  - LOD tools (4): create_lod_hierarchy, decimate_for_lod, setup_lod_distances, get_lod_info
+  - Material tools (4): setup_material, create_glass_material, create_emissive_material, get_material_presets
+  - Collision tools (4): create_collision_mesh, create_collision_box, create_collision_convex, tag_collision_type
+  - Animation tools (4): add_animation_tag, setup_visibility_animation, configure_animation_loop, list_animation_tags
+  - Export tools (4): export_model, validate_for_export, get_export_settings, batch_export_lods
+- MSFS material type support (standard, windshield, clear_coat, glass, anisotropic, etc.)
+- MSFS collision types (collider, road, water, trigger)
+- Animation event tags for MSFS (sound, effect, visibility)
+- glTF export with MSFS custom properties in extras
+- MSFS_ROADMAP.md documentation
+
+### Changed
+
+- Total tool count increased from 48 to 68
+
 ## [0.1.0] - 2025-02-05
 
 ### Added
