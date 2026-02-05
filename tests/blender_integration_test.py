@@ -24,8 +24,8 @@ except ImportError:
     print("Usage: blender --background --python tests/blender_integration_test.py")
     sys.exit(1)
 
-from blender_mcp_addon.handlers import CommandHandlers
 from blender_mcp_addon import compat
+from blender_mcp_addon.handlers import CommandHandlers
 
 
 class TestRunner:

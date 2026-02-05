@@ -1,9 +1,10 @@
 """Utility functions for the Blender MCP addon."""
 
-import bpy
-import json
 import fnmatch
+import json
 from typing import Any
+
+import bpy
 
 
 def serialize_vector(vec) -> list[float]:

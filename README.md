@@ -11,7 +11,7 @@ Control Blender via the Model Context Protocol (MCP). This enables AI assistants
 
 ## Features
 
-- **44 tools** for comprehensive Blender control
+- **48 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF

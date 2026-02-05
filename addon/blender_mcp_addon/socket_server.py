@@ -3,7 +3,6 @@
 import json
 import socket
 import traceback
-from typing import Callable
 
 import bpy
 

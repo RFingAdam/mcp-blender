@@ -8,11 +8,9 @@ import bpy
 
 from . import compat
 from .utils import (
-    create_response,
     ensure_object_selected,
     get_material_or_error,
     get_object_or_error,
-    parse_color,
     serialize_material,
     serialize_object,
     serialize_scene,
@@ -20,11 +18,10 @@ from .utils import (
 from .validation import (
     ValidationError,
     require_param,
-    optional_param,
-    validate_vector3,
     validate_color,
     validate_enum,
     validate_filepath,
+    validate_vector3,
 )
 
 

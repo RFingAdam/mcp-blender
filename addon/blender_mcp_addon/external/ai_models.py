@@ -78,7 +78,10 @@ def _make_request(
         return {
             "success": False,
             "error": "RODIN_API_KEY environment variable not set",
-            "help": "Get an API key from https://hyperhuman.deemos.com and set RODIN_API_KEY environment variable",
+            "help": (
+                "Get an API key from https://hyperhuman.deemos.com "
+                "and set RODIN_API_KEY environment variable"
+            ),
         }
 
     url = f"{RODIN_API_BASE}/{RODIN_API_VERSION}/{endpoint}"
@@ -161,7 +164,7 @@ def generate_model(
     if output_format not in SUPPORTED_FORMATS:
         return {
             "success": False,
-            "error": f"Unsupported format: {output_format}. Supported: {', '.join(SUPPORTED_FORMATS)}",
+            "error": f"Unsupported format: {output_format}. Use: {', '.join(SUPPORTED_FORMATS)}",
         }
 
     if style and style not in GENERATION_STYLES:
@@ -248,7 +251,7 @@ def generate_model_from_image(
     if output_format not in SUPPORTED_FORMATS:
         return {
             "success": False,
-            "error": f"Unsupported format: {output_format}. Supported: {', '.join(SUPPORTED_FORMATS)}",
+            "error": f"Unsupported format: {output_format}. Use: {', '.join(SUPPORTED_FORMATS)}",
         }
 
     request_data = {
