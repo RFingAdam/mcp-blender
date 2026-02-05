@@ -21,9 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - glTF export with MSFS custom properties in extras
 - MSFS_ROADMAP.md documentation
 
+- **MSFS Aircraft Livery Tools** (18 tools):
+  - Painting tools (7): setup_paint_mode, create_paint_layers, load_template_overlay, export_uv_layout, set_paint_brush, sample_color, get_paint_presets
+  - Template tools (3): get_aircraft_templates, get_template_info, download_template
+  - Transfer tools (4): analyze, transfer, extract_colors, map_elements
+  - Export tools (4): export_textures, create_package, convert_to_dds, validate_package
+- Aircraft template support for FlyByWire A32NX, Fenix A320, PMDG 737/777, iniBuilds A310/A320neo, Aerosoft CRJ, and more
+- Paint layer presets for livery workflow (primer, base_color, cheatline, belly, details, decals, weathering, clearcoat)
+- Brush presets for livery painting (soft_airbrush, hard_edge, detail_brush, smudge, clone, fill)
+- AI-assisted livery analysis and transfer between aircraft
+- MSFS livery package creation with manifest.json and layout.json
+- DDS conversion support (requires texconv)
+
 ### Changed
 
-- Total tool count increased from 48 to 68
+- Total tool count increased from 48 to 86
 
 ## [0.1.0] - 2025-02-05
 

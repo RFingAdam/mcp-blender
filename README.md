@@ -11,7 +11,7 @@ Control Blender via the Model Context Protocol (MCP). This enables AI assistants
 
 ## Features
 
-- **68 tools** for comprehensive Blender control
+- **86 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF
@@ -20,6 +20,7 @@ Control Blender via the Model Context Protocol (MCP). This enables AI assistants
 - **Rendering** - Render images/animations, configure engines
 - **Import/Export** - glTF, FBX, OBJ, STL support
 - **MSFS 2020/2024 content creation** - LOD systems, collision meshes, MSFS materials, animation events
+- **MSFS aircraft livery tools** - Paint workflows, template support, AI-assisted livery transfer
 - **Poly Haven integration** - Search and download free HDRIs, textures, and models
 - **AI model generation** - Generate 3D models from text or images via Hyper3D Rodin
 
@@ -228,6 +229,40 @@ Tools for creating Microsoft Flight Simulator compatible content.
 
 See [MSFS_ROADMAP.md](docs/MSFS_ROADMAP.md) for detailed MSFS workflow documentation.
 
+### MSFS Aircraft Livery Tools (18)
+
+Tools for creating and transferring aircraft liveries for virtual airlines.
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_livery_setup_paint_mode` | Set up object for texture painting |
+| `blender_msfs_livery_create_paint_layers` | Create paint layers (primer, base, cheatline, etc.) |
+| `blender_msfs_livery_load_template_overlay` | Load reference template as overlay |
+| `blender_msfs_livery_export_uv_layout` | Export UV layout for external painting |
+| `blender_msfs_livery_set_paint_brush` | Configure brush presets (airbrush, hard edge, etc.) |
+| `blender_msfs_livery_sample_color` | Sample color from reference image |
+| `blender_msfs_livery_get_paint_presets` | Get available paint layer and brush presets |
+| `blender_msfs_livery_get_aircraft_templates` | List supported aircraft (FBW, Fenix, PMDG, etc.) |
+| `blender_msfs_livery_get_template_info` | Get detailed template info for aircraft |
+| `blender_msfs_livery_download_template` | Download/generate aircraft templates |
+| `blender_msfs_livery_analyze` | Analyze livery image for colors and elements |
+| `blender_msfs_livery_transfer` | Transfer livery between aircraft types |
+| `blender_msfs_livery_extract_colors` | Extract color palette from livery |
+| `blender_msfs_livery_map_elements` | Map design elements between templates |
+| `blender_msfs_livery_export_textures` | Export livery textures (PNG, TGA) |
+| `blender_msfs_livery_create_package` | Create MSFS livery package structure |
+| `blender_msfs_livery_convert_to_dds` | Convert textures to DDS format |
+| `blender_msfs_livery_validate_package` | Validate livery package for MSFS |
+
+**Supported Aircraft:**
+- FlyByWire A32NX (freeware)
+- Fenix A320/A319/A321
+- PMDG 737/777
+- iniBuilds A310/A320neo
+- Aerosoft CRJ
+- Just Flight BAe 146
+- Generic template for custom aircraft
+
 ## External Integrations
 
 ### Poly Haven
@@ -399,7 +434,12 @@ mcp-blender/
 │       ├── materials.py       # MSFS material extensions
 │       ├── collision.py       # Collision mesh tools
 │       ├── animation.py       # Animation tags and events
-│       └── export.py          # MSFS export utilities
+│       ├── export.py          # MSFS export utilities
+│       └── livery/            # Aircraft livery tools
+│           ├── painting.py    # Texture painting workflow
+│           ├── templates.py   # Aircraft template definitions
+│           ├── transfer.py    # AI-assisted livery transfer
+│           └── export.py      # Livery package creation
 ├── tests/                     # Test suite
 ├── scripts/                   # Build scripts
 └── docs/                      # Documentation

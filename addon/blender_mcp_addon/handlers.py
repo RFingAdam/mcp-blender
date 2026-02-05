@@ -121,6 +121,26 @@ class CommandHandlers:
         self._handlers["msfs_get_export_settings"] = self._handle_msfs_get_export_settings
         self._handlers["msfs_batch_export_lods"] = self._handle_msfs_batch_export_lods
 
+        # MSFS livery handlers
+        self._handlers["msfs_livery_setup_paint_mode"] = self._handle_msfs_livery_setup_paint_mode
+        self._handlers["msfs_livery_create_paint_layers"] = self._handle_msfs_livery_create_paint_layers
+        self._handlers["msfs_livery_load_template_overlay"] = self._handle_msfs_livery_load_template_overlay
+        self._handlers["msfs_livery_export_uv_layout"] = self._handle_msfs_livery_export_uv_layout
+        self._handlers["msfs_livery_set_paint_brush"] = self._handle_msfs_livery_set_paint_brush
+        self._handlers["msfs_livery_sample_color"] = self._handle_msfs_livery_sample_color
+        self._handlers["msfs_livery_get_paint_presets"] = self._handle_msfs_livery_get_paint_presets
+        self._handlers["msfs_livery_get_aircraft_templates"] = self._handle_msfs_livery_get_aircraft_templates
+        self._handlers["msfs_livery_get_template_info"] = self._handle_msfs_livery_get_template_info
+        self._handlers["msfs_livery_download_template"] = self._handle_msfs_livery_download_template
+        self._handlers["msfs_livery_analyze"] = self._handle_msfs_livery_analyze
+        self._handlers["msfs_livery_transfer"] = self._handle_msfs_livery_transfer
+        self._handlers["msfs_livery_extract_colors"] = self._handle_msfs_livery_extract_colors
+        self._handlers["msfs_livery_map_elements"] = self._handle_msfs_livery_map_elements
+        self._handlers["msfs_livery_export_textures"] = self._handle_msfs_livery_export_textures
+        self._handlers["msfs_livery_create_package"] = self._handle_msfs_livery_create_package
+        self._handlers["msfs_livery_convert_to_dds"] = self._handle_msfs_livery_convert_to_dds
+        self._handlers["msfs_livery_validate_package"] = self._handle_msfs_livery_validate_package
+
     def handle(self, method: str, params: dict) -> Any:
         """Handle a command by method name."""
         handler = self._handlers.get(method)
@@ -1210,4 +1230,168 @@ class CommandHandlers:
             base_name=require_param(params, "base_name", str),
             output_dir=require_param(params, "output_dir", str),
             separate_files=params.get("separate_files", False),
+        )
+
+    # ========== MSFS Livery Handlers ==========
+
+    def _handle_msfs_livery_setup_paint_mode(self, params: dict) -> dict:
+        """Set up an object for texture painting."""
+        from .msfs.livery import setup_paint_mode
+        resolution = params.get("texture_resolution", [4096, 4096])
+        return setup_paint_mode(
+            object_name=require_param(params, "object_name", str),
+            texture_resolution=tuple(resolution),
+            create_uvs=params.get("create_uvs", True),
+        )
+
+    def _handle_msfs_livery_create_paint_layers(self, params: dict) -> dict:
+        """Create paint layer images for livery workflow."""
+        from .msfs.livery import create_paint_layers
+        resolution = params.get("texture_resolution", [4096, 4096])
+        return create_paint_layers(
+            object_name=require_param(params, "object_name", str),
+            layers=params.get("layers"),
+            texture_resolution=tuple(resolution),
+        )
+
+    def _handle_msfs_livery_load_template_overlay(self, params: dict) -> dict:
+        """Load a reference template image as overlay."""
+        from .msfs.livery import load_template_overlay
+        return load_template_overlay(
+            image_path=require_param(params, "image_path", str),
+            object_name=params.get("object_name"),
+            opacity=params.get("opacity", 0.5),
+        )
+
+    def _handle_msfs_livery_export_uv_layout(self, params: dict) -> dict:
+        """Export UV layout as image for painting reference."""
+        from .msfs.livery import export_uv_layout
+        resolution = params.get("resolution", [4096, 4096])
+        return export_uv_layout(
+            object_name=require_param(params, "object_name", str),
+            output_path=require_param(params, "output_path", str),
+            resolution=tuple(resolution),
+            fill_opacity=params.get("fill_opacity", 0.0),
+            line_thickness=params.get("line_thickness", 1.0),
+        )
+
+    def _handle_msfs_livery_set_paint_brush(self, params: dict) -> dict:
+        """Configure paint brush settings."""
+        from .msfs.livery import set_paint_brush
+        return set_paint_brush(
+            preset=params.get("preset"),
+            color=params.get("color"),
+            size=params.get("size"),
+            strength=params.get("strength"),
+        )
+
+    def _handle_msfs_livery_sample_color(self, params: dict) -> dict:
+        """Sample a color from an image."""
+        from .msfs.livery import sample_color_from_image
+        return sample_color_from_image(
+            image_path=require_param(params, "image_path", str),
+            x=require_param(params, "x", int),
+            y=require_param(params, "y", int),
+        )
+
+    def _handle_msfs_livery_get_paint_presets(self, params: dict) -> dict:
+        """Get available paint presets."""
+        from .msfs.livery.painting import get_paint_presets
+        return get_paint_presets()
+
+    def _handle_msfs_livery_get_aircraft_templates(self, params: dict) -> dict:
+        """Get list of supported aircraft templates."""
+        from .msfs.livery import get_aircraft_templates
+        return get_aircraft_templates()
+
+    def _handle_msfs_livery_get_template_info(self, params: dict) -> dict:
+        """Get detailed template info for an aircraft."""
+        from .msfs.livery import get_template_info
+        return get_template_info(
+            aircraft_id=require_param(params, "aircraft_id", str),
+        )
+
+    def _handle_msfs_livery_download_template(self, params: dict) -> dict:
+        """Download or generate template files."""
+        from .msfs.livery import download_template
+        return download_template(
+            aircraft_id=require_param(params, "aircraft_id", str),
+            output_dir=require_param(params, "output_dir", str),
+        )
+
+    def _handle_msfs_livery_analyze(self, params: dict) -> dict:
+        """Analyze a livery image for colors, patterns, elements."""
+        from .msfs.livery import analyze_livery
+        return analyze_livery(
+            image_path=require_param(params, "image_path", str),
+            aircraft_type=params.get("aircraft_type"),
+        )
+
+    def _handle_msfs_livery_transfer(self, params: dict) -> dict:
+        """Transfer livery design between aircraft."""
+        from .msfs.livery import transfer_livery
+        return transfer_livery(
+            source_image=require_param(params, "source_image", str),
+            source_aircraft=require_param(params, "source_aircraft", str),
+            target_aircraft=require_param(params, "target_aircraft", str),
+            output_dir=require_param(params, "output_dir", str),
+            preserve_colors=params.get("preserve_colors", True),
+            preserve_text=params.get("preserve_text", True),
+        )
+
+    def _handle_msfs_livery_extract_colors(self, params: dict) -> dict:
+        """Extract color palette from livery image."""
+        from .msfs.livery import extract_color_palette
+        return extract_color_palette(
+            image_path=require_param(params, "image_path", str),
+            num_colors=params.get("num_colors", 8),
+            exclude_white=params.get("exclude_white", True),
+        )
+
+    def _handle_msfs_livery_map_elements(self, params: dict) -> dict:
+        """Map design elements between aircraft templates."""
+        from .msfs.livery import map_design_elements
+        return map_design_elements(
+            source_aircraft=require_param(params, "source_aircraft", str),
+            target_aircraft=require_param(params, "target_aircraft", str),
+            elements=params.get("elements"),
+        )
+
+    def _handle_msfs_livery_export_textures(self, params: dict) -> dict:
+        """Export livery textures from an object."""
+        from .msfs.livery import export_livery_textures
+        return export_livery_textures(
+            object_name=require_param(params, "object_name", str),
+            output_dir=require_param(params, "output_dir", str),
+            texture_types=params.get("texture_types"),
+            format=params.get("format", "PNG"),
+        )
+
+    def _handle_msfs_livery_create_package(self, params: dict) -> dict:
+        """Create MSFS livery package folder structure."""
+        from .msfs.livery import create_livery_package
+        return create_livery_package(
+            aircraft_id=require_param(params, "aircraft_id", str),
+            livery_name=require_param(params, "livery_name", str),
+            output_dir=require_param(params, "output_dir", str),
+            texture_dir=params.get("texture_dir"),
+            airline=params.get("airline", ""),
+            description=params.get("description", ""),
+            author=params.get("author", ""),
+        )
+
+    def _handle_msfs_livery_convert_to_dds(self, params: dict) -> dict:
+        """Convert texture to DDS format for MSFS."""
+        from .msfs.livery import convert_to_dds
+        return convert_to_dds(
+            input_path=require_param(params, "input_path", str),
+            output_path=params.get("output_path"),
+            texture_type=params.get("texture_type", "albedo"),
+        )
+
+    def _handle_msfs_livery_validate_package(self, params: dict) -> dict:
+        """Validate a livery package structure."""
+        from .msfs.livery import validate_livery_package
+        return validate_livery_package(
+            package_dir=require_param(params, "package_dir", str),
         )
