@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-blender"
+version = "0.1.0"
+description = "MCP server for Blender - Control Blender via Model Context Protocol"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "MCP Blender Contributors" }
+]
+keywords = ["mcp", "blender", "3d", "model-context-protocol", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0",
+]
+
+[project.scripts]
+mcp-blender = "mcp_blender.server:main"
+
+[project.urls]
+Homepage = "https://github.com/mcp-blender/mcp-blender"
+Repository = "https://github.com/mcp-blender/mcp-blender"
+Issues = "https://github.com/mcp-blender/mcp-blender/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_blender"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
