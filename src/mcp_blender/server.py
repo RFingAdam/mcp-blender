@@ -1023,6 +1023,272 @@ TOOLS: list[Tool] = [
             "required": ["base_name", "output_dir"],
         },
     ),
+    # ==================== MSFS Livery Tools ====================
+    Tool(
+        name="blender_msfs_livery_setup_paint_mode",
+        description="Set up an object for texture painting with UV map and paint texture",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object to paint"},
+                "texture_resolution": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Texture resolution [width, height] (default: [4096, 4096])",
+                },
+                "create_uvs": {"type": "boolean", "description": "Create UV map if none exists (default: true)"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_create_paint_layers",
+        description="Create paint layer images for livery workflow (primer, base_color, cheatline, belly, details, decals, weathering, clearcoat)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "layers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Layer names to create (default: all layers)",
+                },
+                "texture_resolution": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Resolution for each layer [width, height]",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_load_template_overlay",
+        description="Load a reference template image as overlay for painting",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to template image"},
+                "object_name": {"type": "string", "description": "Object to use as reference (optional)"},
+                "opacity": {"type": "number", "description": "Overlay opacity 0-1 (default: 0.5)"},
+            },
+            "required": ["image_path"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_export_uv_layout",
+        description="Export UV layout as an image for painting reference in external editors",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "output_path": {"type": "string", "description": "Output image path"},
+                "resolution": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Output resolution [width, height]",
+                },
+                "fill_opacity": {"type": "number", "description": "Fill opacity for UV faces (default: 0)"},
+                "line_thickness": {"type": "number", "description": "UV edge line thickness (default: 1)"},
+            },
+            "required": ["object_name", "output_path"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_set_paint_brush",
+        description="Configure paint brush settings with presets (soft_airbrush, hard_edge, detail_brush, smudge, clone, fill)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "preset": {"type": "string", "description": "Brush preset name"},
+                "color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGBA paint color (0-1 range)",
+                },
+                "size": {"type": "integer", "description": "Brush size in pixels"},
+                "strength": {"type": "number", "description": "Brush strength (0-1)"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_sample_color",
+        description="Sample a color from an image at specific coordinates for matching reference livery colors",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to image file"},
+                "x": {"type": "integer", "description": "X coordinate to sample"},
+                "y": {"type": "integer", "description": "Y coordinate to sample"},
+            },
+            "required": ["image_path", "x", "y"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_get_paint_presets",
+        description="Get available paint presets for livery painting (layers and brushes)",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_get_aircraft_templates",
+        description="Get list of supported aircraft templates (FBW A32NX, Fenix, PMDG, iniBuilds, etc.)",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_get_template_info",
+        description="Get detailed template information for an aircraft including texture sizes and UV regions",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "aircraft_id": {
+                    "type": "string",
+                    "description": "Aircraft identifier (e.g., 'fbw_a32nx', 'pmdg_737', 'fenix_a320')",
+                },
+            },
+            "required": ["aircraft_id"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_download_template",
+        description="Download or generate template files for an aircraft at correct resolution",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "aircraft_id": {"type": "string", "description": "Aircraft identifier"},
+                "output_dir": {"type": "string", "description": "Directory to save template files"},
+            },
+            "required": ["aircraft_id", "output_dir"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_analyze",
+        description="Analyze a livery image for colors, patterns, and design elements",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to livery image"},
+                "aircraft_type": {"type": "string", "description": "Type of aircraft for region analysis (optional)"},
+            },
+            "required": ["image_path"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_transfer",
+        description="Transfer livery design between different aircraft types with UV remapping",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source_image": {"type": "string", "description": "Path to source livery image"},
+                "source_aircraft": {"type": "string", "description": "Source aircraft ID"},
+                "target_aircraft": {"type": "string", "description": "Target aircraft ID"},
+                "output_dir": {"type": "string", "description": "Output directory for transferred livery"},
+                "preserve_colors": {"type": "boolean", "description": "Preserve original colors (default: true)"},
+                "preserve_text": {"type": "boolean", "description": "Attempt to preserve text elements (default: true)"},
+            },
+            "required": ["source_image", "source_aircraft", "target_aircraft", "output_dir"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_extract_colors",
+        description="Extract color palette from livery image for recreating designs",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_path": {"type": "string", "description": "Path to livery image"},
+                "num_colors": {"type": "integer", "description": "Number of colors to extract (default: 8)"},
+                "exclude_white": {"type": "boolean", "description": "Exclude white/near-white colors (default: true)"},
+            },
+            "required": ["image_path"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_map_elements",
+        description="Map design elements (cheatline, logo, registration) between aircraft templates",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source_aircraft": {"type": "string", "description": "Source aircraft ID"},
+                "target_aircraft": {"type": "string", "description": "Target aircraft ID"},
+                "elements": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Elements to map (default: all)",
+                },
+            },
+            "required": ["source_aircraft", "target_aircraft"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_export_textures",
+        description="Export livery textures from an object in PNG, TARGA, or for DDS conversion",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object with livery materials"},
+                "output_dir": {"type": "string", "description": "Directory to save exported textures"},
+                "texture_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Types to export: albedo, normal, composite, emissive (default: albedo)",
+                },
+                "format": {"type": "string", "description": "Output format: PNG, TARGA (default: PNG)"},
+            },
+            "required": ["object_name", "output_dir"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_create_package",
+        description="Create MSFS livery package folder structure with manifest.json and layout.json",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "aircraft_id": {"type": "string", "description": "Aircraft identifier (e.g., 'fbw_a32nx')"},
+                "livery_name": {"type": "string", "description": "Name for the livery"},
+                "output_dir": {"type": "string", "description": "Base directory for the package"},
+                "texture_dir": {"type": "string", "description": "Directory containing texture files to include"},
+                "airline": {"type": "string", "description": "Airline name for aircraft.cfg"},
+                "description": {"type": "string", "description": "Livery description"},
+                "author": {"type": "string", "description": "Author name"},
+            },
+            "required": ["aircraft_id", "livery_name", "output_dir"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_convert_to_dds",
+        description="Convert texture to DDS format for MSFS (requires texconv)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "input_path": {"type": "string", "description": "Path to input image"},
+                "output_path": {"type": "string", "description": "Path for output DDS (optional)"},
+                "texture_type": {
+                    "type": "string",
+                    "description": "Type for format selection: albedo, normal, composite, emissive (default: albedo)",
+                },
+            },
+            "required": ["input_path"],
+        },
+    ),
+    Tool(
+        name="blender_msfs_livery_validate_package",
+        description="Validate a livery package structure for MSFS compatibility",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "package_dir": {"type": "string", "description": "Path to the livery package"},
+            },
+            "required": ["package_dir"],
+        },
+    ),
 ]
 
 

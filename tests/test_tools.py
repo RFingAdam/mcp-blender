@@ -122,7 +122,7 @@ class TestToolDescriptions:
 
     def test_descriptions_are_actionable(self):
         """Descriptions should describe what the tool does."""
-        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return", "tag", "decimate", "validate", "batch"]
+        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return", "tag", "decimate", "validate", "batch", "load", "sample", "extract", "map", "transfer", "analyze", "convert"]
 
         for tool in TOOLS:
             desc_lower = tool.description.lower()
@@ -177,5 +177,5 @@ class TestToolNaming:
         msfs_tools = [t for t in TOOLS if "msfs" in t.name]
         for tool in msfs_tools:
             assert tool.name.startswith("blender_msfs_"), f"MSFS tool {tool.name} should start with blender_msfs_"
-        # Should have at least 18 MSFS tools (LOD, materials, collision, animation, export)
-        assert len(msfs_tools) >= 18, f"Expected at least 18 MSFS tools, found {len(msfs_tools)}"
+        # Should have at least 36 MSFS tools (LOD, materials, collision, animation, export + livery)
+        assert len(msfs_tools) >= 36, f"Expected at least 36 MSFS tools, found {len(msfs_tools)}"

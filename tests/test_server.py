@@ -43,8 +43,8 @@ class TestToolDefinitions:
 
     def test_tool_count(self):
         """Verify expected number of tools."""
-        # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export + 4 external + 20 MSFS = 68
-        assert len(TOOLS) >= 60, f"Expected at least 60 tools, got {len(TOOLS)}"
+        # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export + 4 external + 20 MSFS + 18 livery = 86
+        assert len(TOOLS) >= 80, f"Expected at least 80 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:
@@ -102,7 +102,7 @@ class TestToolCategories:
 
     def test_msfs_tools(self):
         """MSFS content creation tools should exist."""
-        msfs_tools = [t for t in TOOLS if t.name.startswith("blender_msfs_")]
+        msfs_tools = [t for t in TOOLS if t.name.startswith("blender_msfs_") and "livery" not in t.name]
         # LOD (4) + Materials (4) + Collision (4) + Animation (4) + Export (4) = 20
         assert len(msfs_tools) >= 18, f"Expected at least 18 MSFS tools, got {len(msfs_tools)}"
 
@@ -121,3 +121,22 @@ class TestToolCategories:
 
         export_tools = [t for t in msfs_tools if "export" in t.name or "validate" in t.name]
         assert len(export_tools) >= 3, "Should have export tools"
+
+    def test_msfs_livery_tools(self):
+        """MSFS livery tools should exist."""
+        livery_tools = [t for t in TOOLS if "livery" in t.name]
+        # Painting (7) + Templates (3) + Transfer (4) + Export (4) = 18
+        assert len(livery_tools) >= 16, f"Expected at least 16 livery tools, got {len(livery_tools)}"
+
+        # Verify key livery tool categories
+        paint_tools = [t for t in livery_tools if any(x in t.name for x in ["paint", "brush", "layer"])]
+        assert len(paint_tools) >= 3, "Should have paint tools"
+
+        template_tools = [t for t in livery_tools if "template" in t.name or "aircraft" in t.name]
+        assert len(template_tools) >= 3, "Should have template tools"
+
+        transfer_tools = [t for t in livery_tools if any(x in t.name for x in ["transfer", "analyze", "extract", "map"])]
+        assert len(transfer_tools) >= 4, "Should have transfer tools"
+
+        export_tools = [t for t in livery_tools if any(x in t.name for x in ["export", "package", "dds", "validate"])]
+        assert len(export_tools) >= 4, "Should have livery export tools"
