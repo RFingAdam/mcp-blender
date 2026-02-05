@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "MCP Blender Contributors" }
 ]
-keywords = ["mcp", "blender", "3d", "model-context-protocol", "ai"]
+keywords = ["mcp", "blender", "3d", "model-context-protocol", "ai", "msfs", "flight-simulator", "livery", "aircraft"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
