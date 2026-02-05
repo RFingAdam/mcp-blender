@@ -122,7 +122,7 @@ class TestToolDescriptions:
 
     def test_descriptions_are_actionable(self):
         """Descriptions should describe what the tool does."""
-        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return"]
+        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return", "tag", "decimate", "validate", "batch"]
 
         for tool in TOOLS:
             desc_lower = tool.description.lower()
@@ -148,7 +148,8 @@ class TestToolNaming:
 
     def test_material_tools_naming(self):
         """Material tools should follow naming convention."""
-        material_tools = [t for t in TOOLS if "material" in t.name]
+        # Exclude MSFS tools which follow a different naming pattern
+        material_tools = [t for t in TOOLS if "material" in t.name and "msfs" not in t.name]
         for tool in material_tools:
             assert tool.name.startswith("blender_material_")
 
@@ -166,6 +167,15 @@ class TestToolNaming:
 
     def test_export_tools_naming(self):
         """Export tools should follow naming convention."""
-        export_tools = [t for t in TOOLS if "export" in t.name or "import" in t.name]
+        # Exclude MSFS tools which follow a different naming pattern
+        export_tools = [t for t in TOOLS if ("export" in t.name or "import" in t.name) and "msfs" not in t.name]
         for tool in export_tools:
             assert tool.name.startswith("blender_export_") or tool.name.startswith("blender_import_")
+
+    def test_msfs_tools_naming(self):
+        """MSFS tools should follow naming convention."""
+        msfs_tools = [t for t in TOOLS if "msfs" in t.name]
+        for tool in msfs_tools:
+            assert tool.name.startswith("blender_msfs_"), f"MSFS tool {tool.name} should start with blender_msfs_"
+        # Should have at least 18 MSFS tools (LOD, materials, collision, animation, export)
+        assert len(msfs_tools) >= 18, f"Expected at least 18 MSFS tools, found {len(msfs_tools)}"

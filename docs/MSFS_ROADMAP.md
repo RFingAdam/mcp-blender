@@ -1,186 +1,308 @@
-# MSFS 2020/2024 Content Creation Roadmap
+# MSFS 2020/2024 Content Creation Tools
 
-This document outlines planned enhancements for Microsoft Flight Simulator content creation, specifically for ground service vehicles and equipment (GSX-like functionality).
+This document describes the MSFS (Microsoft Flight Simulator) content creation tools available in the MCP Blender server.
 
-## Current Capabilities
+## Overview
 
-The MCP Blender server already supports:
+The MCP Blender server provides specialized tools for creating flight simulator-compatible 3D content. These tools support both MSFS 2020 and MSFS 2024, handling the specific requirements for LOD systems, material extensions, collision meshes, and animation events.
 
-- **Modeling**: Create and manipulate 3D objects, apply modifiers (subdivision, bevel, mirror, array, boolean)
-- **Materials**: PBR materials via Principled BSDF (metallic, roughness, normal maps)
-- **Texturing**: Image texture support with UV mapping
-- **Animation**: Keyframe animation for location, rotation, scale
-- **Export**: glTF/GLB (MSFS native), FBX, OBJ formats
+## Available Tools
 
-## Planned MSFS-Specific Tools
+### LOD (Level of Detail) System
 
-### Phase 1: LOD System (High Priority)
+Proper LOD implementation is critical for flight simulator performance.
 
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_create_lod_hierarchy` | Create LOD hierarchy from a base mesh |
+| `blender_msfs_decimate_for_lod` | Decimate a mesh to a target ratio |
+| `blender_msfs_setup_lod_distances` | Configure LOD switching distances |
+| `blender_msfs_get_lod_info` | Get LOD hierarchy information |
+| `blender_msfs_batch_export_lods` | Export all LODs with proper structure |
+
+**Default LOD Distances:**
+- LOD0: 0-50m (Full detail)
+- LOD1: 50-200m (Medium detail, ~50% vertices)
+- LOD2: 200-500m (Low detail, ~25% vertices)
+- LOD3: 500m+ (Minimal detail, ~10% vertices)
+
+**Example:**
+```python
+# Create LOD hierarchy from a vehicle model
+blender_msfs_create_lod_hierarchy(
+    base_object_name="Vehicle_Body",
+    lod_count=4,
+    auto_decimate=True
+)
+
+# Configure custom distances
+blender_msfs_setup_lod_distances(
+    base_name="Vehicle_Body",
+    distances={"LOD0": 0, "LOD1": 30, "LOD2": 100, "LOD3": 300}
+)
 ```
-blender_msfs_lod_create        - Create LOD hierarchy from base mesh
-blender_msfs_lod_setup         - Configure LOD distances
-blender_msfs_lod_decimate      - Auto-generate lower LODs with decimation
-blender_msfs_lod_export        - Export all LODs with MSFS naming convention
+
+### MSFS Material Extensions
+
+Flight simulators use glTF with custom material extensions.
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_setup_material` | Configure MSFS-specific material type |
+| `blender_msfs_create_glass_material` | Create glass/windshield material |
+| `blender_msfs_create_emissive_material` | Create emissive/light material |
+| `blender_msfs_get_material_presets` | List available material presets |
+
+**Supported Material Types:**
+- `standard` - Standard PBR material
+- `windshield` - Windshield with rain effects
+- `clear_coat` - Vehicle paint, glossy surfaces
+- `anisotropic` - Brushed metal
+- `glass` - Transparent glass
+- `parallax_window` - Fake interior depth
+- `fake_terrain` - Ground shadows
+- `geo_decal` - Decal textures
+- `invisible` - Invisible collision only
+- `environment_occluder` - Environment occlusion
+
+**Available Presets:**
+- `vehicle_paint` - Glossy car paint
+- `chrome` - Reflective chrome
+- `brushed_metal` - Anisotropic brushed metal
+- `rubber` - Tire/rubber material
+- `plastic` - General plastic
+- `glass_clear` - Clear glass
+- `glass_tinted` - Tinted glass
+- `windshield` - Aircraft windshield
+- `fabric` - Cloth/fabric
+- `concrete` - Concrete surface
+- `asphalt` - Road/runway surface
+
+**Example:**
+```python
+# Create vehicle paint material
+blender_msfs_setup_material(
+    material_name="VehiclePaint",
+    msfs_type="clear_coat",
+    base_color=[0.8, 0.2, 0.1, 1.0],
+    metallic=0.1,
+    roughness=0.35
+)
+
+# Create cockpit glass
+blender_msfs_create_glass_material(
+    material_name="Windshield",
+    opacity=0.05,
+    is_windshield=True
+)
 ```
 
-**LOD Requirements for MSFS:**
-- LOD0: Full detail (0-50m)
-- LOD1: Medium detail (50-200m)
-- LOD2: Low detail (200-500m)
-- LOD3: Minimal detail (500m+)
+### Collision Meshes
 
-### Phase 2: MSFS Material Extensions (High Priority)
+Collision meshes define physical interactions in the simulator.
 
-```
-blender_msfs_material_setup    - Configure MSFS-specific material properties
-blender_msfs_material_glass    - Set up glass/windshield materials
-blender_msfs_material_emissive - Configure emissive/light materials
-blender_msfs_material_detail   - Add detail/decal textures
-```
-
-**MSFS Material Properties:**
-- `ASOBO_material_windshield` - Windshield rain effects
-- `ASOBO_material_clear_coat` - Car paint, glossy surfaces
-- `ASOBO_material_anisotropic` - Brushed metal
-- `ASOBO_material_parallax_window` - Fake interior depth
-- `ASOBO_material_fake_terrain` - Ground shadows
-
-### Phase 3: Collision & Physics (High Priority)
-
-```
-blender_msfs_collision_create  - Create collision mesh from object
-blender_msfs_collision_box     - Add box collision primitive
-blender_msfs_collision_convex  - Generate convex hull collision
-blender_msfs_road_collision    - Set up road/ground collision tags
-```
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_create_collision_mesh` | Create simplified collision mesh |
+| `blender_msfs_create_collision_box` | Create box collision primitive |
+| `blender_msfs_create_collision_convex` | Create convex hull collision |
+| `blender_msfs_tag_collision_type` | Tag existing mesh as collision |
 
 **Collision Types:**
-- `فІЗИКА` (Physics) - Physical collision
-- `ROAD` - Ground vehicle pathfinding
-- `WATER` - Water interaction
+- `collider` - General physics collision
+- `road` - Road/ground for vehicle pathfinding
+- `water` - Water interaction zones
+- `trigger` - Trigger volumes (enter/exit events)
 
-### Phase 4: Animation Tools (Medium Priority)
+**Example:**
+```python
+# Create simplified collision mesh
+blender_msfs_create_collision_mesh(
+    source_object_name="Vehicle_Body",
+    collision_type="collider",
+    simplify=True,
+    simplify_ratio=0.3
+)
 
-```
-blender_msfs_anim_tag          - Add MSFS animation tag/event
-blender_msfs_anim_visibility   - Set up visibility animations
-blender_msfs_anim_loop         - Configure looping animations
-blender_msfs_anim_export       - Export with MSFS animation metadata
-```
-
-**Ground Service Animations:**
-- Door open/close sequences
-- Conveyor belt loops
-- Lift platform raise/lower
-- Vehicle steering
-- Light on/off states
-
-### Phase 5: Batch Export & SDK Integration (Medium Priority)
-
-```
-blender_msfs_export_vehicle    - Full vehicle export (mesh + LODs + collision + anims)
-blender_msfs_export_package    - Create complete MSFS package structure
-blender_msfs_xml_generate      - Generate model behavior XML
+# Create box collision for faster physics
+blender_msfs_create_collision_box(
+    object_name="Vehicle_Body",
+    collision_type="collider",
+    padding=0.05
+)
 ```
 
-## Ground Service Vehicle Workflow
+### Animation Events
 
-### 1. Modeling the Vehicle
+Flight simulators use animation tags for triggering sounds, effects, and state changes.
 
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_add_animation_tag` | Add animation event marker |
+| `blender_msfs_setup_visibility_animation` | Configure show/hide animation |
+| `blender_msfs_configure_animation_loop` | Set loop behavior |
+| `blender_msfs_list_animation_tags` | List all animation tags |
+
+**Animation Tag Types:**
+- `start` / `end` - Animation boundaries
+- `loop_start` / `loop_end` - Loop points
+- `sound` / `sound_start` / `sound_stop` - Audio triggers
+- `effect` / `effect_start` / `effect_stop` - Visual effect triggers
+- `show` / `hide` - Visibility toggles
+- `event` - Custom events
+
+**Loop Behaviors:**
+- `once` - Play once and stop
+- `loop` - Loop continuously
+- `ping_pong` - Play forward then reverse
+- `hold` - Play once and hold final frame
+
+**Example:**
+```python
+# Add sound event to animation
+blender_msfs_add_animation_tag(
+    object_name="Door",
+    tag_type="sound",
+    frame=1,
+    tag_data="door_open.wav"
+)
+
+# Configure looping animation
+blender_msfs_configure_animation_loop(
+    object_name="RotatingBeacon",
+    behavior="loop",
+    loop_start=1,
+    loop_end=60
+)
 ```
-# Create base vehicle
-blender_object_create(type="cube", name="FuelTruck_Body")
-blender_object_transform(name="FuelTruck_Body", scale=[4, 2, 1.5])
 
-# Add details with modifiers
-blender_modifier_add(object_name="FuelTruck_Body", modifier_type="BEVEL")
-blender_modifier_add(object_name="FuelTruck_Body", modifier_type="SUBSURF", params={"levels": 2})
+### Export
+
+Export tools ensure compatibility with MSFS format requirements.
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_export_model` | Export with LODs, collision, animations |
+| `blender_msfs_validate_for_export` | Validate for MSFS compatibility |
+| `blender_msfs_get_export_settings` | Get export settings and recommendations |
+| `blender_msfs_batch_export_lods` | Batch export LOD hierarchy |
+
+**Example:**
+```python
+# Validate before export
+result = blender_msfs_validate_for_export(object_name="Vehicle")
+if result["valid"]:
+    # Export complete model
+    blender_msfs_export_model(
+        filepath="/output/vehicle.glb",
+        include_lods=True,
+        include_collision=True,
+        include_animations=True
+    )
 ```
 
-### 2. Setting Up Materials
+## Complete Workflow Example
 
-```
-# Create PBR material
-blender_material_create(name="FuelTruck_Paint")
-blender_material_set_principled(
-    material_name="FuelTruck_Paint",
-    base_color=[0.8, 0.2, 0.1, 1.0],  # Red
+### Creating a Ground Vehicle
+
+```python
+# 1. Create base model
+blender_object_create(type="cube", name="Vehicle_Body")
+blender_object_transform(name="Vehicle_Body", scale=[4, 2, 1.5])
+blender_modifier_add(object_name="Vehicle_Body", modifier_type="BEVEL")
+blender_modifier_add(object_name="Vehicle_Body", modifier_type="SUBSURF", properties={"levels": 2})
+
+# 2. Set up materials
+blender_msfs_setup_material(
+    material_name="BodyPaint",
+    msfs_type="clear_coat",
+    base_color=[0.9, 0.9, 0.1, 1.0],
     metallic=0.1,
-    roughness=0.4
+    roughness=0.35
 )
-blender_material_add_texture(material_name="FuelTruck_Paint", texture_path="/textures/truck_diffuse.png")
-```
+blender_material_assign(object_name="Vehicle_Body", material_name="BodyPaint")
 
-### 3. Creating Animations
-
-```
-# Animate fuel hose arm
-blender_keyframe_insert(object_name="FuelArm", data_path="rotation_euler", frame=1)
-blender_object_transform(name="FuelArm", rotation=[0, 0, 45])
-blender_keyframe_insert(object_name="FuelArm", data_path="rotation_euler", frame=60)
-```
-
-### 4. Generating LODs (Planned)
-
-```
-# Auto-generate LODs
-blender_msfs_lod_create(base_object="FuelTruck", lod_count=4)
-blender_msfs_lod_decimate(object_name="FuelTruck_LOD1", ratio=0.5)
-blender_msfs_lod_decimate(object_name="FuelTruck_LOD2", ratio=0.25)
-blender_msfs_lod_decimate(object_name="FuelTruck_LOD3", ratio=0.1)
-```
-
-### 5. Export for MSFS (Planned)
-
-```
-# Export complete vehicle package
-blender_msfs_export_vehicle(
-    base_object="FuelTruck",
-    output_dir="/path/to/msfs/package/",
-    include_lods=True,
-    include_collision=True,
-    include_animations=True
+# 3. Create LOD hierarchy
+blender_msfs_create_lod_hierarchy(
+    base_object_name="Vehicle_Body",
+    lod_count=4,
+    auto_decimate=True
 )
+
+# 4. Set up collision
+blender_msfs_create_collision_box(
+    object_name="Vehicle_Body",
+    collision_type="collider"
+)
+
+# 5. Add door animation
+blender_keyframe_insert(object_name="Door", data_path="rotation_euler", frame=1, value=[0, 0, 0])
+blender_keyframe_insert(object_name="Door", data_path="rotation_euler", frame=30, value=[0, 0, 1.57])
+blender_msfs_add_animation_tag(object_name="Door", tag_type="sound_start", frame=1, tag_data="door_open.wav")
+blender_msfs_add_animation_tag(object_name="Door", tag_type="sound_stop", frame=30)
+
+# 6. Validate and export
+validation = blender_msfs_validate_for_export()
+if validation["valid"]:
+    blender_msfs_export_model(
+        filepath="/output/vehicle.glb",
+        include_lods=True,
+        include_collision=True,
+        include_animations=True
+    )
 ```
 
-## Integration with Ground Master
+## Best Practices
 
-For your GSX-like "Ground Master" application, the MCP Blender tools would handle:
+### Performance Optimization
 
-1. **Asset Creation Pipeline**
-   - Model ground vehicles (tugs, fuel trucks, baggage carts, stairs, etc.)
-   - Create animations for vehicle operations
-   - Generate LODs for performance
-   - Export glTF with MSFS extensions
+1. **LODs are mandatory** - Always create at least 3 LOD levels for any visible object
+2. **Simplify collision meshes** - Use boxes or convex hulls when possible
+3. **Texture sizes** - Max 4096x4096, use power-of-2 dimensions
+4. **Vertex count targets**:
+   - LOD0: <50,000 vertices for complex objects
+   - LOD3: <1,000 vertices
 
-2. **Batch Processing**
-   - AI-assisted modeling via prompts
-   - Automated LOD generation
-   - Consistent material setup across fleet
+### Material Setup
 
-3. **Iteration Workflow**
-   - Quick modifications via Claude Code
-   - Test renders before export
-   - Animation preview and adjustment
+1. Use MSFS material types for correct rendering
+2. Enable day/night cycle for cockpit lights
+3. Use windshield type for rain effects on glass
+4. Apply tangent normals (not object normals)
 
-## Blender Addons to Consider
+### Animation Guidelines
 
-For MSFS content, these Blender addons are commonly used:
+1. Add tags for sound synchronization
+2. Use visibility animations for state changes
+3. Configure proper loop behavior
+4. Test frame ranges before export
 
-1. **MSFS Blender Tools** (FlyByWire/Asobo) - Official SDK integration
-2. **Blender2MSFS** - Community glTF exporter with MSFS extensions
-3. **glTF Validator** - Verify export compatibility
+### Export Checklist
 
-The MCP server could potentially integrate with these addons for full MSFS workflow support.
+- [ ] All objects have UV maps
+- [ ] Materials assigned to all meshes
+- [ ] LODs created and configured
+- [ ] Collision meshes added
+- [ ] Animations have proper tags
+- [ ] Scale applied (no non-unit scale)
+- [ ] Validation passes with no errors
 
-## Next Steps
+## Related External Tools
 
-1. Implement LOD generation tools
-2. Add MSFS material extension support in glTF export
-3. Create collision mesh tools
-4. Add animation tag/event system
-5. Build batch export for complete vehicle packages
+For complete MSFS development workflows, consider these companion tools:
 
----
+- **MSFS SDK** - Official Microsoft development kit
+- **MSFS Blender Tools** - Asobo's official Blender addon
+- **glTF Validator** - Verify export compatibility
 
-*This roadmap is for the MCP Blender integration with Ground Master framework.*
+## Format Reference
+
+The tools export to glTF 2.0 format with MSFS-specific extensions:
+
+- Custom properties stored in `extras` field
+- Material types via `MSFS_material_type` property
+- LOD distances via `MSFS_lod_min_distance` / `MSFS_lod_max_distance`
+- Collision type via `MSFS_collision_type`
+- Animation tags via `MSFS_animation_tags`
+
+All custom properties are preserved during glTF export and recognized by MSFS import tools.

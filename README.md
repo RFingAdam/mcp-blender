@@ -11,7 +11,7 @@ Control Blender via the Model Context Protocol (MCP). This enables AI assistants
 
 ## Features
 
-- **48 tools** for comprehensive Blender control
+- **68 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF
@@ -19,6 +19,7 @@ Control Blender via the Model Context Protocol (MCP). This enables AI assistants
 - **Animation** - Keyframes, actions, playback control
 - **Rendering** - Render images/animations, configure engines
 - **Import/Export** - glTF, FBX, OBJ, STL support
+- **MSFS 2020/2024 content creation** - LOD systems, collision meshes, MSFS materials, animation events
 - **Poly Haven integration** - Search and download free HDRIs, textures, and models
 - **AI model generation** - Generate 3D models from text or images via Hyper3D Rodin
 
@@ -198,6 +199,35 @@ Ask Claude to:
 | `blender_ai_generate_model` | Generate 3D model from text or image (Hyper3D Rodin) |
 | `blender_ai_model_status` | Check AI generation job status |
 
+### MSFS 2020/2024 Content Creation Tools (20)
+
+Tools for creating Microsoft Flight Simulator compatible content.
+
+| Tool | Description |
+|------|-------------|
+| `blender_msfs_create_lod_hierarchy` | Create LOD hierarchy from base mesh |
+| `blender_msfs_decimate_for_lod` | Decimate mesh to target ratio |
+| `blender_msfs_setup_lod_distances` | Configure LOD switch distances |
+| `blender_msfs_get_lod_info` | Get LOD hierarchy information |
+| `blender_msfs_setup_material` | Set up MSFS-specific material |
+| `blender_msfs_create_glass_material` | Create glass/windshield material |
+| `blender_msfs_create_emissive_material` | Create emissive/light material |
+| `blender_msfs_get_material_presets` | List available material presets |
+| `blender_msfs_create_collision_mesh` | Create simplified collision mesh |
+| `blender_msfs_create_collision_box` | Create box collision primitive |
+| `blender_msfs_create_collision_convex` | Create convex hull collision |
+| `blender_msfs_tag_collision_type` | Tag mesh as collision object |
+| `blender_msfs_add_animation_tag` | Add animation event marker |
+| `blender_msfs_setup_visibility_animation` | Configure show/hide animation |
+| `blender_msfs_configure_animation_loop` | Set loop behavior |
+| `blender_msfs_list_animation_tags` | List all animation tags |
+| `blender_msfs_export_model` | Export with LODs, collision, animations |
+| `blender_msfs_validate_for_export` | Validate for MSFS compatibility |
+| `blender_msfs_get_export_settings` | Get export settings |
+| `blender_msfs_batch_export_lods` | Batch export LOD hierarchy |
+
+See [MSFS_ROADMAP.md](docs/MSFS_ROADMAP.md) for detailed MSFS workflow documentation.
+
 ## External Integrations
 
 ### Poly Haven
@@ -360,10 +390,16 @@ mcp-blender/
 │   ├── handlers.py            # Command handlers
 │   ├── compat.py              # Version compatibility layer
 │   ├── validation.py          # Parameter validation
-│   └── external/              # External integrations
-│       ├── cache.py           # Asset caching system
-│       ├── polyhaven.py       # Poly Haven API client
-│       └── ai_models.py       # Hyper3D Rodin integration
+│   ├── external/              # External integrations
+│   │   ├── cache.py           # Asset caching system
+│   │   ├── polyhaven.py       # Poly Haven API client
+│   │   └── ai_models.py       # Hyper3D Rodin integration
+│   └── msfs/                  # MSFS content creation tools
+│       ├── lod.py             # LOD hierarchy management
+│       ├── materials.py       # MSFS material extensions
+│       ├── collision.py       # Collision mesh tools
+│       ├── animation.py       # Animation tags and events
+│       └── export.py          # MSFS export utilities
 ├── tests/                     # Test suite
 ├── scripts/                   # Build scripts
 └── docs/                      # Documentation
