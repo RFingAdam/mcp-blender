@@ -1,49 +1,57 @@
-"""AI model generation integration (Hyper3D Rodin).
+"""AI model generation integration with multi-backend support.
 
-This module provides integration with Hyper3D Rodin for AI-based 3D model generation.
-It supports text-to-3D and image-to-3D generation with caching and status polling.
+This module provides a unified interface for AI-based 3D model generation,
+supporting multiple backends including:
+- Hyper3D Rodin (cloud)
+- Meshy.ai (cloud)
+- Tripo AI (cloud)
+- TripoSR (local)
+- Hunyuan3D (local)
+- ComfyUI (local)
 
-API Documentation: https://hyperhuman.deemos.com/docs
+The module maintains backward compatibility with the original Rodin-only API
+while providing access to the new multi-backend features.
+
+API Documentation: https://hyperhuman.deemos.com/docs (Rodin)
 """
 
-import base64
-import json
-import os
 import tempfile
 import time
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 import bpy
 
+from .ai_backends import (
+    BackendCapability,
+    GenerationResult,
+    GenerationStatus,
+    get_backend_manager,
+)
 from .cache import cache_asset, get_cached_path, is_cached
+from .job_queue import GenerationJob, get_job_queue
 
-# Hyper3D Rodin API configuration
-RODIN_API_BASE = "https://hyperhuman.deemos.com/api"
-RODIN_API_VERSION = "v1"
-
-# Supported output formats
+# Re-export for backward compatibility
 SUPPORTED_FORMATS = ["glb", "gltf", "fbx", "obj", "usdz"]
+GENERATION_STYLES = ["realistic", "cartoon", "low_poly", "sculpture", "anime"]
 
-# Generation styles
-GENERATION_STYLES = [
-    "realistic",
-    "cartoon",
-    "low_poly",
-    "sculpture",
-    "anime",
-]
+
+# =============================================================================
+# Backward-Compatible API (Original Functions)
+# =============================================================================
 
 
 def get_api_key() -> str | None:
-    """Get the Rodin API key from environment or addon preferences."""
-    # First check environment variable
+    """Get the Rodin API key from environment or addon preferences.
+
+    Maintained for backward compatibility.
+    """
+    import os
+
     api_key = os.environ.get("RODIN_API_KEY")
     if api_key:
         return api_key
 
-    # Check addon preferences if available
     try:
         prefs = bpy.context.preferences.addons.get("blender_mcp_addon")
         if prefs and hasattr(prefs, "preferences"):
@@ -56,107 +64,27 @@ def get_api_key() -> str | None:
     return None
 
 
-def _make_request(
-    endpoint: str,
-    method: str = "GET",
-    data: dict | None = None,
-    timeout: float = 60.0,
-) -> dict[str, Any]:
-    """Make an authenticated request to the Rodin API.
-
-    Args:
-        endpoint: API endpoint (without base URL)
-        method: HTTP method (GET, POST)
-        data: Request body data (for POST)
-        timeout: Request timeout in seconds
-
-    Returns:
-        API response as dictionary
-    """
-    api_key = get_api_key()
-    if not api_key:
-        return {
-            "success": False,
-            "error": "RODIN_API_KEY environment variable not set",
-            "help": (
-                "Get an API key from https://hyperhuman.deemos.com "
-                "and set RODIN_API_KEY environment variable"
-            ),
-        }
-
-    url = f"{RODIN_API_BASE}/{RODIN_API_VERSION}/{endpoint}"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    try:
-        request_data = json.dumps(data).encode("utf-8") if data else None
-        req = urllib.request.Request(url, data=request_data, headers=headers, method=method)
-
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            response_text = response.read().decode("utf-8")
-            if response_text:
-                return {"success": True, "data": json.loads(response_text)}
-            return {"success": True, "data": {}}
-
-    except urllib.error.HTTPError as e:
-        error_body = ""
-        try:
-            error_body = e.read().decode("utf-8")
-            error_data = json.loads(error_body)
-            error_message = error_data.get("message", error_data.get("error", str(e)))
-        except Exception:
-            error_message = error_body or str(e)
-
-        return {
-            "success": False,
-            "error": f"API error ({e.code}): {error_message}",
-            "status_code": e.code,
-        }
-
-    except urllib.error.URLError as e:
-        return {
-            "success": False,
-            "error": f"Connection error: {e.reason}",
-        }
-
-    except TimeoutError:
-        return {
-            "success": False,
-            "error": f"Request timed out after {timeout} seconds",
-        }
-
-    except json.JSONDecodeError as e:
-        return {
-            "success": False,
-            "error": f"Invalid JSON response: {e}",
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Unexpected error: {e}",
-        }
-
-
 def generate_model(
     prompt: str,
     style: str | None = None,
     quality: str = "medium",
     output_format: str = "glb",
+    backend: str | None = None,
 ) -> dict[str, Any]:
     """Start generating a 3D model from a text prompt.
 
+    This function uses the multi-backend system when available,
+    falling back to the original Rodin implementation if needed.
+
     Args:
-        prompt: Text description of the desired model
-        style: Optional style modifier (realistic, cartoon, low_poly, etc.)
-        quality: Generation quality (draft, medium, high)
-        output_format: Output format (glb, gltf, fbx, obj, usdz)
+        prompt: Text description of the desired model.
+        style: Optional style modifier (realistic, cartoon, etc.).
+        quality: Generation quality (draft, medium, high).
+        output_format: Output format (glb, gltf, fbx, obj, usdz).
+        backend: Optional specific backend to use.
 
     Returns:
-        Dictionary with job_id, status, and metadata
+        Dictionary with job_id, status, and metadata.
     """
     if not prompt or not prompt.strip():
         return {"success": False, "error": "Prompt cannot be empty"}
@@ -173,37 +101,40 @@ def generate_model(
             "error": f"Unknown style: {style}. Available: {', '.join(GENERATION_STYLES)}",
         }
 
-    request_data = {
-        "prompt": prompt.strip(),
-        "quality": quality,
-        "output_format": output_format,
-    }
-    if style:
-        request_data["style"] = style
+    # Use backend manager
+    manager = get_backend_manager()
+    result = manager.generate(
+        prompt=prompt.strip(),
+        style=style,
+        quality=quality,
+        output_format=output_format,
+        backend=backend,
+    )
 
-    result = _make_request("rodin/generate", method="POST", data=request_data)
+    if not result.success:
+        return {"success": False, "error": result.error}
 
-    if not result["success"]:
-        return result
-
-    data = result["data"]
-    job_id = data.get("job_id") or data.get("uuid") or data.get("task_id")
-
-    if not job_id:
-        return {
-            "success": False,
-            "error": "No job ID returned from API",
-            "raw_response": data,
-        }
+    # Create job in queue for tracking
+    queue = get_job_queue()
+    job = queue.create_job(
+        backend=backend or "auto",
+        prompt=prompt,
+        style=style,
+        quality=quality,
+        output_format=output_format,
+        metadata={"external_job_id": result.job_id},
+    )
 
     return {
         "success": True,
-        "job_id": job_id,
-        "status": "processing",
+        "job_id": result.job_id,
+        "internal_job_id": job.id,
+        "status": result.status.value,
         "prompt": prompt,
         "style": style,
         "quality": quality,
         "output_format": output_format,
+        "backend": result.metadata.get("backend", "unknown"),
         "message": "Model generation started. Use check_status to monitor progress.",
     }
 
@@ -214,39 +145,24 @@ def generate_model_from_image(
     style: str | None = None,
     quality: str = "medium",
     output_format: str = "glb",
+    backend: str | None = None,
 ) -> dict[str, Any]:
     """Start generating a 3D model from an image.
 
     Args:
-        image_path: Path to the input image
-        prompt: Optional text prompt to guide generation
-        style: Optional style modifier
-        quality: Generation quality (draft, medium, high)
-        output_format: Output format (glb, gltf, fbx, obj, usdz)
+        image_path: Path to the input image.
+        prompt: Optional text prompt to guide generation.
+        style: Optional style modifier.
+        quality: Generation quality (draft, medium, high).
+        output_format: Output format (glb, gltf, fbx, obj, usdz).
+        backend: Optional specific backend to use.
 
     Returns:
-        Dictionary with job_id, status, and metadata
+        Dictionary with job_id, status, and metadata.
     """
     image_path = Path(image_path)
     if not image_path.exists():
         return {"success": False, "error": f"Image not found: {image_path}"}
-
-    # Read and encode the image
-    try:
-        with open(image_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode("utf-8")
-    except Exception as e:
-        return {"success": False, "error": f"Failed to read image: {e}"}
-
-    # Determine MIME type from extension
-    ext = image_path.suffix.lower()
-    mime_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }
-    mime_type = mime_types.get(ext, "image/png")
 
     if output_format not in SUPPORTED_FORMATS:
         return {
@@ -254,60 +170,64 @@ def generate_model_from_image(
             "error": f"Unsupported format: {output_format}. Use: {', '.join(SUPPORTED_FORMATS)}",
         }
 
-    request_data = {
-        "image": f"data:{mime_type};base64,{image_data}",
-        "quality": quality,
-        "output_format": output_format,
-    }
-    if prompt:
-        request_data["prompt"] = prompt.strip()
-    if style:
-        request_data["style"] = style
+    # Use backend manager
+    manager = get_backend_manager()
+    result = manager.generate(
+        prompt=prompt or "",
+        image_path=str(image_path),
+        style=style,
+        quality=quality,
+        output_format=output_format,
+        backend=backend,
+    )
 
-    result = _make_request("rodin/image-to-3d", method="POST", data=request_data, timeout=120.0)
+    if not result.success:
+        return {"success": False, "error": result.error}
 
-    if not result["success"]:
-        return result
-
-    data = result["data"]
-    job_id = data.get("job_id") or data.get("uuid") or data.get("task_id")
-
-    if not job_id:
-        return {
-            "success": False,
-            "error": "No job ID returned from API",
-            "raw_response": data,
-        }
+    # Create job in queue for tracking
+    queue = get_job_queue()
+    job = queue.create_job(
+        backend=backend or "auto",
+        prompt=prompt or f"Image-to-3D: {image_path.name}",
+        image_path=str(image_path),
+        style=style,
+        quality=quality,
+        output_format=output_format,
+        metadata={"external_job_id": result.job_id},
+    )
 
     return {
         "success": True,
-        "job_id": job_id,
-        "status": "processing",
+        "job_id": result.job_id,
+        "internal_job_id": job.id,
+        "status": result.status.value,
         "source_image": str(image_path),
         "prompt": prompt,
         "style": style,
         "quality": quality,
         "output_format": output_format,
+        "backend": result.metadata.get("backend", "unknown"),
         "message": "Image-to-3D generation started. Use check_status to monitor progress.",
     }
 
 
-def check_status(job_id: str, auto_import: bool = True) -> dict[str, Any]:
+def check_status(job_id: str, auto_import: bool = True, backend: str | None = None) -> dict[str, Any]:
     """Check the status of an AI model generation job.
 
     Args:
-        job_id: The job ID from generate_model or generate_model_from_image
-        auto_import: If True, automatically import completed models into Blender
+        job_id: The job ID from generate_model or generate_model_from_image.
+        auto_import: If True, automatically import completed models into Blender.
+        backend: Optional backend hint for faster lookup.
 
     Returns:
-        Dictionary with status, progress, and import info if completed
+        Dictionary with status, progress, and import info if completed.
     """
     if not job_id:
         return {"success": False, "error": "Job ID is required"}
 
     # Check if already cached
-    if is_cached("rodin", job_id):
-        cached_path = get_cached_path("rodin", job_id)
+    if is_cached("ai_models", job_id):
+        cached_path = get_cached_path("ai_models", job_id)
         if cached_path and auto_import:
             import_result = _import_model_file(cached_path, job_id)
             return {
@@ -325,105 +245,119 @@ def check_status(job_id: str, auto_import: bool = True) -> dict[str, Any]:
             "cached_path": str(cached_path) if cached_path else None,
         }
 
-    result = _make_request(f"rodin/status/{job_id}")
-
-    if not result["success"]:
-        return result
-
-    data = result["data"]
-    status = data.get("status", "unknown").lower()
+    # Get status from backend manager
+    manager = get_backend_manager()
+    result = manager.get_status(job_id, backend=backend)
 
     response = {
-        "success": True,
+        "success": result.success,
         "job_id": job_id,
-        "status": status,
+        "status": result.status.value,
+        "progress": result.progress,
     }
 
-    # Add progress information if available
-    if "progress" in data:
-        response["progress"] = data["progress"]
-    if "eta" in data:
-        response["eta_seconds"] = data["eta"]
-    if "message" in data:
-        response["message"] = data["message"]
+    if result.message:
+        response["message"] = result.message
+
+    # Add ETA if available
+    if "eta_seconds" in result.metadata:
+        response["eta_seconds"] = result.metadata["eta_seconds"]
 
     # Handle completed jobs
-    if status == "completed":
-        download_url = (
-            data.get("download_url")
-            or data.get("model_url")
-            or data.get("result", {}).get("url")
-        )
-
-        if download_url and auto_import:
-            import_result = download_and_import(job_id, download_url)
+    if result.status == GenerationStatus.COMPLETED:
+        if result.model_path:
+            # Local backend - model already available
+            if auto_import:
+                import_result = download_and_import(job_id, result.model_path, use_cache=True, is_local=True)
+                response["imported"] = import_result
+            else:
+                response["model_path"] = result.model_path
+        elif result.download_url and auto_import:
+            # Cloud backend - need to download
+            import_result = download_and_import(job_id, result.download_url)
             response["imported"] = import_result
-        elif download_url:
-            response["download_url"] = download_url
-        else:
-            response["warning"] = "No download URL in response"
+        elif result.download_url:
+            response["download_url"] = result.download_url
 
     # Handle failed jobs
-    elif status in ("failed", "error"):
+    elif result.status in (GenerationStatus.FAILED,):
         response["success"] = False
-        response["error"] = data.get("error") or data.get("message") or "Generation failed"
+        response["error"] = result.error or "Generation failed"
+
+    # Update job queue
+    queue = get_job_queue()
+    queue.update_job(
+        job_id,
+        status=result.status.value,
+        progress=result.progress,
+        error=result.error,
+    )
 
     return response
 
 
 def download_and_import(
     job_id: str,
-    download_url: str,
+    source: str,
     use_cache: bool = True,
+    is_local: bool = False,
 ) -> dict[str, Any]:
     """Download and import an AI-generated model.
 
     Args:
-        job_id: Job ID for caching
-        download_url: URL to download the model from
-        use_cache: Whether to cache the downloaded file
+        job_id: Job ID for caching.
+        source: URL to download from, or local path if is_local=True.
+        use_cache: Whether to cache the downloaded file.
+        is_local: If True, source is a local file path.
 
     Returns:
-        Dictionary with import results
+        Dictionary with import results.
     """
+    import shutil
+    import urllib.request
+
     try:
-        # Determine format from URL
-        url_lower = download_url.lower()
-        if ".obj" in url_lower:
-            ext = ".obj"
-        elif ".fbx" in url_lower:
-            ext = ".fbx"
-        elif ".gltf" in url_lower:
-            ext = ".gltf"
-        elif ".usdz" in url_lower:
-            ext = ".usdz"
+        if is_local:
+            source_path = Path(source)
+            ext = source_path.suffix
+            import_path = source_path
         else:
-            ext = ".glb"
+            # Determine format from URL
+            url_lower = source.lower()
+            if ".obj" in url_lower:
+                ext = ".obj"
+            elif ".fbx" in url_lower:
+                ext = ".fbx"
+            elif ".gltf" in url_lower:
+                ext = ".gltf"
+            elif ".usdz" in url_lower:
+                ext = ".usdz"
+            else:
+                ext = ".glb"
 
-        # Download to temporary location
-        temp_dir = tempfile.mkdtemp()
-        temp_path = Path(temp_dir) / f"rodin_{job_id}{ext}"
+            # Download to temporary location
+            temp_dir = tempfile.mkdtemp()
+            temp_path = Path(temp_dir) / f"ai_model_{job_id}{ext}"
 
-        # Download with progress tracking
-        urllib.request.urlretrieve(download_url, str(temp_path))
+            urllib.request.urlretrieve(source, str(temp_path))
 
-        if not temp_path.exists() or temp_path.stat().st_size == 0:
-            return {"success": False, "error": "Download failed - empty file"}
+            if not temp_path.exists() or temp_path.stat().st_size == 0:
+                return {"success": False, "error": "Download failed - empty file"}
+
+            import_path = temp_path
 
         # Cache the file
         if use_cache:
             cached_path = cache_asset(
-                source="rodin",
+                source="ai_models",
                 asset_id=job_id,
-                file_path=temp_path,
+                file_path=import_path,
                 metadata={
-                    "download_url": download_url,
-                    "format": ext[1:],  # Remove leading dot
+                    "source_url": source if not is_local else None,
+                    "format": ext[1:],
                 },
             )
             import_path = cached_path
-        else:
-            import_path = temp_path
 
         # Import into Blender
         return _import_model_file(import_path, job_id)
@@ -436,11 +370,11 @@ def _import_model_file(filepath: Path, job_id: str) -> dict[str, Any]:
     """Import a model file into Blender.
 
     Args:
-        filepath: Path to the model file
-        job_id: Job ID for naming
+        filepath: Path to the model file.
+        job_id: Job ID for naming.
 
     Returns:
-        Dictionary with import results
+        Dictionary with import results.
     """
     filepath = Path(filepath)
     ext = filepath.suffix.lower()
@@ -456,11 +390,12 @@ def _import_model_file(filepath: Path, job_id: str) -> dict[str, Any]:
         elif ext == ".fbx":
             bpy.ops.import_scene.fbx(filepath=str(filepath))
         elif ext == ".usdz":
-            # USD import requires specific Blender version
             if hasattr(bpy.ops.wm, "usd_import"):
                 bpy.ops.wm.usd_import(filepath=str(filepath))
             else:
                 return {"success": False, "error": "USD import not available in this Blender version"}
+        elif ext == ".ply":
+            bpy.ops.wm.ply_import(filepath=str(filepath))
         else:
             return {"success": False, "error": f"Unsupported format: {ext}"}
 
@@ -473,6 +408,10 @@ def _import_model_file(filepath: Path, job_id: str) -> dict[str, Any]:
             obj = bpy.data.objects.get(obj_name)
             if obj and obj.parent is None:
                 obj.name = f"AI_Model_{job_id[:8]}_{obj_name}"
+
+        # Update job queue
+        queue = get_job_queue()
+        queue.update_job(job_id, result_path=str(filepath), status="completed")
 
         return {
             "success": True,
@@ -492,17 +431,19 @@ def poll_until_complete(
     max_wait: float = 300.0,
     poll_interval: float = 5.0,
     auto_import: bool = True,
+    backend: str | None = None,
 ) -> dict[str, Any]:
     """Poll a job until it completes or times out.
 
     Args:
-        job_id: The job ID to poll
-        max_wait: Maximum time to wait in seconds
-        poll_interval: Time between polls in seconds
-        auto_import: Whether to auto-import when complete
+        job_id: The job ID to poll.
+        max_wait: Maximum time to wait in seconds.
+        poll_interval: Time between polls in seconds.
+        auto_import: Whether to auto-import when complete.
+        backend: Optional backend hint.
 
     Returns:
-        Final status dictionary
+        Final status dictionary.
     """
     start_time = time.time()
 
@@ -517,22 +458,180 @@ def poll_until_complete(
                 "elapsed_seconds": elapsed,
             }
 
-        result = check_status(job_id, auto_import=auto_import)
+        result = check_status(job_id, auto_import=auto_import, backend=backend)
 
         status = result.get("status", "unknown")
-        if status in ("completed", "failed", "error"):
+        if status in ("completed", "failed", "error", "cancelled"):
             result["elapsed_seconds"] = elapsed
             return result
 
-        # Wait before next poll
         time.sleep(poll_interval)
+
+
+# =============================================================================
+# New Multi-Backend API
+# =============================================================================
+
+
+def list_backends(available_only: bool = True) -> dict[str, Any]:
+    """List all available AI generation backends.
+
+    Args:
+        available_only: If True, only return backends ready to use.
+
+    Returns:
+        Dictionary with list of backends and their capabilities.
+    """
+    manager = get_backend_manager()
+    backends = manager.list_backends(available_only=available_only)
+
+    return {
+        "success": True,
+        "backends": backends,
+        "count": len(backends),
+        "preferred": manager._preferred_backend,
+        "prefer_local": manager._prefer_local,
+    }
+
+
+def set_preferred_backend(backend: str | None, prefer_local: bool | None = None) -> dict[str, Any]:
+    """Set the preferred backend for generation.
+
+    Args:
+        backend: Backend name or None for auto-selection.
+        prefer_local: If True, prefer local backends over cloud.
+
+    Returns:
+        Dictionary confirming the setting.
+    """
+    manager = get_backend_manager()
+
+    try:
+        manager.set_preferred_backend(backend)
+        if prefer_local is not None:
+            manager.set_prefer_local(prefer_local)
+
+        return {
+            "success": True,
+            "preferred_backend": backend,
+            "prefer_local": manager._prefer_local,
+            "available_backends": manager.get_available_backends(),
+        }
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_backend_info(backend: str) -> dict[str, Any]:
+    """Get detailed information about a specific backend.
+
+    Args:
+        backend: Backend name.
+
+    Returns:
+        Dictionary with backend details.
+    """
+    manager = get_backend_manager()
+    info = manager.get_backend_info(backend)
+
+    if info:
+        return {"success": True, **info}
+    return {"success": False, "error": f"Unknown backend: {backend}"}
+
+
+def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
+    """Configure a specific backend.
+
+    Args:
+        backend: Backend name.
+        config: Configuration dictionary.
+
+    Returns:
+        Dictionary confirming the configuration.
+    """
+    manager = get_backend_manager()
+
+    if manager.configure_backend(backend, config):
+        return {
+            "success": True,
+            "backend": backend,
+            "configured": True,
+        }
+    return {"success": False, "error": f"Unknown backend: {backend}"}
+
+
+def cancel_generation(job_id: str, backend: str | None = None) -> dict[str, Any]:
+    """Cancel an in-progress generation job.
+
+    Args:
+        job_id: The job ID to cancel.
+        backend: Optional backend hint.
+
+    Returns:
+        Dictionary with cancellation status.
+    """
+    manager = get_backend_manager()
+    result = manager.cancel(job_id, backend=backend)
+
+    # Update job queue
+    if result.success:
+        queue = get_job_queue()
+        queue.update_job(job_id, status="cancelled")
+
+    return {
+        "success": result.success,
+        "job_id": job_id,
+        "status": result.status.value,
+        "error": result.error,
+    }
+
+
+def get_generation_history(limit: int = 50) -> dict[str, Any]:
+    """Get generation history.
+
+    Args:
+        limit: Maximum number of entries to return.
+
+    Returns:
+        Dictionary with generation history.
+    """
+    queue = get_job_queue()
+    history = queue.get_history(limit=limit)
+
+    return {
+        "success": True,
+        "history": history,
+        "count": len(history),
+    }
+
+
+def clear_generation_history(older_than_hours: float | None = None) -> dict[str, Any]:
+    """Clear generation history.
+
+    Args:
+        older_than_hours: Only clear entries older than this.
+
+    Returns:
+        Dictionary with number of entries cleared.
+    """
+    queue = get_job_queue()
+    cleared = queue.clear_completed(older_than_hours=older_than_hours)
+
+    return {
+        "success": True,
+        "cleared": cleared,
+    }
+
+
+# =============================================================================
+# Helper Functions (Backward Compatibility)
+# =============================================================================
 
 
 def list_styles() -> dict[str, Any]:
     """List available generation styles.
 
     Returns:
-        Dictionary with available styles
+        Dictionary with available styles.
     """
     return {
         "success": True,
@@ -551,7 +650,7 @@ def list_formats() -> dict[str, Any]:
     """List supported output formats.
 
     Returns:
-        Dictionary with supported formats
+        Dictionary with supported formats.
     """
     return {
         "success": True,
