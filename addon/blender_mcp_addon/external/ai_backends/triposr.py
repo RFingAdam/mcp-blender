@@ -6,11 +6,7 @@ developed by Stability AI. It can generate 3D models in under 1 second.
 GitHub: https://github.com/VAST-AI-Research/TripoSR
 """
 
-import os
 import shutil
-import subprocess
-import sys
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
@@ -80,13 +76,12 @@ class TripoSRBackend(BaseBackend):
 
     def _check_triposr_available(self) -> bool:
         """Check if TripoSR is installed and available."""
-        try:
-            import torch
-            import tsr  # TripoSR package
+        import importlib.util
 
-            return True
-        except ImportError:
-            return False
+        return (
+            importlib.util.find_spec("torch") is not None
+            and importlib.util.find_spec("tsr") is not None
+        )
 
     def _check_dependencies(self) -> tuple[bool, str]:
         """Check if all required dependencies are available.
@@ -94,9 +89,11 @@ class TripoSRBackend(BaseBackend):
         Returns:
             Tuple of (available, message).
         """
+        import importlib.util
+
         missing = []
 
-        try:
+        if importlib.util.find_spec("torch") is not None:
             import torch
 
             if not torch.cuda.is_available():
@@ -107,22 +104,16 @@ class TripoSRBackend(BaseBackend):
                 ):
                     # CPU is available but slow
                     pass
-        except ImportError:
+        else:
             missing.append("torch")
 
-        try:
-            import tsr
-        except ImportError:
+        if importlib.util.find_spec("tsr") is None:
             missing.append("tsr (pip install triposr)")
 
-        try:
-            import PIL
-        except ImportError:
+        if importlib.util.find_spec("PIL") is None:
             missing.append("Pillow")
 
-        try:
-            import numpy
-        except ImportError:
+        if importlib.util.find_spec("numpy") is None:
             missing.append("numpy")
 
         if missing:
@@ -167,7 +158,6 @@ class TripoSRBackend(BaseBackend):
             return True
 
         try:
-            import torch
             from tsr.system import TSR
 
             device = self._get_device()
@@ -290,7 +280,6 @@ class TripoSRBackend(BaseBackend):
             )
 
         try:
-            import numpy as np
             import torch
             from PIL import Image
 
@@ -485,6 +474,7 @@ class TripoSRBackend(BaseBackend):
         # Force garbage collection
         try:
             import gc
+
             import torch
 
             gc.collect()

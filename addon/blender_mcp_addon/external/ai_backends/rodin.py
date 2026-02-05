@@ -9,8 +9,6 @@ API Documentation: https://hyperhuman.deemos.com/docs
 import base64
 import json
 import os
-import tempfile
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
