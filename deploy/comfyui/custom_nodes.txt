@@ -1,0 +1,11 @@
+# ComfyUI Custom Nodes
+# Install these into the custom_nodes volume/directory.
+#
+# ComfyUI-Manager: Node management UI, install/update other nodes from the browser.
+https://github.com/ltdrdata/ComfyUI-Manager.git
+
+# comfyui_controlnet_aux: Preprocessors for ControlNet (depth, normal, canny, etc.)
+https://github.com/Fannovel16/comfyui_controlnet_aux.git
+
+# ComfyUI-3D-Pack: 3D-related nodes (mesh, point cloud, depth utilities).
+https://github.com/MrForExample/ComfyUI-3D-Pack.git
