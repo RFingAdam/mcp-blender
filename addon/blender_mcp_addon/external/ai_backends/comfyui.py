@@ -90,6 +90,29 @@ class WorkflowTemplate:
 
         return workflow
 
+    def resolve_fallbacks(self, workflow: dict, available_checker) -> dict:
+        """Resolve _fallback_class entries in a built workflow.
+
+        For each node with a ``_fallback_class`` key, check if the primary
+        ``class_type`` is available.  If not, swap to the fallback class.
+        Strips all ``_fallback_class`` keys from the result.
+
+        Args:
+            workflow: A built workflow dict.
+            available_checker: Callable that takes a class_type string and
+                returns True if the node is available in ComfyUI.
+
+        Returns:
+            The workflow with fallbacks resolved and metadata stripped.
+        """
+        for node_id, node in workflow.items():
+            if not isinstance(node, dict):
+                continue
+            fallback = node.pop("_fallback_class", None)
+            if fallback and not available_checker(node.get("class_type", "")):
+                node["class_type"] = fallback
+        return workflow
+
     @property
     def parameter_names(self) -> list[str]:
         return list(self._param_map.keys())
@@ -400,6 +423,9 @@ class ComfyUIBackend(BaseBackend):
 
         build_params.update(kwargs)
         workflow = template.build(**build_params)
+
+        # Resolve _fallback_class entries for unavailable nodes
+        template.resolve_fallbacks(workflow, self.has_node)
 
         client_id = str(uuid.uuid4())
         result = self._queue_workflow(workflow, client_id)
