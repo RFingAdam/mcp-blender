@@ -137,6 +137,71 @@ def generate_model(
     }
 
 
+def generate_texture(
+    prompt: str,
+    workflow_type: str = "pbr_texture",
+    object_name: str | None = None,
+    auto_apply: bool = True,
+    backend: str | None = None,
+    **kwargs,
+) -> dict[str, Any]:
+    """Generate PBR textures from a text prompt.
+
+    Args:
+        prompt: Text description of the desired texture.
+        workflow_type: Workflow type (pbr_texture, reference_image, inpaint,
+            controlnet_texture).
+        object_name: Object to apply textures to (if auto_apply).
+        auto_apply: Automatically apply textures to the object.
+        backend: Optional specific backend to use.
+        **kwargs: Extra params passed to the backend.
+
+    Returns:
+        Dictionary with job_id, status, and metadata.
+    """
+    if not prompt or not prompt.strip():
+        return {"success": False, "error": "Prompt cannot be empty"}
+
+    manager = get_backend_manager()
+    result = manager.generate_texture(
+        prompt=prompt.strip(),
+        workflow_type=workflow_type,
+        backend=backend,
+        **kwargs,
+    )
+
+    if not result.success:
+        return {"success": False, "error": result.error}
+
+    # Create job in queue for tracking
+    queue = get_job_queue()
+    job = queue.create_job(
+        backend=backend or "auto",
+        prompt=prompt,
+        quality="medium",
+        output_format="png",
+        metadata={
+            "external_job_id": result.job_id,
+            "workflow_type": workflow_type,
+            "object_name": object_name,
+            "auto_apply": auto_apply,
+        },
+    )
+
+    return {
+        "success": True,
+        "job_id": result.job_id,
+        "internal_job_id": job.id,
+        "status": result.status.value,
+        "prompt": prompt,
+        "workflow_type": workflow_type,
+        "object_name": object_name,
+        "auto_apply": auto_apply,
+        "backend": result.metadata.get("backend", "unknown"),
+        "message": "Texture generation started. Use blender_ai_model_status to monitor progress.",
+    }
+
+
 def generate_model_from_image(
     image_path: str,
     prompt: str | None = None,
