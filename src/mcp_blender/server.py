@@ -1289,6 +1289,171 @@ TOOLS: list[Tool] = [
             "required": ["package_dir"],
         },
     ),
+    # ==================== Script Execution ====================
+    Tool(
+        name="blender_execute_script",
+        description="Execute arbitrary Python/bmesh script in Blender's context. Enables real mesh modeling with vertices, edges, faces, extrusion, bevel, and full Blender API access. The script can import bmesh, mathutils, math, etc. Set a 'result' variable in the script to return data.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "script": {
+                    "type": "string",
+                    "description": "Python script to execute in Blender. Has 'bpy' pre-loaded. Can import bmesh, mathutils, etc.",
+                },
+                "timeout": {
+                    "type": "number",
+                    "description": "Execution timeout in seconds (default: 30)",
+                },
+            },
+            "required": ["script"],
+        },
+    ),
+    # ==================== Multi-Angle Rendering ====================
+    Tool(
+        name="blender_render_multi_angle",
+        description="Render an object from multiple angles (front, right, top, perspective) for visual feedback. Uses Workbench engine for speed. Returns file paths to rendered PNG images.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of object to render (omit for all mesh objects)",
+                },
+                "angles": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["front", "right", "top", "perspective"]},
+                    "description": "Angles to render (default: all four)",
+                },
+                "resolution": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Render resolution [width, height] (default: [512, 512])",
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Output directory for renders (default: temp dir)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    # ==================== Vision Analysis ====================
+    Tool(
+        name="blender_analyze_viewport",
+        description="Render multi-angle views and analyze with Ollama vision model. Returns structured feedback with quality score, issues, and fix suggestions for iterative mesh refinement.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of object to analyze (omit for all)",
+                },
+                "reference_image": {
+                    "type": "string",
+                    "description": "Path to reference image for comparison",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Analysis prompt/instructions for the vision model",
+                },
+                "resolution": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Render resolution [width, height] (default: [512, 512])",
+                },
+                "ollama_host": {
+                    "type": "string",
+                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                },
+                "ollama_model": {
+                    "type": "string",
+                    "description": "Vision model name (default: llama3.2-vision:11b)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    # ==================== Refinement Loop ====================
+    Tool(
+        name="blender_refine_iteration",
+        description="Run one iteration of the AI refinement loop: render object from multiple angles, analyze with vision model, check for convergence. Returns score, issues, and whether to continue refining.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of object being refined",
+                },
+                "reference_image": {
+                    "type": "string",
+                    "description": "Path to reference image for comparison",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Evaluation prompt for the vision model",
+                },
+                "iteration": {
+                    "type": "integer",
+                    "description": "Current iteration number (0-based)",
+                },
+                "previous_score": {
+                    "type": "number",
+                    "description": "Score from previous iteration (for delta calculation)",
+                },
+                "max_iterations": {
+                    "type": "integer",
+                    "description": "Maximum iterations before forced convergence (default: 10)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    # ==================== Refinement Session Management ====================
+    Tool(
+        name="blender_refine_create_session",
+        description="Create a new refinement session to track iterative improvement of a 3D model",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object being refined",
+                },
+                "reference_image": {
+                    "type": "string",
+                    "description": "Optional reference image path",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Description of what the model should look like",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_refine_get_session",
+        description="Get details and iteration history of a refinement session",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Refinement session ID",
+                },
+            },
+            "required": ["session_id"],
+        },
+    ),
+    Tool(
+        name="blender_refine_list_sessions",
+        description="List all refinement sessions with their status and iteration counts",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
 ]
 
 

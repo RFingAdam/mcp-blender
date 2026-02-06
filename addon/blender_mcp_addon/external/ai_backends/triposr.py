@@ -4,9 +4,16 @@ TripoSR is a fast feed-forward model for image-to-3D reconstruction
 developed by Stability AI. It can generate 3D models in under 1 second.
 
 GitHub: https://github.com/VAST-AI-Research/TripoSR
+
+Note: TripoSR requires PyTorch+CUDA which is not available in Blender's
+bundled Python. This backend uses subprocess to invoke the system Python
+that has torch and tsr installed.
 """
 
+import json
 import shutil
+import subprocess
+import textwrap
 import uuid
 from pathlib import Path
 from typing import Any
@@ -54,12 +61,21 @@ class TripoSRBackend(BaseBackend):
         """Initialize the TripoSR backend.
 
         Args:
-            config: Optional configuration with model_path and device settings.
+            config: Optional configuration with model_path, device,
+                    python_path (system Python with torch), and
+                    triposr_path (TripoSR install dir) settings.
         """
         super().__init__(config)
         self._model = None
         self._jobs: dict[str, dict] = {}
         self._output_dir = self._get_output_dir()
+        # System Python path (not Blender's bundled Python)
+        self._python_path = (
+            config.extra.get("python_path", "python3") if config else "python3"
+        )
+        self._triposr_path = (
+            config.extra.get("triposr_path") if config else None
+        )
 
     def _get_output_dir(self) -> Path:
         """Get the output directory for generated models."""
@@ -75,51 +91,69 @@ class TripoSRBackend(BaseBackend):
         return output_dir
 
     def _check_triposr_available(self) -> bool:
-        """Check if TripoSR is installed and available."""
-        import importlib.util
-
-        return (
-            importlib.util.find_spec("torch") is not None
-            and importlib.util.find_spec("tsr") is not None
-        )
+        """Check if TripoSR is installed and available via system Python."""
+        available, _ = self._check_dependencies()
+        return available
 
     def _check_dependencies(self) -> tuple[bool, str]:
-        """Check if all required dependencies are available.
+        """Check if all required dependencies are available in system Python.
+
+        Uses subprocess to check the system Python (not Blender's bundled one),
+        since torch/tsr are installed there.
 
         Returns:
             Tuple of (available, message).
         """
-        import importlib.util
+        check_script = textwrap.dedent("""\
+            import json, sys
+            missing = []
+            try:
+                import torch
+                has_cuda = torch.cuda.is_available()
+            except ImportError:
+                missing.append("torch")
+                has_cuda = False
+            try:
+                import tsr
+            except ImportError:
+                missing.append("tsr (pip install triposr)")
+            try:
+                import PIL
+            except ImportError:
+                missing.append("Pillow")
+            try:
+                import numpy
+            except ImportError:
+                missing.append("numpy")
+            print(json.dumps({"missing": missing, "has_cuda": has_cuda}))
+        """)
 
-        missing = []
+        try:
+            result = subprocess.run(
+                [self._python_path, "-c", check_script],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
 
-        if importlib.util.find_spec("torch") is not None:
-            import torch
+            if result.returncode != 0:
+                return False, f"System Python check failed: {result.stderr.strip()}"
 
-            if not torch.cuda.is_available():
-                # Check for MPS (Apple Silicon) or CPU fallback
-                if not (
-                    hasattr(torch.backends, "mps")
-                    and torch.backends.mps.is_available()
-                ):
-                    # CPU is available but slow
-                    pass
-        else:
-            missing.append("torch")
+            data = json.loads(result.stdout.strip())
+            missing = data.get("missing", [])
 
-        if importlib.util.find_spec("tsr") is None:
-            missing.append("tsr (pip install triposr)")
+            if missing:
+                return False, f"Missing in system Python: {', '.join(missing)}"
 
-        if importlib.util.find_spec("PIL") is None:
-            missing.append("Pillow")
+            cuda_status = "with CUDA" if data.get("has_cuda") else "CPU only"
+            return True, f"All dependencies available ({cuda_status})"
 
-        if importlib.util.find_spec("numpy") is None:
-            missing.append("numpy")
-
-        if missing:
-            return False, f"Missing dependencies: {', '.join(missing)}"
-
-        return True, "All dependencies available"
+        except FileNotFoundError:
+            return False, f"System Python not found at: {self._python_path}"
+        except subprocess.TimeoutExpired:
+            return False, "Dependency check timed out"
+        except Exception as e:
+            return False, f"Error checking dependencies: {e}"
 
     def is_available(self) -> bool:
         """Check if TripoSR is available for use."""
@@ -149,35 +183,16 @@ class TripoSRBackend(BaseBackend):
         return device
 
     def _load_model(self) -> bool:
-        """Load the TripoSR model into memory.
+        """Check if TripoSR model can be loaded (pre-check only).
+
+        With subprocess approach, model is loaded per-invocation in the
+        external Python process. This just validates availability.
 
         Returns:
-            True if model loaded successfully.
+            True if dependencies are available.
         """
-        if self._model is not None:
-            return True
-
-        try:
-            from tsr.system import TSR
-
-            device = self._get_device()
-
-            # Use configured model path or default
-            model_path = self.config.model_path or self.DEFAULT_MODEL_NAME
-
-            self._model = TSR.from_pretrained(
-                model_path,
-                config_name="config.yaml",
-                weight_name="model.ckpt",
-            )
-            self._model.renderer.set_chunk_size(8192)
-            self._model.to(device)
-
-            return True
-
-        except Exception as e:
-            print(f"Failed to load TripoSR model: {e}")
-            return False
+        available, _ = self._check_dependencies()
+        return available
 
     def generate(
         self,
@@ -253,7 +268,10 @@ class TripoSRBackend(BaseBackend):
             )
 
     def _run_generation(self, job_id: str) -> GenerationResult:
-        """Run the actual generation process.
+        """Run generation via system Python subprocess.
+
+        This avoids the problem of importing torch/tsr in Blender's
+        bundled Python (which doesn't have PyTorch+CUDA installed).
 
         Args:
             job_id: Job ID.
@@ -270,71 +288,119 @@ class TripoSRBackend(BaseBackend):
                 status=GenerationStatus.FAILED,
             )
 
-        # Load model if needed
-        if not self._load_model():
-            return GenerationResult(
-                success=False,
-                job_id=job_id,
-                error="Failed to load TripoSR model",
-                status=GenerationStatus.FAILED,
-            )
+        quality_map = {"draft": 128, "medium": 256, "high": 512}
+        mc_resolution = quality_map.get(job["quality"], 256)
+        model_name = self.config.model_path or self.DEFAULT_MODEL_NAME
+
+        # Build a self-contained Python script for the subprocess
+        gen_script = textwrap.dedent(f"""\
+            import json, sys
+            try:
+                import torch
+                from PIL import Image
+                from tsr.system import TSR
+
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+
+                model = TSR.from_pretrained(
+                    {model_name!r},
+                    config_name="config.yaml",
+                    weight_name="model.ckpt",
+                )
+                model.renderer.set_chunk_size(8192)
+                model.to(device)
+
+                image = Image.open({job['image_path']!r})
+                if image.mode != "RGBA":
+                    image = image.convert("RGBA")
+
+                with torch.no_grad():
+                    scene_codes = model([image], device)
+
+                meshes = model.extract_mesh(scene_codes, resolution={mc_resolution})
+                mesh = meshes[0]
+
+                output_path = {job['output_path']!r}
+                output_format = {job['output_format']!r}
+
+                if output_format == "glb":
+                    mesh.export(output_path)
+                elif output_format == "obj":
+                    mesh.export(output_path, file_type="obj")
+                elif output_format == "ply":
+                    mesh.export(output_path, file_type="ply")
+
+                print(json.dumps({{"success": True, "model_path": output_path}}))
+
+            except Exception as e:
+                print(json.dumps({{"success": False, "error": str(e)}}))
+                sys.exit(1)
+        """)
 
         try:
-            import torch
-            from PIL import Image
+            env = None
+            if self._triposr_path:
+                import os
+                env = os.environ.copy()
+                env["PYTHONPATH"] = self._triposr_path + ":" + env.get("PYTHONPATH", "")
 
-            # Load and preprocess image
-            image = Image.open(job["image_path"])
+            result = subprocess.run(
+                [self._python_path, "-c", gen_script],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=env,
+            )
 
-            # Remove background if the model expects it
-            # TripoSR works better with clean backgrounds
-            if image.mode != "RGBA":
-                image = image.convert("RGBA")
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown subprocess error"
+                self._jobs[job_id]["status"] = "failed"
+                self._jobs[job_id]["error"] = error_msg
+                return GenerationResult(
+                    success=False,
+                    job_id=job_id,
+                    status=GenerationStatus.FAILED,
+                    error=f"Generation subprocess failed: {error_msg}",
+                )
 
-            # Process with model
-            device = self._get_device()
-            with torch.no_grad():
-                scene_codes = self._model([image], device)
+            output_data = json.loads(result.stdout.strip())
 
-            # Quality affects mesh resolution
-            quality_map = {
-                "draft": 128,
-                "medium": 256,
-                "high": 512,
-            }
-            mc_resolution = quality_map.get(job["quality"], 256)
+            if not output_data.get("success"):
+                error_msg = output_data.get("error", "Unknown error")
+                self._jobs[job_id]["status"] = "failed"
+                self._jobs[job_id]["error"] = error_msg
+                return GenerationResult(
+                    success=False,
+                    job_id=job_id,
+                    status=GenerationStatus.FAILED,
+                    error=f"Generation failed: {error_msg}",
+                )
 
-            # Extract mesh
-            meshes = self._model.extract_mesh(scene_codes, resolution=mc_resolution)
-            mesh = meshes[0]
-
-            # Export to file
-            output_path = Path(job["output_path"])
-            output_format = job["output_format"]
-
-            if output_format == "glb":
-                mesh.export(str(output_path))
-            elif output_format == "obj":
-                mesh.export(str(output_path), file_type="obj")
-            elif output_format == "ply":
-                mesh.export(str(output_path), file_type="ply")
-
-            # Update job status
             self._jobs[job_id]["status"] = "completed"
 
             return GenerationResult(
                 success=True,
                 job_id=job_id,
                 status=GenerationStatus.COMPLETED,
-                model_path=str(output_path),
-                message="Model generated successfully",
+                model_path=output_data["model_path"],
+                message="Model generated successfully via subprocess",
                 metadata={
                     "backend": self.name,
                     "resolution": mc_resolution,
-                    "format": output_format,
+                    "format": job["output_format"],
+                    "python_path": self._python_path,
                 },
             )
 
+        except subprocess.TimeoutExpired:
+            self._jobs[job_id]["status"] = "failed"
+            self._jobs[job_id]["error"] = "Generation timed out (120s)"
+            return GenerationResult(
+                success=False,
+                job_id=job_id,
+                status=GenerationStatus.FAILED,
+                error="Generation timed out (120s limit)",
+            )
         except Exception as e:
             self._jobs[job_id]["status"] = "failed"
             self._jobs[job_id]["error"] = str(e)
@@ -457,28 +523,19 @@ class TripoSRBackend(BaseBackend):
         info.update({
             "dependencies_status": dep_status,
             "device": self._get_device(),
-            "model_loaded": self._model is not None,
             "output_directory": str(self._output_dir),
+            "python_path": self._python_path,
+            "triposr_path": self._triposr_path,
+            "execution_mode": "subprocess (system Python)",
             "note": "TripoSR requires an input image. For text-to-3D, use a different backend.",
         })
         return info
 
     def initialize(self) -> bool:
-        """Pre-load the model for faster generation."""
+        """Validate that system Python has required dependencies."""
         return self._load_model()
 
     def shutdown(self) -> None:
-        """Release model from memory."""
+        """No-op since model runs in subprocess, not in Blender's process."""
         self._model = None
         self._initialized = False
-        # Force garbage collection
-        try:
-            import gc
-
-            import torch
-
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass

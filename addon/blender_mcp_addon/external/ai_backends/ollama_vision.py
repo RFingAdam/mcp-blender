@@ -86,8 +86,11 @@ Be specific and descriptive. The description will be used to generate a 3D model
             models = [m.get("name", "") for m in data.get("models", [])]
 
             # Check for vision-capable models
-            vision_models = ["llava", "bakllava", "llava:13b", "llava:34b"]
-            available_vision = [m for m in models if any(v in m.lower() for v in vision_models)]
+            vision_keywords = [
+                "llava", "bakllava", "vision", "moondream",
+                "llama3.2-vision", "minicpm-v", "cogvlm",
+            ]
+            available_vision = [m for m in models if any(v in m.lower() for v in vision_keywords)]
 
             if available_vision:
                 return True, f"Vision models available: {', '.join(available_vision)}"
@@ -160,6 +163,122 @@ Be specific and descriptive. The description will be used to generate a 3D model
 
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    REFINEMENT_PROMPT = """You are analyzing renders of a 3D model from multiple angles.
+
+Evaluate the model and respond with ONLY a valid JSON object (no markdown, no extra text):
+{{
+  "overall_quality": <float 0.0-1.0>,
+  "issues": [
+    {{
+      "category": "<geometry|topology|proportion|detail|surface>",
+      "severity": "<low|medium|high>",
+      "description": "<what is wrong>",
+      "location": "<where on the model>",
+      "suggested_fix": "<bmesh/Blender operation to fix it>"
+    }}
+  ],
+  "missing_features": ["<feature that should exist but doesn't>"],
+  "proportion_issues": ["<description of proportion problem>"],
+  "convergence_signal": <true if model looks good enough, false if needs more work>
+}}
+
+{user_prompt}"""
+
+    def analyze_for_refinement(
+        self,
+        image_paths: list[str],
+        reference_image: str | None = None,
+        prompt: str = "",
+    ) -> dict[str, Any]:
+        """Analyze rendered views for refinement feedback.
+
+        Args:
+            image_paths: Paths to rendered angle images.
+            reference_image: Optional reference image to compare against.
+            prompt: Additional context for analysis.
+
+        Returns:
+            Structured analysis with quality score and issues.
+        """
+        host = self._get_host()
+        model = self._get_model()
+
+        all_images = []
+
+        # Encode reference image first if provided
+        if reference_image:
+            ref_path = Path(reference_image)
+            if ref_path.exists():
+                with open(ref_path, "rb") as f:
+                    all_images.append(base64.b64encode(f.read()).decode("utf-8"))
+
+        # Encode render images
+        for img_path in image_paths:
+            path = Path(img_path)
+            if path.exists():
+                with open(path, "rb") as f:
+                    all_images.append(base64.b64encode(f.read()).decode("utf-8"))
+
+        if not all_images:
+            return {"success": False, "error": "No valid images to analyze"}
+
+        user_prompt = prompt
+        if reference_image:
+            user_prompt = f"The first image is the reference. Compare the model renders against it. {prompt}"
+
+        full_prompt = self.REFINEMENT_PROMPT.format(user_prompt=user_prompt)
+
+        request_data = {
+            "model": model,
+            "prompt": full_prompt,
+            "images": all_images,
+            "stream": False,
+        }
+
+        try:
+            req = urllib.request.Request(
+                f"{host}/api/generate",
+                data=json.dumps(request_data).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+
+            with urllib.request.urlopen(req, timeout=180) as response:
+                data = json.loads(response.read().decode())
+
+            raw_response = data.get("response", "")
+
+            # Try to parse structured JSON from response
+            try:
+                # Find JSON in the response (may be wrapped in markdown)
+                json_str = raw_response
+                if "```json" in json_str:
+                    json_str = json_str.split("```json")[1].split("```")[0]
+                elif "```" in json_str:
+                    json_str = json_str.split("```")[1].split("```")[0]
+                analysis = json.loads(json_str.strip())
+            except (json.JSONDecodeError, IndexError):
+                # If parsing fails, return raw response with default score
+                analysis = {
+                    "overall_quality": 0.5,
+                    "issues": [],
+                    "missing_features": [],
+                    "proportion_issues": [],
+                    "convergence_signal": False,
+                    "raw_response": raw_response,
+                }
+
+            analysis["success"] = True
+            analysis["model_used"] = model
+            return analysis
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "overall_quality": 0.0,
+            }
 
     def generate(
         self,

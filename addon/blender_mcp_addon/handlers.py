@@ -1,7 +1,10 @@
 """Command handlers for MCP socket server."""
 
+import contextlib
+import io
 import math
 import os
+import tempfile
 from typing import Any
 
 import bpy
@@ -29,7 +32,7 @@ class CommandHandlers:
     """Handles all MCP commands from the socket server."""
 
     def __init__(self):
-        self._handlers: dict[str, callable] = {}
+        self._handlers: dict[str, Any] = {}
         self._register_handlers()
 
     def _register_handlers(self):
@@ -166,6 +169,23 @@ class CommandHandlers:
         self._handlers["msfs_livery_convert_to_dds"] = self._handle_msfs_livery_convert_to_dds
         self._handlers["msfs_livery_validate_package"] = self._handle_msfs_livery_validate_package
 
+        # Script execution handler
+        self._handlers["execute_script"] = self._handle_execute_script
+
+        # Multi-angle rendering handler
+        self._handlers["render_multi_angle"] = self._handle_render_multi_angle
+
+        # Vision analysis handler
+        self._handlers["analyze_viewport"] = self._handle_analyze_viewport
+
+        # Refinement iteration handler
+        self._handlers["refine_iteration"] = self._handle_refine_iteration
+
+        # Refinement session management handlers
+        self._handlers["refine_create_session"] = self._handle_refine_create_session
+        self._handlers["refine_get_session"] = self._handle_refine_get_session
+        self._handlers["refine_list_sessions"] = self._handle_refine_list_sessions
+
     def handle(self, method: str, params: dict) -> Any:
         """Handle a command by method name."""
         handler = self._handlers.get(method)
@@ -177,7 +197,13 @@ class CommandHandlers:
 
     def _handle_ping(self, params: dict) -> dict:
         """Simple ping/pong for connectivity testing."""
-        return {"pong": True, "blender_version": bpy.app.version_string}
+        return {
+            "pong": True,
+            "blender_version": bpy.app.version_string,
+            "handler_count": len(self._handlers),
+            "has_ai_list_backends": "ai_list_backends" in self._handlers,
+            "has_ai_queue_list": "ai_queue_list" in self._handlers,
+        }
 
     def _handle_scene_info(self, params: dict) -> dict:
         """Get current scene information."""
@@ -835,7 +861,7 @@ class CommandHandlers:
     def _handle_render_screenshot(self, params: dict) -> dict:
         """Capture viewport screenshot."""
         output_path = params["output_path"]
-        bpy.ops.screen.screenshot(filepath=output_path)
+        bpy.ops.screen.screenshot_area(filepath=output_path)
         return {"output_path": output_path}
 
     # ========== Export Handlers ==========
@@ -944,7 +970,16 @@ class CommandHandlers:
         if "ascii" in params:
             export_kwargs["ascii"] = params["ascii"]
 
-        bpy.ops.export_mesh.stl(**export_kwargs)
+        # Use new STL export operator (Blender 4.x+)
+        stl_kwargs = {
+            "filepath": filepath,
+            "export_selected_objects": export_kwargs.get("use_selection", False),
+        }
+        if "global_scale" in export_kwargs:
+            stl_kwargs["global_scale"] = export_kwargs["global_scale"]
+        if "ascii" in export_kwargs:
+            stl_kwargs["ascii_format"] = export_kwargs["ascii"]
+        bpy.ops.wm.stl_export(**stl_kwargs)
 
         return {
             "filepath": filepath,
@@ -1664,3 +1699,395 @@ class CommandHandlers:
         return validate_livery_package(
             package_dir=require_param(params, "package_dir", str),
         )
+
+    # ========== Script Execution Handler ==========
+
+    def _handle_execute_script(self, params: dict) -> dict:
+        """Execute arbitrary Python script in Blender's context.
+
+        Enables real mesh modeling via bmesh, mathutils, and full Blender API access.
+        """
+        script = require_param(params, "script", str)
+
+        # Push undo so user can Ctrl+Z
+        bpy.ops.ed.undo_push(message="MCP Execute Script")
+
+        # Capture stdout/stderr
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+
+        # Pre-loaded namespace for script execution
+        exec_namespace = {"bpy": bpy, "__builtins__": __builtins__}
+
+        try:
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+                exec(script, exec_namespace)  # noqa: S102
+
+            stdout_str = stdout_capture.getvalue()
+            stderr_str = stderr_capture.getvalue()
+
+            # Cap output at 64KB
+            max_output = 65536
+            if len(stdout_str) > max_output:
+                stdout_str = stdout_str[:max_output] + "\n... (truncated)"
+            if len(stderr_str) > max_output:
+                stderr_str = stderr_str[:max_output] + "\n... (truncated)"
+
+            # Check for a 'result' variable set by the script
+            script_result = exec_namespace.get("result")
+            result_data = None
+            if script_result is not None:
+                try:
+                    import json
+                    json.dumps(script_result)
+                    result_data = script_result
+                except (TypeError, ValueError):
+                    result_data = str(script_result)
+
+            return {
+                "success": True,
+                "stdout": stdout_str,
+                "stderr": stderr_str,
+                "error": None,
+                "result": result_data,
+            }
+
+        except Exception as e:
+            stdout_str = stdout_capture.getvalue()
+            stderr_str = stderr_capture.getvalue()
+            return {
+                "success": False,
+                "stdout": stdout_str,
+                "stderr": stderr_str,
+                "error": f"{type(e).__name__}: {e}",
+                "result": None,
+            }
+
+    # ========== Multi-Angle Rendering Handler ==========
+
+    def _handle_render_multi_angle(self, params: dict) -> dict:
+        """Render an object from multiple angles for visual feedback."""
+        import mathutils
+
+        object_name = params.get("object_name")
+        angles = params.get("angles", ["front", "right", "top", "perspective"])
+        resolution = params.get("resolution", [512, 512])
+        output_dir = params.get("output_dir")
+
+        if output_dir is None:
+            output_dir = tempfile.mkdtemp(prefix="mcp_render_")
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Find target object
+        if object_name:
+            obj = get_object_or_error(object_name)
+        else:
+            # Use all mesh objects
+            obj = None
+
+        # Compute bounding box center and size
+        if obj:
+            bbox_corners = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
+        else:
+            bbox_corners = []
+            for o in bpy.context.scene.objects:
+                if o.type == "MESH":
+                    bbox_corners.extend(
+                        o.matrix_world @ mathutils.Vector(c) for c in o.bound_box
+                    )
+
+        if not bbox_corners:
+            return {"success": False, "error": "No mesh objects found to render"}
+
+        min_co = mathutils.Vector((
+            min(c.x for c in bbox_corners),
+            min(c.y for c in bbox_corners),
+            min(c.z for c in bbox_corners),
+        ))
+        max_co = mathutils.Vector((
+            max(c.x for c in bbox_corners),
+            max(c.y for c in bbox_corners),
+            max(c.z for c in bbox_corners),
+        ))
+        center = (min_co + max_co) / 2
+        bbox_size = max_co - min_co
+        distance = bbox_size.length * 1.5
+
+        if distance < 0.01:
+            distance = 5.0
+
+        # Camera angle definitions (position relative to center)
+        angle_configs = {
+            "front": {
+                "location": mathutils.Vector((0, -distance, 0)) + center,
+                "rotation": (math.radians(90), 0, 0),
+                "ortho": True,
+            },
+            "right": {
+                "location": mathutils.Vector((distance, 0, 0)) + center,
+                "rotation": (math.radians(90), 0, math.radians(90)),
+                "ortho": True,
+            },
+            "top": {
+                "location": mathutils.Vector((0, 0, distance)) + center,
+                "rotation": (0, 0, 0),
+                "ortho": True,
+            },
+            "perspective": {
+                "location": mathutils.Vector((
+                    distance * 0.7,
+                    -distance * 0.7,
+                    distance * 0.5,
+                )) + center,
+                "rotation": None,  # Use track_to
+                "ortho": False,
+            },
+        }
+
+        # Store original render settings
+        scene = bpy.context.scene
+        orig_engine = scene.render.engine
+        orig_res_x = scene.render.resolution_x
+        orig_res_y = scene.render.resolution_y
+        orig_percentage = scene.render.resolution_percentage
+        orig_camera = scene.camera
+
+        # Use Workbench for speed
+        scene.render.engine = "BLENDER_WORKBENCH"
+        scene.render.resolution_x = resolution[0]
+        scene.render.resolution_y = resolution[1]
+        scene.render.resolution_percentage = 100
+        scene.display.shading.light = "STUDIO"
+        scene.display.shading.color_type = "MATERIAL"
+
+        renders = {}
+        temp_objects = []
+
+        try:
+            for angle_name in angles:
+                config = angle_configs.get(angle_name)
+                if not config:
+                    continue
+
+                # Create temporary camera
+                cam_data = bpy.data.cameras.new(f"_mcp_temp_cam_{angle_name}")
+                cam_obj = bpy.data.objects.new(f"_mcp_temp_cam_{angle_name}", cam_data)
+                bpy.context.collection.objects.link(cam_obj)
+                temp_objects.append(cam_obj)
+
+                cam_obj.location = config["location"]
+
+                if config["ortho"]:
+                    cam_data.type = "ORTHO"
+                    cam_data.ortho_scale = max(bbox_size.x, bbox_size.y, bbox_size.z) * 1.3
+                    cam_obj.rotation_euler = config["rotation"]
+                else:
+                    cam_data.type = "PERSP"
+                    cam_data.lens = 50
+                    # Point camera at center
+                    direction = center - cam_obj.location
+                    rot_quat = direction.to_track_quat("-Z", "Y")
+                    cam_obj.rotation_euler = rot_quat.to_euler()
+
+                scene.camera = cam_obj
+
+                # Render
+                filepath = os.path.join(output_dir, f"{angle_name}.png")
+                scene.render.filepath = filepath
+                scene.render.image_settings.file_format = "PNG"
+                bpy.ops.render.render(write_still=True)
+
+                renders[angle_name] = filepath
+
+        finally:
+            # Clean up temp cameras
+            for temp_obj in temp_objects:
+                cam_data = temp_obj.data
+                bpy.data.objects.remove(temp_obj, do_unlink=True)
+                bpy.data.cameras.remove(cam_data)
+
+            # Restore original settings
+            scene.render.engine = orig_engine
+            scene.render.resolution_x = orig_res_x
+            scene.render.resolution_y = orig_res_y
+            scene.render.resolution_percentage = orig_percentage
+            scene.camera = orig_camera
+
+        return {
+            "success": True,
+            "renders": renders,
+            "output_dir": output_dir,
+            "resolution": resolution,
+        }
+
+    # ========== Vision Analysis Handler ==========
+
+    def _handle_analyze_viewport(self, params: dict) -> dict:
+        """Render multi-angle views and analyze with Ollama vision model."""
+        object_name = params.get("object_name")
+        reference_image = params.get("reference_image")
+        prompt = params.get("prompt", "Analyze this 3D model render for quality and accuracy.")
+        resolution = params.get("resolution", [512, 512])
+
+        # Render multi-angle views
+        render_result = self._handle_render_multi_angle({
+            "object_name": object_name,
+            "resolution": resolution,
+        })
+
+        if not render_result.get("success"):
+            return render_result
+
+        render_paths = render_result["renders"]
+
+        # Send to Ollama vision for analysis
+        try:
+            from .external.ai_backends.base import BackendConfig
+            from .external.ai_backends.ollama_vision import OllamaVisionBackend
+
+            config = BackendConfig(
+                enabled=True,
+                extra={
+                    "host": params.get("ollama_host", "http://10.27.27.10:11434"),
+                    "model": params.get("ollama_model", "llama3.2-vision:11b"),
+                },
+            )
+            backend = OllamaVisionBackend(config)
+
+            analysis = backend.analyze_for_refinement(
+                image_paths=list(render_paths.values()),
+                reference_image=reference_image,
+                prompt=prompt,
+            )
+        except Exception as e:
+            analysis = {
+                "success": False,
+                "error": f"Vision analysis failed: {e}",
+            }
+
+        return {
+            "success": True,
+            "renders": render_paths,
+            "analysis": analysis,
+            "output_dir": render_result["output_dir"],
+        }
+
+    # ========== Refinement Iteration Handler ==========
+
+    def _handle_refine_iteration(self, params: dict) -> dict:
+        """Run one iteration of the refinement feedback loop."""
+        object_name = params.get("object_name")
+        reference_image = params.get("reference_image")
+        prompt = params.get("prompt", "Evaluate this 3D model for geometric accuracy and quality.")
+        iteration = params.get("iteration", 0)
+        previous_score = params.get("previous_score", 0.0)
+        max_iterations = params.get("max_iterations", 10)
+
+        # Analyze current state
+        analysis_result = self._handle_analyze_viewport({
+            "object_name": object_name,
+            "reference_image": reference_image,
+            "prompt": prompt,
+        })
+
+        if not analysis_result.get("success"):
+            return analysis_result
+
+        analysis = analysis_result.get("analysis", {})
+        score = analysis.get("overall_quality", 0.0)
+        score_delta = score - previous_score
+
+        # Check convergence
+        converged = False
+        convergence_reason = None
+
+        if score >= 0.85:
+            converged = True
+            convergence_reason = f"Quality threshold reached: {score:.2f} >= 0.85"
+        elif iteration >= 2 and abs(score_delta) < 0.02:
+            converged = True
+            convergence_reason = f"Score plateau: delta {score_delta:.3f} < 0.02"
+        elif iteration >= max_iterations:
+            converged = True
+            convergence_reason = f"Max iterations reached: {iteration} >= {max_iterations}"
+
+        return {
+            "success": True,
+            "iteration": iteration,
+            "converged": converged,
+            "convergence_reason": convergence_reason,
+            "score": score,
+            "score_delta": score_delta,
+            "analysis": analysis,
+            "render_paths": analysis_result.get("renders", {}),
+        }
+
+    # ========== Refinement Session Management Handlers ==========
+
+    def _handle_refine_create_session(self, params: dict) -> dict:
+        """Create a new refinement session."""
+        from .external.refinement import get_refinement_manager
+
+        manager = get_refinement_manager()
+        session = manager.create_session(
+            object_name=require_param(params, "object_name", str),
+            reference_image=params.get("reference_image"),
+            prompt=params.get("prompt", ""),
+        )
+        return {
+            "success": True,
+            "session_id": session.session_id,
+            "object_name": session.object_name,
+            "status": session.status,
+        }
+
+    def _handle_refine_get_session(self, params: dict) -> dict:
+        """Get refinement session details."""
+        from .external.refinement import get_refinement_manager
+
+        manager = get_refinement_manager()
+        session = manager.get_session(
+            require_param(params, "session_id", str),
+        )
+
+        if session is None:
+            return {"success": False, "error": "Session not found"}
+
+        return {
+            "success": True,
+            "session_id": session.session_id,
+            "object_name": session.object_name,
+            "reference_image": session.reference_image,
+            "status": session.status,
+            "iterations": [
+                {
+                    "iteration": it.iteration,
+                    "score": it.score,
+                    "render_paths": it.render_paths,
+                }
+                for it in session.iterations
+            ],
+            "iteration_count": len(session.iterations),
+        }
+
+    def _handle_refine_list_sessions(self, params: dict) -> dict:
+        """List all refinement sessions."""
+        from .external.refinement import get_refinement_manager
+
+        manager = get_refinement_manager()
+        sessions = manager.list_sessions()
+
+        return {
+            "success": True,
+            "sessions": [
+                {
+                    "session_id": s.session_id,
+                    "object_name": s.object_name,
+                    "status": s.status,
+                    "iteration_count": len(s.iterations),
+                }
+                for s in sessions
+            ],
+            "count": len(sessions),
+        }
