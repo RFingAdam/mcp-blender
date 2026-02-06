@@ -188,43 +188,21 @@ def get_principled_bsdf_inputs():
     """
     Get the mapping of Principled BSDF input names across versions.
 
-    Some inputs were renamed between 4.x and 5.0.
+    Input names are the same for 4.2+ and 5.0.
     """
-    base_inputs = {
+    return {
         "base_color": "Base Color",
         "metallic": "Metallic",
         "roughness": "Roughness",
         "alpha": "Alpha",
+        "specular_ior_level": "Specular IOR Level",
+        "specular_tint": "Specular Tint",
+        "anisotropic": "Anisotropic",
+        "sheen_weight": "Sheen Weight",
+        "coat_weight": "Coat Weight",
+        "emission_color": "Emission Color",
+        "emission_strength": "Emission Strength",
     }
-
-    if IS_5_0_OR_LATER:
-        # 5.0 naming
-        base_inputs.update(
-            {
-                "specular_ior_level": "Specular IOR Level",
-                "specular_tint": "Specular Tint",
-                "anisotropic": "Anisotropic",
-                "sheen_weight": "Sheen Weight",
-                "coat_weight": "Coat Weight",
-                "emission_color": "Emission Color",
-                "emission_strength": "Emission Strength",
-            }
-        )
-    else:
-        # 4.2 naming (some may differ)
-        base_inputs.update(
-            {
-                "specular_ior_level": "Specular IOR Level",
-                "specular_tint": "Specular Tint",
-                "anisotropic": "Anisotropic",
-                "sheen_weight": "Sheen Weight",
-                "coat_weight": "Coat Weight",
-                "emission_color": "Emission Color",
-                "emission_strength": "Emission Strength",
-            }
-        )
-
-    return base_inputs
 
 
 def convert_mathutils_value(value):
@@ -242,13 +220,12 @@ def convert_mathutils_value(value):
 def get_eevee_engine_name():
     """
     Get the correct EEVEE engine identifier for the Blender version.
+
+    EEVEE Next was introduced in 4.2, so for 4.2+ it's always BLENDER_EEVEE_NEXT.
     """
-    if IS_5_0_OR_LATER:
+    if IS_4_2_OR_LATER:
         return "BLENDER_EEVEE_NEXT"
-    elif IS_4_2_OR_LATER:
-        return "BLENDER_EEVEE_NEXT"  # EEVEE Next was introduced in 4.2
-    else:
-        return "BLENDER_EEVEE"
+    return "BLENDER_EEVEE"
 
 
 def get_compositor_node_mapping():

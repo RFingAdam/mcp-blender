@@ -23,13 +23,11 @@ from typing import Any
 import bpy
 
 from .ai_backends import (
-    BackendCapability,
-    GenerationResult,
     GenerationStatus,
     get_backend_manager,
 )
 from .cache import cache_asset, get_cached_path, is_cached
-from .job_queue import GenerationJob, get_job_queue
+from .job_queue import get_job_queue
 
 # Re-export for backward compatibility
 SUPPORTED_FORMATS = ["glb", "gltf", "fbx", "obj", "usdz"]
@@ -313,7 +311,6 @@ def download_and_import(
     Returns:
         Dictionary with import results.
     """
-    import shutil
     import urllib.request
 
     try:
