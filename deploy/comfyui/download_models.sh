@@ -19,7 +19,7 @@ set -euo pipefail
 # Default: the Docker named-volume mount used by the compose stack.
 # Override with MODELS_DIR env var for manual / host-side downloads.
 # ---------------------------------------------------------------------------
-MODELS_DIR="${MODELS_DIR:-/opt/ComfyUI/models}"
+MODELS_DIR="${MODELS_DIR:-/root/ComfyUI/models}"
 
 CHECKPOINTS_DIR="${MODELS_DIR}/checkpoints"
 CONTROLNET_DIR="${MODELS_DIR}/controlnet"
