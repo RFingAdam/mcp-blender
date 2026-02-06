@@ -44,8 +44,8 @@ class TestToolDefinitions:
     def test_tool_count(self):
         """Verify expected number of tools."""
         # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export
-        # + 4 external + 4 texture + 20 MSFS + 18 livery + ... = 97
-        assert len(TOOLS) == 97, f"Expected 97 tools, got {len(TOOLS)}"
+        # + 4 external + 5 texture + 20 MSFS + 18 livery + ... + 2 ai eval/refine = 100
+        assert len(TOOLS) == 100, f"Expected 100 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:
@@ -105,11 +105,12 @@ class TestToolCategories:
         """AI texture generation tools should exist."""
         texture_tools = [t for t in TOOLS if t.name in (
             "blender_ai_generate_texture",
+            "blender_ai_generate_texture_sync",
             "blender_ai_generate_reference_image",
             "blender_ai_inpaint_texture",
             "blender_ai_texture_from_render",
         )]
-        assert len(texture_tools) == 4, f"Expected 4 texture tools, got {len(texture_tools)}"
+        assert len(texture_tools) == 5, f"Expected 5 texture tools, got {len(texture_tools)}"
 
     def test_msfs_tools(self):
         """MSFS content creation tools should exist."""
