@@ -1,0 +1,32 @@
+{
+    "_parameters": {
+        "image": "1.image"
+    },
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {
+            "image": "input.png"
+        }
+    },
+    "2": {
+        "class_type": "StableFast3DLoader",
+        "inputs": {}
+    },
+    "3": {
+        "class_type": "StableFast3DSampler",
+        "inputs": {
+            "model": ["2", 0],
+            "image": ["1", 0],
+            "texture_resolution": 1024,
+            "remesh_option": "none"
+        }
+    },
+    "4": {
+        "class_type": "SaveGLB",
+        "_fallback_class": "Save3D",
+        "inputs": {
+            "mesh": ["3", 0],
+            "filename_prefix": "sf3d_output"
+        }
+    }
+}

@@ -1,12 +1,12 @@
-"""Stable Fast 3D local backend for fast text-to-3D generation.
+"""Stable Fast 3D backend routed through ComfyUI.
 
-Stable Fast 3D is a fast local model for text-to-3D generation.
-
-Note: This is a placeholder implementation. The actual Stable Fast 3D
-model needs to be installed separately.
+Instead of requiring a standalone sf3d package and PyTorch installation
+inside Blender, this backend delegates to ComfyUI when the
+``StableFast3DLoader`` node is available.
 """
 
 from pathlib import Path
+from typing import Any
 
 from .base import (
     BackendCapability,
@@ -18,14 +18,13 @@ from .base import (
 
 
 class StableFast3DBackend(BaseBackend):
-    """Stable Fast 3D local backend for fast 3D generation."""
+    """Stable Fast 3D via ComfyUI's 3D-Pack nodes."""
 
     name = "stable_fast_3d"
     display_name = "Stable Fast 3D"
-    description = "Fast local text-to-3D generation"
+    description = "Fast image-to-3D generation via ComfyUI (StableFast3DLoader)"
 
     capabilities = {
-        BackendCapability.TEXT_TO_3D,
         BackendCapability.IMAGE_TO_3D,
         BackendCapability.LOCAL,
     }
@@ -38,41 +37,22 @@ class StableFast3DBackend(BaseBackend):
 
     def __init__(self, config: BackendConfig | None = None):
         super().__init__(config)
-        self._model = None
-        self._jobs: dict[str, dict] = {}
-        self._output_dir = self._get_output_dir()
+        self._comfyui = None
 
-    def _get_output_dir(self) -> Path:
-        try:
-            import bpy
-            user_path = Path(bpy.utils.resource_path("USER"))
-            output_dir = user_path / "mcp_blender_cache" / "ai_models" / "sf3d"
-        except Exception:
-            output_dir = Path.home() / ".cache" / "mcp_blender" / "ai_models" / "sf3d"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        return output_dir
-
-    def _check_dependencies(self) -> tuple[bool, str]:
-        """Check if dependencies are available."""
-        try:
-            import torch
-            if not torch.cuda.is_available():
-                return False, "CUDA not available"
-        except ImportError:
-            return False, "PyTorch not installed"
-
-        # Check for sf3d package (placeholder - actual package name may differ)
-        try:
-            import sf3d  # noqa
-            return True, "All dependencies available"
-        except ImportError:
-            return False, "Stable Fast 3D not installed (pip install sf3d)"
+    def _get_comfyui(self):
+        """Lazily get the ComfyUI backend instance."""
+        if self._comfyui is None:
+            from .comfyui import ComfyUIBackend
+            self._comfyui = ComfyUIBackend(self.config)
+        return self._comfyui
 
     def is_available(self) -> bool:
         if not self.config.enabled:
             return False
-        available, _ = self._check_dependencies()
-        return available
+        comfyui = self._get_comfyui()
+        if not comfyui.is_available():
+            return False
+        return comfyui.has_node("StableFast3DLoader")
 
     def generate(
         self,
@@ -83,33 +63,89 @@ class StableFast3DBackend(BaseBackend):
         output_format: str = "glb",
         **kwargs,
     ) -> GenerationResult:
-        """Generate 3D model."""
-        # Placeholder - actual implementation depends on sf3d API
+        """Generate a 3D model from an image via ComfyUI's SF3D nodes."""
+        if not image_path:
+            return GenerationResult(
+                success=False,
+                error="Stable Fast 3D requires an input image (image_path)",
+                status=GenerationStatus.FAILED,
+            )
+
+        if not Path(image_path).exists():
+            return GenerationResult(
+                success=False,
+                error=f"Image not found: {image_path}",
+                status=GenerationStatus.FAILED,
+            )
+
+        comfyui = self._get_comfyui()
+
+        # Upload image to ComfyUI
+        server_name = comfyui._upload_image(image_path)
+        if not server_name:
+            return GenerationResult(
+                success=False,
+                error="Failed to upload image to ComfyUI",
+                status=GenerationStatus.FAILED,
+            )
+
+        # Build and queue the SF3D workflow
+        from .comfyui import WorkflowTemplate, WorkflowType
+
+        try:
+            template = WorkflowTemplate(WorkflowType.STABLE_FAST_3D)
+        except FileNotFoundError as e:
+            return GenerationResult(
+                success=False,
+                error=str(e),
+                status=GenerationStatus.FAILED,
+            )
+
+        workflow = template.build(image=server_name)
+
+        import uuid
+        client_id = str(uuid.uuid4())
+        result = comfyui._queue_workflow(workflow, client_id)
+
+        if not result["success"]:
+            return GenerationResult(
+                success=False,
+                error=result.get("error", "Failed to queue SF3D workflow"),
+                status=GenerationStatus.FAILED,
+            )
+
+        prompt_id = result["data"].get("prompt_id")
+        comfyui._jobs[prompt_id] = {
+            "prompt": prompt,
+            "image_path": image_path,
+            "client_id": client_id,
+            "output_format": output_format,
+            "status": "processing",
+        }
+
         return GenerationResult(
-            success=False,
-            error="Stable Fast 3D backend not yet fully implemented",
-            status=GenerationStatus.FAILED,
+            success=True,
+            job_id=prompt_id,
+            status=GenerationStatus.PROCESSING,
+            message="Stable Fast 3D workflow queued in ComfyUI",
+            metadata={"backend": self.name, "client_id": client_id},
         )
 
     def get_status(self, job_id: str) -> GenerationResult:
-        job = self._jobs.get(job_id)
-        if not job:
-            return GenerationResult(
-                success=False,
-                job_id=job_id,
-                error="Job not found",
-                status=GenerationStatus.FAILED,
-            )
-        return GenerationResult(
-            success=job.get("status") == "completed",
-            job_id=job_id,
-            status=GenerationStatus.COMPLETED if job.get("status") == "completed" else GenerationStatus.FAILED,
-        )
+        return self._get_comfyui().get_status(job_id)
 
     def download_result(self, job_id: str, output_path: str) -> GenerationResult:
-        return GenerationResult(
-            success=False,
-            job_id=job_id,
-            error="Not implemented",
-            status=GenerationStatus.FAILED,
-        )
+        return self._get_comfyui().download_result(job_id, output_path)
+
+    def get_info(self) -> dict[str, Any]:
+        info = super().get_info()
+        comfyui = self._get_comfyui()
+        available, status = comfyui._check_comfyui()
+        has_sf3d = comfyui.has_node("StableFast3DLoader") if available else False
+        info.update({
+            "comfyui_host": comfyui._get_host(),
+            "comfyui_status": status,
+            "sf3d_node_available": has_sf3d,
+            "note": "Routes through ComfyUI with StableFast3DLoader node",
+        })
+        return info
