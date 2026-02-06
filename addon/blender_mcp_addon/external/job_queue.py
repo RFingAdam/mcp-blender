@@ -5,14 +5,11 @@ and async generation queue functionality.
 """
 
 import json
-import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-from .ai_backends.base import GenerationStatus
 
 
 @dataclass
