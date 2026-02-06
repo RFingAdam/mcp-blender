@@ -122,6 +122,19 @@ class TestToolSchemas:
         assert "auto_apply" in schema["properties"]
         assert "prompt" in schema["required"]
 
+    def test_ai_generate_texture_sync_schema(self):
+        """Test ai_generate_texture_sync tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_generate_texture_sync")
+        schema = tool.inputSchema
+
+        assert "prompt" in schema["properties"]
+        assert "object_name" in schema["properties"]
+        assert "resolution" in schema["properties"]
+        assert "auto_apply" in schema["properties"]
+        assert "timeout" in schema["properties"]
+        assert schema["properties"]["timeout"]["type"] == "integer"
+        assert "prompt" in schema["required"]
+
     def test_ai_generate_reference_image_schema(self):
         """Test ai_generate_reference_image tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_generate_reference_image")
@@ -155,6 +168,36 @@ class TestToolSchemas:
         assert "enum" in schema["properties"]["control_type"]
         assert "depth" in schema["properties"]["control_type"]["enum"]
         assert "normal" in schema["properties"]["control_type"]["enum"]
+        assert "object_name" in schema["required"]
+        assert "prompt" in schema["required"]
+
+
+    def test_ai_evaluate_schema(self):
+        """Test ai_evaluate tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_evaluate")
+        schema = tool.inputSchema
+
+        assert "render_path" in schema["properties"]
+        assert "category" in schema["properties"]
+        assert "enum" in schema["properties"]["category"]
+        assert "model" in schema["properties"]["category"]["enum"]
+        assert "texture" in schema["properties"]["category"]["enum"]
+        assert "animation" in schema["properties"]["category"]["enum"]
+        assert "reference_image" in schema["properties"]
+        assert schema["required"] == ["render_path"]
+
+    def test_ai_refine_schema(self):
+        """Test ai_refine tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_refine")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert "prompt" in schema["properties"]
+        assert "category" in schema["properties"]
+        assert "max_iterations" in schema["properties"]
+        assert "quality_threshold" in schema["properties"]
+        assert "materials" in schema["properties"]
+        assert schema["properties"]["materials"]["type"] == "array"
         assert "object_name" in schema["required"]
         assert "prompt" in schema["required"]
 

@@ -761,6 +761,48 @@ TOOLS: list[Tool] = [
         },
     ),
     Tool(
+        name="blender_ai_generate_texture_sync",
+        description="Generate PBR texture and wait for completion (synchronous). Returns texture file paths when done.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the desired texture (e.g., 'worn red brick wall', 'brushed steel')",
+                },
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the Blender object to apply the texture to",
+                },
+                "resolution": {
+                    "type": "integer",
+                    "enum": [512, 1024, 2048],
+                    "default": 1024,
+                    "description": "Texture resolution in pixels",
+                },
+                "auto_apply": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Automatically apply generated textures to the object's material",
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "What to avoid in generation (default: 'blurry, low quality, watermark, text, logo')",
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for reproducible results",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "default": 300,
+                    "description": "Maximum wait time in seconds (default: 300)",
+                },
+            },
+            "required": ["prompt"],
+        },
+    ),
+    Tool(
         name="blender_ai_generate_reference_image",
         description="Generate a concept art / reference image from a text prompt using SDXL (useful for image-to-3D workflows)",
         inputSchema={
@@ -1599,6 +1641,92 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {},
             "required": [],
+        },
+    ),
+    # ==================== AI Evaluation & Self-Refinement ====================
+    Tool(
+        name="blender_ai_evaluate",
+        description="Evaluate any render or output (model, texture, animation) using Ollama vision with category-specific criteria. Returns structured scores and improvement suggestions.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "render_path": {
+                    "type": "string",
+                    "description": "Path to the rendered image to evaluate",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["model", "texture", "animation"],
+                    "default": "model",
+                    "description": "Evaluation category: model (geometry/proportions), texture (PBR/tiling), or animation (motion/timing)",
+                },
+                "reference_image": {
+                    "type": "string",
+                    "description": "Optional reference image path for comparison",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Additional evaluation context or instructions",
+                },
+                "ollama_host": {
+                    "type": "string",
+                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                },
+                "ollama_model": {
+                    "type": "string",
+                    "description": "Vision model name (default: llama3.2-vision:11b)",
+                },
+            },
+            "required": ["render_path"],
+        },
+    ),
+    Tool(
+        name="blender_ai_refine",
+        description="Run one iteration of AI self-refinement: render object, evaluate with vision model, return scores and suggestions. Call repeatedly in a loop, applying suggestions between calls, until converged.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the Blender object to refine",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Description of the desired result for evaluation",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["model", "texture", "animation"],
+                    "default": "model",
+                    "description": "Refinement category",
+                },
+                "max_iterations": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Maximum iterations before forced convergence",
+                },
+                "quality_threshold": {
+                    "type": "number",
+                    "default": 0.85,
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Score threshold to consider converged (0.0-1.0)",
+                },
+                "materials": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Material names for texture refinement (optional)",
+                },
+                "ollama_host": {
+                    "type": "string",
+                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                },
+                "ollama_model": {
+                    "type": "string",
+                    "description": "Vision model name (default: llama3.2-vision:11b)",
+                },
+            },
+            "required": ["object_name", "prompt"],
         },
     ),
 ]

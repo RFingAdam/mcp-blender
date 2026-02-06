@@ -18,7 +18,7 @@
 
 ## Features
 
-- **93 tools** for comprehensive Blender control
+- **100 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF
@@ -227,6 +227,27 @@ Ask Claude to:
 |------|-------------|
 | `blender_polyhaven_search` | Search Poly Haven for HDRIs, textures, or models |
 | `blender_polyhaven_download` | Download and apply Poly Haven asset |
+
+### AI Texture Generation Tools (5)
+
+Generate PBR textures, reference images, and inpaint textures using ComfyUI/SDXL.
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_generate_texture` | Generate PBR texture set from text prompt (async, returns job_id) |
+| `blender_ai_generate_texture_sync` | Generate PBR texture and wait for completion (synchronous) |
+| `blender_ai_generate_reference_image` | Generate concept art / reference image from text |
+| `blender_ai_inpaint_texture` | Inpaint a masked region of an existing texture |
+| `blender_ai_texture_from_render` | Generate texture from depth/normal render via ControlNet |
+
+### AI Evaluation & Refinement Tools (2)
+
+Evaluate and iteratively improve 3D content using Ollama vision.
+
+| Tool | Description |
+|------|-------------|
+| `blender_ai_evaluate` | Evaluate any render with category-specific scoring (model/texture/animation) |
+| `blender_ai_refine` | Run one refinement iteration: render, evaluate, return scores and suggestions |
 
 ### AI 3D Generation Tools (21)
 
@@ -597,6 +618,11 @@ mcp-blender/
 │           ├── templates.py   # Aircraft template definitions
 │           ├── transfer.py    # AI-assisted livery transfer
 │           └── export.py      # Livery package creation
+├── assets/                    # Static and generated assets
+│   ├── generated/             # AI-generated models & textures (gitignored)
+│   │   └── mototok/           # Mototok Spacer 8600 project
+│   ├── banner.svg             # Project banner
+│   └── logo.svg               # Project logo
 ├── tests/                     # Test suite
 ├── scripts/                   # Build scripts
 └── docs/                      # Documentation

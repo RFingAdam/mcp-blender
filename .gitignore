@@ -46,6 +46,10 @@ Thumbs.db
 # Blender
 *.blend1
 
+# Generated assets & models
+assets/generated/
+mototok_spacer_8600.blend
+
 # Build artifacts
 *.zip
 *.tar.gz

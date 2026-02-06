@@ -104,6 +104,7 @@ class CommandHandlers:
 
         # Texture generation handlers
         self._handlers["ai_generate_texture"] = self._handle_ai_generate_texture
+        self._handlers["ai_generate_texture_sync"] = self._handle_ai_generate_texture_sync
         self._handlers["ai_generate_reference_image"] = self._handle_ai_generate_reference_image
         self._handlers["ai_inpaint_texture"] = self._handle_ai_inpaint_texture
         self._handlers["ai_texture_from_render"] = self._handle_ai_texture_from_render
@@ -174,6 +175,10 @@ class CommandHandlers:
         self._handlers["msfs_livery_create_package"] = self._handle_msfs_livery_create_package
         self._handlers["msfs_livery_convert_to_dds"] = self._handle_msfs_livery_convert_to_dds
         self._handlers["msfs_livery_validate_package"] = self._handle_msfs_livery_validate_package
+
+        # AI evaluation & self-refinement handlers
+        self._handlers["ai_evaluate"] = self._handle_ai_evaluate
+        self._handlers["ai_refine"] = self._handle_ai_refine
 
         # Script execution handler
         self._handlers["execute_script"] = self._handle_execute_script
@@ -1130,6 +1135,32 @@ class CommandHandlers:
             height=params.get("resolution", 1024),
             negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
             seed=params.get("seed"),
+        )
+
+    def _handle_ai_generate_texture_sync(self, params: dict) -> dict:
+        """Generate PBR texture and poll until complete (synchronous)."""
+        from .external.ai_models import generate_texture, poll_until_complete
+
+        result = generate_texture(
+            prompt=require_param(params, "prompt", str),
+            workflow_type="pbr_texture",
+            object_name=params.get("object_name"),
+            auto_apply=params.get("auto_apply", True),
+            texture_types=params.get("texture_types"),
+            width=params.get("resolution", 1024),
+            height=params.get("resolution", 1024),
+            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            seed=params.get("seed"),
+        )
+
+        if not result.get("success") or not result.get("job_id"):
+            return result
+
+        timeout = params.get("timeout", 300)
+        return poll_until_complete(
+            job_id=result["job_id"],
+            max_wait=timeout,
+            auto_import=False,
         )
 
     def _handle_ai_generate_reference_image(self, params: dict) -> dict:
@@ -2097,6 +2128,58 @@ class CommandHandlers:
             "analysis": analysis,
             "output_dir": render_result["output_dir"],
         }
+
+    # ========== AI Evaluation & Self-Refinement Handlers ==========
+
+    def _handle_ai_evaluate(self, params: dict) -> dict:
+        """Evaluate any render/output using Ollama vision."""
+        from .external.ai_models import evaluate_output
+
+        render_path = require_param(params, "render_path", str)
+        category = params.get("category", "model")
+        reference_image = params.get("reference_image")
+        prompt = params.get("prompt", "")
+
+        if category not in ("model", "texture", "animation"):
+            raise ValidationError(f"Invalid category: {category}. Must be model, texture, or animation")
+
+        result = evaluate_output(
+            render_path=render_path,
+            category=category,
+            reference_image=reference_image,
+            prompt=prompt,
+            ollama_host=params.get("ollama_host", "http://10.27.27.10:11434"),
+            ollama_model=params.get("ollama_model", "llama3.2-vision:11b"),
+        )
+
+        return result
+
+    def _handle_ai_refine(self, params: dict) -> dict:
+        """Run one iteration of AI self-refinement loop."""
+        from .external.ai_models import refine_with_feedback
+
+        object_name = require_param(params, "object_name", str)
+        prompt = require_param(params, "prompt", str)
+        category = params.get("category", "model")
+        max_iterations = params.get("max_iterations", 5)
+        quality_threshold = params.get("quality_threshold", 0.85)
+        materials = params.get("materials")
+
+        if category not in ("model", "texture", "animation"):
+            raise ValidationError(f"Invalid category: {category}. Must be model, texture, or animation")
+
+        result = refine_with_feedback(
+            object_name=object_name,
+            prompt=prompt,
+            category=category,
+            max_iterations=max_iterations,
+            quality_threshold=quality_threshold,
+            materials=materials,
+            ollama_host=params.get("ollama_host", "http://10.27.27.10:11434"),
+            ollama_model=params.get("ollama_model", "llama3.2-vision:11b"),
+        )
+
+        return result
 
     # ========== Refinement Iteration Handler ==========
 

@@ -685,6 +685,189 @@ def clear_generation_history(older_than_hours: float | None = None) -> dict[str,
 
 
 # =============================================================================
+# AI Evaluation & Self-Refinement
+# =============================================================================
+
+
+def evaluate_output(
+    render_path: str,
+    category: str = "model",
+    reference_image: str | None = None,
+    prompt: str = "",
+    ollama_host: str = "http://10.27.27.10:11434",
+    ollama_model: str = "llama3.2-vision:11b",
+) -> dict[str, Any]:
+    """Evaluate a render/output using Ollama vision with category-specific criteria.
+
+    Args:
+        render_path: Path to the rendered image to evaluate.
+        category: Evaluation category (model, texture, animation).
+        reference_image: Optional reference image for comparison.
+        prompt: Additional evaluation context.
+        ollama_host: Ollama server URL.
+        ollama_model: Vision model name.
+
+    Returns:
+        Structured evaluation with scores and suggestions.
+    """
+    from .ai_backends.base import BackendConfig
+    from .ai_backends.ollama_vision import OllamaVisionBackend
+
+    config = BackendConfig(
+        enabled=True,
+        extra={"host": ollama_host, "model": ollama_model},
+    )
+    backend = OllamaVisionBackend(config)
+
+    return backend.evaluate_output(
+        image_path=render_path,
+        category=category,
+        reference_image=reference_image,
+        prompt=prompt,
+    )
+
+
+def refine_with_feedback(
+    object_name: str,
+    prompt: str,
+    category: str = "model",
+    max_iterations: int = 5,
+    quality_threshold: float = 0.85,
+    materials: list[str] | None = None,
+    ollama_host: str = "http://10.27.27.10:11434",
+    ollama_model: str = "llama3.2-vision:11b",
+) -> dict[str, Any]:
+    """Orchestrate an iterative self-refinement loop.
+
+    For each iteration:
+    1. Render current state
+    2. Evaluate via Ollama vision
+    3. Return evaluation with suggestions for the caller to apply changes
+
+    The caller (MCP client) applies the suggested changes between iterations.
+    This function runs a single pass and returns the evaluation so the MCP
+    tool can be called repeatedly in a loop by the client.
+
+    Args:
+        object_name: Name of the Blender object to refine.
+        prompt: Description of desired result.
+        category: Evaluation category (model, texture, animation).
+        max_iterations: Maximum iterations before stopping.
+        quality_threshold: Score threshold to consider converged.
+        materials: Optional material names for texture refinement.
+        ollama_host: Ollama server URL.
+        ollama_model: Vision model name.
+
+    Returns:
+        Dictionary with evaluation results and iteration state.
+    """
+    from .refinement import get_refinement_manager
+
+    manager = get_refinement_manager()
+
+    # Find or create session for this object
+    existing = [
+        s for s in manager.list_sessions()
+        if s.object_name == object_name and s.status == "active"
+    ]
+    if existing:
+        session = existing[0]
+    else:
+        session = manager.create_session(
+            object_name=object_name,
+            prompt=prompt,
+        )
+
+    iteration = len(session.iterations)
+
+    # Render current state
+    import tempfile
+
+    output_dir = tempfile.mkdtemp(prefix="refine_")
+    render_path = Path(output_dir) / "render.png"
+
+    # Render the object to evaluate
+    scene = bpy.context.scene
+    orig_path = scene.render.filepath
+    orig_format = scene.render.image_settings.file_format
+    orig_res_x = scene.render.resolution_x
+    orig_res_y = scene.render.resolution_y
+
+    scene.render.filepath = str(render_path)
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.resolution_x = 512
+    scene.render.resolution_y = 512
+
+    try:
+        bpy.ops.render.render(write_still=True)
+    finally:
+        scene.render.filepath = orig_path
+        scene.render.image_settings.file_format = orig_format
+        scene.render.resolution_x = orig_res_x
+        scene.render.resolution_y = orig_res_y
+
+    # Evaluate
+    eval_prompt = f"{prompt}. Object: {object_name}."
+    if materials:
+        eval_prompt += f" Materials: {', '.join(materials)}."
+
+    evaluation = evaluate_output(
+        render_path=str(render_path),
+        category=category,
+        prompt=eval_prompt,
+        ollama_host=ollama_host,
+        ollama_model=ollama_model,
+    )
+
+    score = evaluation.get("overall_score", 0.0)
+    previous_score = session.iterations[-1].score if session.iterations else 0.0
+    score_delta = score - previous_score
+
+    # Record iteration
+    from .refinement import RefinementIteration
+
+    iteration_record = RefinementIteration(
+        iteration=iteration,
+        score=score,
+        render_paths={"render": str(render_path)},
+        analysis=evaluation,
+    )
+    session.iterations.append(iteration_record)
+
+    # Check convergence
+    converged = False
+    convergence_reason = None
+
+    if score >= quality_threshold:
+        converged = True
+        convergence_reason = f"Quality threshold reached: {score:.2f} >= {quality_threshold}"
+    elif iteration >= 2 and abs(score_delta) < 0.02:
+        converged = True
+        convergence_reason = f"Score plateau: delta {score_delta:.3f} < 0.02"
+    elif iteration >= max_iterations:
+        converged = True
+        convergence_reason = f"Max iterations reached: {iteration} >= {max_iterations}"
+
+    if converged:
+        session.status = "converged"
+
+    return {
+        "success": True,
+        "session_id": session.session_id,
+        "object_name": object_name,
+        "category": category,
+        "iteration": iteration,
+        "score": score,
+        "score_delta": score_delta,
+        "converged": converged,
+        "convergence_reason": convergence_reason,
+        "evaluation": evaluation,
+        "render_path": str(render_path),
+        "suggestions": evaluation.get("suggestions", []),
+    }
+
+
+# =============================================================================
 # Helper Functions (Backward Compatibility)
 # =============================================================================
 
