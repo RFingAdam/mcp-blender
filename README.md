@@ -18,7 +18,7 @@
 
 ## Features
 
-- **103 tools** for comprehensive Blender control
+- **93 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
 - **Materials & textures** - Create materials, set colors, configure Principled BSDF
@@ -30,6 +30,8 @@
 - **MSFS aircraft livery tools** - Paint workflows, template support, AI-assisted livery transfer
 - **Poly Haven integration** - Search and download free HDRIs, textures, and models
 - **AI model generation** - Generate 3D models from text or images via multiple backends (Rodin, Meshy, Tripo AI, TripoSR, Hunyuan3D, and more)
+- **AI self-refinement loop** - Render, analyze with vision AI, fix, re-render until converged
+- **Script execution** - Run arbitrary Python/bmesh code in Blender
 - **Mesh processing** - Cleanup, optimize, decimate, remesh, and auto-UV generated models
 
 ## Architecture
@@ -43,6 +45,24 @@
 
 The MCP server communicates with Claude Code via stdio and connects to a Blender addon via TCP sockets. The addon runs a non-blocking server inside Blender using `bpy.app.timers`.
 
+### Self-Refinement Loop
+
+```
+┌───────────┐  execute_script  ┌─────────┐  render_multi_angle  ┌──────────────┐
+│   Claude   │ ──────────────► │ Blender  │ ───────────────────► │  PNG Images  │
+│  (AI LLM)  │                 │  (bpy)   │                      └──────┬───────┘
+└─────┬──────┘                 └─────────┘                             │
+      │                                                  analyze_viewport
+      │  fix script                                                    │
+      │  (loop)                                                        ▼
+      │                                                     ┌──────────────────┐
+      └─────────────────────────────────────────────────────│  Ollama Vision   │
+                              feedback + score              │  (llama3.2-11b)  │
+                                                            └──────────────────┘
+```
+
+The refinement loop lets Claude iteratively improve 3D models: generate mesh with `execute_script`, render from multiple angles, analyze with a vision model, then apply fixes — repeating until the quality score converges.
+
 ## Installation
 
 ### 1. Install the MCP Server
@@ -54,7 +74,7 @@ pip install mcp-blender
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/mcp-blender
+git clone https://github.com/RFingAdam/mcp-blender
 cd mcp-blender
 pip install -e .
 ```
@@ -63,7 +83,7 @@ pip install -e .
 
 **Option A: From ZIP (recommended)**
 
-1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/yourusername/mcp-blender/releases)
+1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/RFingAdam/mcp-blender/releases)
 2. In Blender: **Edit → Preferences → Add-ons → Install...**
 3. Select the ZIP file and click "Install Add-on"
 4. Enable "MCP Server Addon" by checking the box
@@ -116,6 +136,7 @@ Ask Claude to:
 - *"Set up a three-point lighting setup"*
 - *"Render the scene to /tmp/render.png"*
 - *"Search Poly Haven for brick textures and apply one to the cube"*
+- *"Create a low-poly tree with bmesh, then refine it until it looks good"*
 
 ## Tools Reference
 
@@ -189,7 +210,7 @@ Ask Claude to:
 | `blender_render_set_resolution` | Set output resolution |
 | `blender_render_screenshot` | Capture viewport screenshot |
 
-### Export/Import Tools (5)
+### Export/Import Tools (6)
 
 | Tool | Description |
 |------|-------------|
@@ -197,6 +218,7 @@ Ask Claude to:
 | `blender_export_fbx` | Export to FBX format |
 | `blender_export_obj` | Export to OBJ format |
 | `blender_export_stl` | Export to STL format |
+| `blender_export_usd` | Export to USD format |
 | `blender_import_file` | Import file (auto-detects format) |
 
 ### External Integration Tools (2)
@@ -248,6 +270,20 @@ Multi-backend AI model generation with local and cloud options.
 | `blender_ai_queue_list` | List all generation jobs |
 | `blender_ai_queue_clear` | Clear completed/failed jobs |
 | `blender_ai_get_history` | Get generation history |
+
+### AI Self-Refinement Tools (7)
+
+Iterative render-analyze-fix loop using vision AI for quality convergence.
+
+| Tool | Description |
+|------|-------------|
+| `blender_execute_script` | Execute arbitrary Python/bmesh script in Blender's context |
+| `blender_render_multi_angle` | Render object from multiple angles (front, right, top, perspective) |
+| `blender_analyze_viewport` | Render and analyze with Ollama vision model for structured feedback |
+| `blender_refine_iteration` | Run one refinement iteration: render, analyze, check convergence |
+| `blender_refine_create_session` | Create a new refinement session to track iterative improvement |
+| `blender_refine_get_session` | Get details and iteration history of a refinement session |
+| `blender_refine_list_sessions` | List all refinement sessions with status and iteration counts |
 
 ### MSFS 2020/2024 Content Creation Tools (20)
 
@@ -312,6 +348,28 @@ Tools for creating and transferring aircraft liveries for virtual airlines.
 - Just Flight BAe 146
 - Generic template for custom aircraft
 
+## Self-Refinement Loop
+
+The refinement loop enables AI-driven iterative improvement of 3D models. Claude generates mesh code, renders it from multiple angles, analyzes with a vision model, and applies fixes until quality converges.
+
+```
+# 1. Create a refinement session
+blender_refine_create_session(object_name="Tree", prompt="A realistic low-poly pine tree")
+
+# 2. Generate initial mesh with bmesh script
+blender_execute_script(script="import bmesh; ...")
+
+# 3. Run refinement iteration (render + analyze + convergence check)
+blender_refine_iteration(object_name="Tree", iteration=0, max_iterations=5)
+
+# 4. Apply fixes based on feedback, then iterate
+blender_execute_script(script="# fix issues from analysis ...")
+blender_refine_iteration(object_name="Tree", iteration=1, previous_score=0.6)
+
+# 5. Check session history
+blender_refine_get_session(session_id="...")
+```
+
 ## External Integrations
 
 ### Poly Haven
@@ -340,6 +398,7 @@ Generate 3D models from text prompts or images using multiple backends - both cl
 | Meshy.ai | Cloud | API key | Text-to-3D, Image-to-3D, Texturing |
 | Tripo AI | Cloud | API key | Text-to-3D, Image-to-3D, Fast |
 | TripoSR | Local | 4GB VRAM | Image-to-3D, Very fast (<1s) |
+| Stable Fast 3D | Local | 6GB VRAM | Image-to-3D, Fast, Stable results |
 | Hunyuan3D | Local | 16GB VRAM | Text-to-3D, Image-to-3D, High quality |
 | Ollama Vision | Local | 8GB VRAM | Image understanding (helper) |
 | ComfyUI | Local | Varies | Custom workflows |
@@ -396,7 +455,7 @@ This addon includes a compatibility layer for Blender API differences:
 |---------|-------------|-------------|
 | Action FCurves | `action.fcurves` | `action.slots[].layers[].strips[].channels` |
 | mathutils precision | float64 | float32 |
-| Render engine | `BLENDER_EEVEE` | `BLENDER_EEVEE_NEXT` |
+| Render engine | `BLENDER_EEVEE` (< 4.2) | `BLENDER_EEVEE_NEXT` (4.2+) |
 
 The compatibility layer handles these differences automatically.
 
@@ -460,7 +519,7 @@ The addon panel in the 3D Viewport sidebar offers:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/mcp-blender
+git clone https://github.com/RFingAdam/mcp-blender
 cd mcp-blender
 
 # Create virtual environment
@@ -509,9 +568,11 @@ mcp-blender/
 │   ├── handlers.py            # Command handlers
 │   ├── compat.py              # Version compatibility layer
 │   ├── validation.py          # Parameter validation
+│   ├── utils.py               # Shared utility functions
 │   ├── external/              # External integrations
 │   │   ├── cache.py           # Asset caching system
 │   │   ├── polyhaven.py       # Poly Haven API client
+│   │   ├── refinement.py      # Refinement session state management
 │   │   ├── ai_models.py       # AI generation orchestration
 │   │   ├── mesh_processing.py # Mesh cleanup and optimization
 │   │   ├── job_queue.py       # Persistent job tracking
@@ -523,6 +584,7 @@ mcp-blender/
 │   │       ├── triposr.py     # TripoSR (local)
 │   │       ├── hunyuan3d.py   # Hunyuan3D (local)
 │   │       ├── ollama_vision.py # Ollama Vision (local)
+│   │       ├── stable_fast_3d.py # Stable Fast 3D (local)
 │   │       └── comfyui.py     # ComfyUI integration
 │   └── msfs/                  # MSFS content creation tools
 │       ├── lod.py             # LOD hierarchy management

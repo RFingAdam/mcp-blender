@@ -31,6 +31,11 @@ Thank you for your interest in contributing to MCP Blender! This document provid
    pip install -e ".[dev]"
    ```
 
+   Or using [uv](https://github.com/astral-sh/uv) (recommended for faster installs):
+   ```bash
+   uv pip install -e ".[dev]"
+   ```
+
 4. **Install the Blender addon:**
    ```bash
    # Symlink the addon to Blender's addons folder
@@ -96,7 +101,11 @@ mcp-blender/
 │   ├── socket_server.py       # TCP server
 │   ├── handlers.py            # Command handlers
 │   ├── compat.py              # Version compatibility
+│   ├── utils.py               # Shared utility functions
 │   └── external/              # External integrations
+│       ├── refinement.py      # Refinement session state
+│       └── ai_backends/
+│           └── stable_fast_3d.py  # Stable Fast 3D backend
 ├── tests/                     # Test suite
 └── scripts/                   # Build scripts
 ```
@@ -125,7 +134,7 @@ Tool(
 
 In `addon/blender_mcp_addon/handlers.py`:
 
-1. Register the handler in `__init__`:
+1. Register the handler in `_register_handlers()`:
    ```python
    self._handlers["my_new_tool"] = self._handle_my_new_tool
    ```
