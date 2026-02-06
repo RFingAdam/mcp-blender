@@ -104,8 +104,10 @@ mcp-blender/
 │   ├── utils.py               # Shared utility functions
 │   └── external/              # External integrations
 │       ├── refinement.py      # Refinement session state
-│       └── ai_backends/
-│           └── stable_fast_3d.py  # Stable Fast 3D backend
+│       ├── ai_models.py       # AI generation orchestration
+│       └── ai_backends/       # AI backend implementations
+├── assets/                    # Static and generated assets
+│   └── generated/             # AI-generated models & textures (gitignored)
 ├── tests/                     # Test suite
 └── scripts/                   # Build scripts
 ```

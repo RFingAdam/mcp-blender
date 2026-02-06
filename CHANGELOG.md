@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-02-06
+
+### Added
+
+- **AI Texture Generation (sync)**: `blender_ai_generate_texture_sync` — queues ComfyUI job and polls until complete in one call, eliminating the need for manual status polling
+- **AI Output Evaluation**: `blender_ai_evaluate` — evaluate any render/output (model, texture, animation) using Ollama vision with category-specific scoring criteria
+- **AI Self-Refinement**: `blender_ai_refine` — run one iteration of render → evaluate → suggest loop for iterative quality improvement
+- Ollama Vision `evaluate_output()` method with structured scoring and category-specific criteria (model/texture/animation)
+- `refine_with_feedback()` orchestration function for iterative self-refinement sessions
+- Asset organization: `assets/generated/` directory for generated models and textures (gitignored)
+
+### Changed
+
+- Total tool count increased from 97 to 100
+- Blend model files moved to `assets/generated/mototok/` and removed from git tracking
+- Updated `.gitignore` to exclude generated assets and blend files
+
 ## [0.2.0] - 2025-02-05
 
 ### Added
@@ -65,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Version bump to 0.2.0
-- Total tool count increased from 86 to 93
+- Total tool count increased from 44 to 97
 - TripoSR backend rewritten to use subprocess (avoids Blender Python limitations with PyTorch/CUDA)
 - Simplified `compat.py` — removed redundant BSDF input branching
 - `get_event_loop()` → `get_running_loop()` deprecation fix in `blender_client.py`
@@ -102,5 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-blocking socket server using `bpy.app.timers`
 - JSON-RPC 2.0 protocol for command communication
 
+[0.2.1]: https://github.com/RFingAdam/mcp-blender/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/RFingAdam/mcp-blender/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RFingAdam/mcp-blender/releases/tag/v0.1.0

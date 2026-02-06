@@ -164,6 +164,55 @@ Be specific and descriptive. The description will be used to generate a 3D model
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    EVALUATION_PROMPT = """You are evaluating a {category} output from a 3D content pipeline.
+
+{category_criteria}
+
+Respond with ONLY a valid JSON object (no markdown, no extra text):
+{{
+  "overall_score": <float 0.0-1.0>,
+  "per_element_scores": {{
+    "<element_name>": <float 0.0-1.0>
+  }},
+  "suggestions": [
+    {{
+      "priority": "<high|medium|low>",
+      "area": "<what to improve>",
+      "action": "<specific improvement action>"
+    }}
+  ],
+  "convergence_signal": <true if output looks good enough, false if needs more work>
+}}
+
+{user_prompt}"""
+
+    CATEGORY_CRITERIA = {
+        "model": (
+            "Evaluate the 3D model for:\n"
+            "1. Geometric accuracy and proportions\n"
+            "2. Mesh topology and edge flow\n"
+            "3. Level of detail and features\n"
+            "4. Surface smoothness and artifacts\n"
+            "5. Overall silhouette correctness"
+        ),
+        "texture": (
+            "Evaluate the PBR texture for:\n"
+            "1. Material realism and PBR accuracy\n"
+            "2. Tiling and seam visibility\n"
+            "3. Color accuracy and consistency\n"
+            "4. Normal map quality and depth\n"
+            "5. Roughness/metallic map correctness"
+        ),
+        "animation": (
+            "Evaluate the animation for:\n"
+            "1. Motion quality and fluidity\n"
+            "2. Timing and spacing of keyframes\n"
+            "3. Physics realism (weight, momentum)\n"
+            "4. Easing and acceleration curves\n"
+            "5. Overall believability of movement"
+        ),
+    }
+
     REFINEMENT_PROMPT = """You are analyzing renders of a 3D model from multiple angles.
 
 Evaluate the model and respond with ONLY a valid JSON object (no markdown, no extra text):
@@ -278,6 +327,106 @@ Evaluate the model and respond with ONLY a valid JSON object (no markdown, no ex
                 "success": False,
                 "error": str(e),
                 "overall_quality": 0.0,
+            }
+
+    def evaluate_output(
+        self,
+        image_path: str,
+        category: str = "model",
+        reference_image: str | None = None,
+        prompt: str = "",
+    ) -> dict[str, Any]:
+        """Evaluate any render/output using category-specific criteria.
+
+        Args:
+            image_path: Path to the image to evaluate.
+            category: Evaluation category (model, texture, animation).
+            reference_image: Optional reference image for comparison.
+            prompt: Additional evaluation context.
+
+        Returns:
+            Structured evaluation with scores and suggestions.
+        """
+        host = self._get_host()
+        model = self._get_model()
+
+        category_criteria = self.CATEGORY_CRITERIA.get(
+            category, self.CATEGORY_CRITERIA["model"],
+        )
+
+        all_images = []
+
+        # Encode reference image first if provided
+        if reference_image:
+            ref_path = Path(reference_image)
+            if ref_path.exists():
+                with open(ref_path, "rb") as f:
+                    all_images.append(base64.b64encode(f.read()).decode("utf-8"))
+
+        # Encode the main image
+        path = Path(image_path)
+        if not path.exists():
+            return {"success": False, "error": f"Image not found: {image_path}"}
+        with open(path, "rb") as f:
+            all_images.append(base64.b64encode(f.read()).decode("utf-8"))
+
+        user_prompt = prompt
+        if reference_image:
+            user_prompt = f"The first image is the reference. Compare against it. {prompt}"
+
+        full_prompt = self.EVALUATION_PROMPT.format(
+            category=category,
+            category_criteria=category_criteria,
+            user_prompt=user_prompt,
+        )
+
+        request_data = {
+            "model": model,
+            "prompt": full_prompt,
+            "images": all_images,
+            "stream": False,
+        }
+
+        try:
+            req = urllib.request.Request(
+                f"{host}/api/generate",
+                data=json.dumps(request_data).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+
+            with urllib.request.urlopen(req, timeout=180) as response:
+                data = json.loads(response.read().decode())
+
+            raw_response = data.get("response", "")
+
+            # Parse structured JSON from response
+            try:
+                json_str = raw_response
+                if "```json" in json_str:
+                    json_str = json_str.split("```json")[1].split("```")[0]
+                elif "```" in json_str:
+                    json_str = json_str.split("```")[1].split("```")[0]
+                evaluation = json.loads(json_str.strip())
+            except (json.JSONDecodeError, IndexError):
+                evaluation = {
+                    "overall_score": 0.5,
+                    "per_element_scores": {},
+                    "suggestions": [],
+                    "convergence_signal": False,
+                    "raw_response": raw_response,
+                }
+
+            evaluation["success"] = True
+            evaluation["model_used"] = model
+            evaluation["category"] = category
+            return evaluation
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "overall_score": 0.0,
             }
 
     def generate(
