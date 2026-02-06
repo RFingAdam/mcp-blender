@@ -43,6 +43,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Blender
+*.blend1
+
 # Build artifacts
 *.zip
 *.tar.gz

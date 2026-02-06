@@ -5,15 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2025-02-05
 
 ### Added
 
-- **Multi-Backend AI 3D Generation System** (17 new tools):
-  - Backend Management tools (4): list_backends, set_backend, get_backend_info, configure_backend
-  - Enhanced Generation tools (3): generate_variations, cancel_generation, redo_generation
-  - Mesh Processing tools (7): mesh_cleanup, mesh_decimate, mesh_remesh, mesh_optimize, auto_uv, fix_mesh_issues, mesh_stats
-  - Queue Management tools (3): queue_list, queue_clear, get_history
+- **AI Self-Refinement Loop** (7 new tools):
+  - Script execution: `execute_script` — run arbitrary Python/bmesh code in Blender
+  - Multi-angle rendering: `render_multi_angle` — render from front, right, top, perspective
+  - Vision analysis: `analyze_viewport` — analyze renders with Ollama vision model
+  - Refinement iteration: `refine_iteration` — render + analyze + convergence check
+  - Session management: `refine_create_session`, `refine_get_session`, `refine_list_sessions`
+- **Refinement session state management** module (`refinement.py`)
+- **Ollama Vision** `analyze_for_refinement()` method for structured model feedback
+- **TripoSR subprocess execution** — runs via system Python for PyTorch/CUDA support
+- **Stable Fast 3D** backend for local image-to-3D generation
+- **Multi-Backend AI 3D Generation System**:
+  - Backend Management tools: list_backends, set_backend, get_backend_info, configure_backend
+  - Enhanced Generation tools: generate_variations, cancel_generation, redo_generation
+  - Mesh Processing tools: mesh_cleanup, mesh_decimate, mesh_remesh, mesh_optimize, auto_uv, fix_mesh_issues, mesh_stats
+  - Queue Management tools: queue_list, queue_clear, get_history
 - **Multi-backend support** for AI 3D generation:
   - Cloud backends: Hyper3D Rodin, Meshy.ai, Tripo AI
   - Local backends: TripoSR, Hunyuan3D 2.1, Stable Fast 3D
@@ -54,7 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Total tool count increased from 86 to 103
+- Version bump to 0.2.0
+- Total tool count increased from 86 to 93
+- TripoSR backend rewritten to use subprocess (avoids Blender Python limitations with PyTorch/CUDA)
+- Simplified `compat.py` — removed redundant BSDF input branching
+- `get_event_loop()` → `get_running_loop()` deprecation fix in `blender_client.py`
+- Removed unused imports across multiple modules
 - Refactored AI generation system to use pluggable backend architecture
 - Enhanced `blender_ai_generate_model` with backend selection parameter
 - Enhanced `blender_ai_model_status` with auto-import and mesh optimization options
@@ -87,5 +102,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-blocking socket server using `bpy.app.timers`
 - JSON-RPC 2.0 protocol for command communication
 
-[Unreleased]: https://github.com/RFingAdam/mcp-blender/compare/v0.1.0...HEAD
+[0.2.0]: https://github.com/RFingAdam/mcp-blender/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RFingAdam/mcp-blender/releases/tag/v0.1.0
