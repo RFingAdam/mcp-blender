@@ -326,6 +326,50 @@ class BackendManager:
             **kwargs,
         )
 
+    def generate_texture(
+        self,
+        prompt: str,
+        workflow_type: str = "pbr_texture",
+        backend: str | None = None,
+        **kwargs,
+    ) -> GenerationResult:
+        """Generate textures using a backend with TEXTURE_GENERATION capability.
+
+        Args:
+            prompt: Text description of the desired texture.
+            workflow_type: Type of texture workflow.
+            backend: Optional specific backend name to use.
+            **kwargs: Backend-specific options.
+
+        Returns:
+            GenerationResult with job_id and status.
+        """
+        if backend:
+            selected = self._backends.get(backend)
+            if not selected:
+                return GenerationResult(
+                    success=False,
+                    error=f"Unknown backend: {backend}",
+                    status=GenerationStatus.FAILED,
+                )
+            if not selected.is_available():
+                return GenerationResult(
+                    success=False,
+                    error=f"Backend '{backend}' is not available",
+                    status=GenerationStatus.FAILED,
+                )
+        else:
+            try:
+                selected = self.select_backend(
+                    capabilities_needed={BackendCapability.TEXTURE_GENERATION},
+                )
+            except NoBackendAvailableError as e:
+                return GenerationResult(
+                    success=False, error=str(e), status=GenerationStatus.FAILED,
+                )
+
+        return selected.generate_texture(prompt=prompt, workflow_type=workflow_type, **kwargs)
+
     def get_status(self, job_id: str, backend: str | None = None) -> GenerationResult:
         """Get the status of a generation job.
 

@@ -165,6 +165,31 @@ class BaseBackend(ABC):
         """
         pass
 
+    def generate_texture(
+        self,
+        prompt: str,
+        workflow_type: str = "pbr_texture",
+        **kwargs,
+    ) -> GenerationResult:
+        """Generate textures from a text prompt.
+
+        Not all backends support texture generation. Override in subclasses
+        that have ``TEXTURE_GENERATION`` capability.
+
+        Args:
+            prompt: Text description of the desired texture.
+            workflow_type: Type of texture workflow.
+            **kwargs: Backend-specific options.
+
+        Returns:
+            GenerationResult with job_id and status.
+        """
+        return GenerationResult(
+            success=False,
+            error="Texture generation not supported by this backend",
+            status=GenerationStatus.FAILED,
+        )
+
     def cancel(self, job_id: str) -> GenerationResult:
         """Cancel an in-progress generation job.
 

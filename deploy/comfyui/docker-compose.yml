@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  comfyui:
+    image: ghcr.io/ai-dock/comfyui:latest
+    container_name: comfyui
+    restart: unless-stopped
+
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+    ports:
+      - "8188:8188"
+
+    command: ["--listen", "0.0.0.0"]
+
+    volumes:
+      - comfyui_models:/opt/ComfyUI/models
+      - comfyui_output:/opt/ComfyUI/output
+      - comfyui_input:/opt/ComfyUI/input
+      - comfyui_custom_nodes:/opt/ComfyUI/custom_nodes
+
+    networks:
+      - comfyui_net
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  comfyui_models:
+  comfyui_output:
+  comfyui_input:
+  comfyui_custom_nodes:
+
+networks:
+  comfyui_net:
+    name: comfyui_net
+    driver: bridge

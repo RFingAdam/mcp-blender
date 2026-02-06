@@ -102,6 +102,12 @@ class CommandHandlers:
         self._handlers["ai_generate_model"] = self._handle_ai_generate_model
         self._handlers["ai_model_status"] = self._handle_ai_model_status
 
+        # Texture generation handlers
+        self._handlers["ai_generate_texture"] = self._handle_ai_generate_texture
+        self._handlers["ai_generate_reference_image"] = self._handle_ai_generate_reference_image
+        self._handlers["ai_inpaint_texture"] = self._handle_ai_inpaint_texture
+        self._handlers["ai_texture_from_render"] = self._handle_ai_texture_from_render
+
         # New AI backend management handlers
         self._handlers["ai_list_backends"] = self._handle_ai_list_backends
         self._handlers["ai_set_backend"] = self._handle_ai_set_backend
@@ -1107,6 +1113,125 @@ class CommandHandlers:
             job_id=params["job_id"],
             auto_import=params.get("auto_import", True),
         )
+
+    # ========== Texture Generation Handlers ==========
+
+    def _handle_ai_generate_texture(self, params: dict) -> dict:
+        """Generate PBR texture set from text, optionally apply to object."""
+        from .external.ai_models import generate_texture
+
+        return generate_texture(
+            prompt=require_param(params, "prompt", str),
+            workflow_type="pbr_texture",
+            object_name=params.get("object_name"),
+            auto_apply=params.get("auto_apply", True),
+            texture_types=params.get("texture_types"),
+            width=params.get("resolution", 1024),
+            height=params.get("resolution", 1024),
+            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            seed=params.get("seed"),
+        )
+
+    def _handle_ai_generate_reference_image(self, params: dict) -> dict:
+        """Generate concept art / reference image from text."""
+        from .external.ai_models import generate_texture
+
+        return generate_texture(
+            prompt=require_param(params, "prompt", str),
+            workflow_type="reference_image",
+            width=params.get("resolution", 1024),
+            height=params.get("resolution", 1024),
+            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            seed=params.get("seed"),
+        )
+
+    def _handle_ai_inpaint_texture(self, params: dict) -> dict:
+        """Inpaint a region of an existing texture."""
+        from .external.ai_models import generate_texture
+
+        image_path = require_param(params, "image_path", str)
+        mask_path = require_param(params, "mask_path", str)
+        validate_filepath(image_path, must_exist=True)
+        validate_filepath(mask_path, must_exist=True)
+
+        return generate_texture(
+            prompt=require_param(params, "prompt", str),
+            workflow_type="inpaint",
+            image_path=image_path,
+            mask_path=mask_path,
+            denoise=params.get("strength", 0.85),
+            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark"),
+            seed=params.get("seed"),
+        )
+
+    def _handle_ai_texture_from_render(self, params: dict) -> dict:
+        """Generate texture from depth/normal render via ControlNet."""
+        from .external.ai_models import generate_texture
+
+        object_name = require_param(params, "object_name", str)
+        control_type = params.get("control_type", "depth")
+        validate_enum(control_type, ["depth", "normal"], "control_type")
+
+        # Render the object to get control image
+        render_path = self._render_control_image(object_name, control_type)
+        if not render_path:
+            return {"success": False, "error": f"Failed to render {control_type} pass for '{object_name}'"}
+
+        return generate_texture(
+            prompt=require_param(params, "prompt", str),
+            workflow_type="controlnet_texture",
+            object_name=object_name,
+            auto_apply=params.get("auto_apply", True),
+            image_path=render_path,
+            controlnet_strength=params.get("controlnet_strength", 0.85),
+            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark"),
+            seed=params.get("seed"),
+        )
+
+    def _render_control_image(self, object_name: str, control_type: str) -> str | None:
+        """Render a depth or normal pass of an object for ControlNet input."""
+        obj = bpy.data.objects.get(object_name)
+        if not obj:
+            return None
+
+        scene = bpy.context.scene
+        render = scene.render
+
+        # Save current settings
+        old_engine = render.engine
+        old_film = render.film_transparent
+        old_filepath = render.filepath
+        old_res_x = render.resolution_x
+        old_res_y = render.resolution_y
+
+        try:
+            render.engine = "BLENDER_EEVEE_NEXT"
+            render.film_transparent = True
+            render.resolution_x = 1024
+            render.resolution_y = 1024
+
+            output_path = tempfile.mktemp(suffix=".png", prefix=f"control_{control_type}_")
+            render.filepath = output_path
+
+            # Enable the appropriate render pass via view layer
+            scene.use_nodes = True
+            view_layer = bpy.context.view_layer
+            if control_type == "depth":
+                view_layer.use_pass_z = True
+            elif control_type == "normal":
+                view_layer.use_pass_normal = True
+
+            bpy.ops.render.render(write_still=True)
+            return output_path
+
+        except Exception:
+            return None
+        finally:
+            render.engine = old_engine
+            render.film_transparent = old_film
+            render.filepath = old_filepath
+            render.resolution_x = old_res_x
+            render.resolution_y = old_res_y
 
     # ========== New AI Backend Management Handlers ==========
 

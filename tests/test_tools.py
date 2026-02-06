@@ -111,6 +111,53 @@ class TestToolSchemas:
         # Neither prompt nor image_path is strictly required (one or the other)
         assert schema["required"] == []
 
+    def test_ai_generate_texture_schema(self):
+        """Test ai_generate_texture tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_generate_texture")
+        schema = tool.inputSchema
+
+        assert "prompt" in schema["properties"]
+        assert "object_name" in schema["properties"]
+        assert "resolution" in schema["properties"]
+        assert "auto_apply" in schema["properties"]
+        assert "prompt" in schema["required"]
+
+    def test_ai_generate_reference_image_schema(self):
+        """Test ai_generate_reference_image tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_generate_reference_image")
+        schema = tool.inputSchema
+
+        assert "prompt" in schema["properties"]
+        assert "resolution" in schema["properties"]
+        assert "prompt" in schema["required"]
+
+    def test_ai_inpaint_texture_schema(self):
+        """Test ai_inpaint_texture tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_inpaint_texture")
+        schema = tool.inputSchema
+
+        assert "image_path" in schema["properties"]
+        assert "mask_path" in schema["properties"]
+        assert "prompt" in schema["properties"]
+        assert "strength" in schema["properties"]
+        assert "image_path" in schema["required"]
+        assert "mask_path" in schema["required"]
+        assert "prompt" in schema["required"]
+
+    def test_ai_texture_from_render_schema(self):
+        """Test ai_texture_from_render tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_ai_texture_from_render")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert "prompt" in schema["properties"]
+        assert "control_type" in schema["properties"]
+        assert "enum" in schema["properties"]["control_type"]
+        assert "depth" in schema["properties"]["control_type"]["enum"]
+        assert "normal" in schema["properties"]["control_type"]["enum"]
+        assert "object_name" in schema["required"]
+        assert "prompt" in schema["required"]
+
 
 class TestToolDescriptions:
     """Test that tool descriptions are helpful."""
@@ -161,7 +208,7 @@ class TestToolNaming:
 
     def test_render_tools_naming(self):
         """Render tools should follow naming convention."""
-        render_tools = [t for t in TOOLS if "render" in t.name]
+        render_tools = [t for t in TOOLS if "render" in t.name and "ai_" not in t.name]
         for tool in render_tools:
             assert tool.name.startswith("blender_render_")
 

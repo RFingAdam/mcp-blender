@@ -1,0 +1,68 @@
+{
+    "_parameters": {
+        "prompt": "3.text",
+        "negative_prompt": "4.text",
+        "width": "6.width",
+        "height": "6.height",
+        "seed": "5.seed",
+        "steps": "5.steps",
+        "cfg": "5.cfg"
+    },
+    "1": {
+        "class_type": "CheckpointLoaderSimple",
+        "inputs": {
+            "ckpt_name": "sd_xl_base_1.0.safetensors"
+        }
+    },
+    "3": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "concept art, highly detailed, professional",
+            "clip": ["1", 1]
+        }
+    },
+    "4": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "blurry, low quality, watermark, text, logo",
+            "clip": ["1", 1]
+        }
+    },
+    "5": {
+        "class_type": "KSampler",
+        "inputs": {
+            "model": ["1", 0],
+            "positive": ["3", 0],
+            "negative": ["4", 0],
+            "seed": 0,
+            "steps": 25,
+            "cfg": 7.0,
+            "sampler_name": "euler_ancestral",
+            "scheduler": "normal",
+            "denoise": 1.0,
+            "latent_image": ["6", 0]
+        }
+    },
+    "6": {
+        "class_type": "EmptyLatentImage",
+        "inputs": {
+            "width": 1024,
+            "height": 1024,
+            "batch_size": 1
+        }
+    },
+    "7": {
+        "class_type": "VAEDecode",
+        "inputs": {
+            "samples": ["5", 0],
+            "vae": ["1", 2]
+        }
+    },
+    "10": {
+        "class_type": "SaveImage",
+        "inputs": {
+            "images": ["7", 0],
+            "filename_prefix": "reference"
+        }
+    }
+}

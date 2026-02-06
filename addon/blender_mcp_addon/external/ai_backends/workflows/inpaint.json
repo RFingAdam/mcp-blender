@@ -1,0 +1,87 @@
+{
+    "_parameters": {
+        "prompt": "3.text",
+        "negative_prompt": "4.text",
+        "image": "1.image",
+        "mask": "2.image",
+        "seed": "5.seed",
+        "steps": "5.steps",
+        "cfg": "5.cfg",
+        "denoise": "5.denoise"
+    },
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {
+            "image": "input.png"
+        }
+    },
+    "2": {
+        "class_type": "LoadImage",
+        "inputs": {
+            "image": "mask.png"
+        }
+    },
+    "8": {
+        "class_type": "CheckpointLoaderSimple",
+        "inputs": {
+            "ckpt_name": "sd_xl_base_1.0_inpainting_0.1.safetensors"
+        }
+    },
+    "3": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "high quality texture, seamless",
+            "clip": ["8", 1]
+        }
+    },
+    "4": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+            "text": "blurry, low quality, watermark",
+            "clip": ["8", 1]
+        }
+    },
+    "9": {
+        "class_type": "SetLatentNoiseMask",
+        "inputs": {
+            "samples": ["6", 0],
+            "mask": ["2", 1]
+        }
+    },
+    "6": {
+        "class_type": "VAEEncode",
+        "inputs": {
+            "pixels": ["1", 0],
+            "vae": ["8", 2]
+        }
+    },
+    "5": {
+        "class_type": "KSampler",
+        "inputs": {
+            "model": ["8", 0],
+            "positive": ["3", 0],
+            "negative": ["4", 0],
+            "seed": 0,
+            "steps": 25,
+            "cfg": 7.0,
+            "sampler_name": "euler_ancestral",
+            "scheduler": "normal",
+            "denoise": 0.85,
+            "latent_image": ["9", 0]
+        }
+    },
+    "7": {
+        "class_type": "VAEDecode",
+        "inputs": {
+            "samples": ["5", 0],
+            "vae": ["8", 2]
+        }
+    },
+    "10": {
+        "class_type": "SaveImage",
+        "inputs": {
+            "images": ["7", 0],
+            "filename_prefix": "inpaint"
+        }
+    }
+}
