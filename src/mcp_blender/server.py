@@ -722,6 +722,153 @@ TOOLS: list[Tool] = [
             "required": ["job_id"],
         },
     ),
+    # AI Texture Generation Tools
+    Tool(
+        name="blender_ai_generate_texture",
+        description="Generate a PBR texture set (diffuse, roughness, normal, metallic) from a text prompt using SDXL and apply it to a Blender object",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the desired texture (e.g., 'worn red brick wall', 'brushed steel')",
+                },
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the Blender object to apply the texture to",
+                },
+                "resolution": {
+                    "type": "integer",
+                    "enum": [512, 1024, 2048],
+                    "default": 1024,
+                    "description": "Texture resolution in pixels",
+                },
+                "auto_apply": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Automatically apply generated textures to the object's material",
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "What to avoid in generation (default: 'blurry, low quality, watermark, text, logo')",
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for reproducible results",
+                },
+            },
+            "required": ["prompt"],
+        },
+    ),
+    Tool(
+        name="blender_ai_generate_reference_image",
+        description="Generate a concept art / reference image from a text prompt using SDXL (useful for image-to-3D workflows)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the desired image (e.g., 'isometric medieval castle, concept art')",
+                },
+                "resolution": {
+                    "type": "integer",
+                    "enum": [512, 1024, 2048],
+                    "default": 1024,
+                    "description": "Image resolution in pixels",
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "What to avoid in generation",
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for reproducible results",
+                },
+            },
+            "required": ["prompt"],
+        },
+    ),
+    Tool(
+        name="blender_ai_inpaint_texture",
+        description="Generate inpainted content for a masked region of an existing texture using SDXL",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "image_path": {
+                    "type": "string",
+                    "description": "Path to the texture image to inpaint",
+                },
+                "mask_path": {
+                    "type": "string",
+                    "description": "Path to the mask image (white = inpaint region, black = keep)",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of what to paint in the masked region",
+                },
+                "strength": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.85,
+                    "description": "Inpainting strength (0.0 = no change, 1.0 = full repaint)",
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "What to avoid in generation",
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for reproducible results",
+                },
+            },
+            "required": ["image_path", "mask_path", "prompt"],
+        },
+    ),
+    Tool(
+        name="blender_ai_texture_from_render",
+        description="Generate a texture from a depth or normal render of a Blender object using ControlNet guidance",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the Blender object to render and generate texture for",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the desired texture (e.g., 'weathered stone wall')",
+                },
+                "control_type": {
+                    "type": "string",
+                    "enum": ["depth", "normal"],
+                    "default": "depth",
+                    "description": "Type of control image to render (depth map or normal map)",
+                },
+                "auto_apply": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Automatically apply generated texture to the object",
+                },
+                "controlnet_strength": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.85,
+                    "description": "ControlNet conditioning strength",
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "What to avoid in generation",
+                },
+                "seed": {
+                    "type": "integer",
+                    "description": "Random seed for reproducible results",
+                },
+            },
+            "required": ["object_name", "prompt"],
+        },
+    ),
     # MSFS Content Creation Tools - LOD
     Tool(
         name="blender_msfs_create_lod_hierarchy",
