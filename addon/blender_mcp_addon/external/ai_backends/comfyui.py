@@ -34,6 +34,8 @@ class WorkflowType(Enum):
     INPAINT = "inpaint"
     CONTROLNET_TEXTURE = "controlnet_texture"
     STABLE_FAST_3D = "stable_fast_3d"
+    MULTIVIEW_TO_3D = "multiview_to_3d"
+    TRIPOSG = "triposg"
 
 
 class WorkflowTemplate:
@@ -189,7 +191,8 @@ class ComfyUIBackend(BaseBackend):
         """Check if a specific node type is available in ComfyUI."""
         host = self._get_host()
         try:
-            req = urllib.request.Request(f"{host}/object_info/{class_type}")
+            encoded = urllib.parse.quote(class_type, safe='')
+            req = urllib.request.Request(f"{host}/object_info/{encoded}")
             with urllib.request.urlopen(req, timeout=5) as response:
                 data = json.loads(response.read().decode())
                 return class_type in data
@@ -371,6 +374,17 @@ class ComfyUIBackend(BaseBackend):
         Returns:
             GenerationResult with job_id for polling.
         """
+        # Convert string to WorkflowType enum if needed
+        if isinstance(workflow_type, str):
+            try:
+                workflow_type = WorkflowType(workflow_type)
+            except ValueError:
+                return GenerationResult(
+                    success=False,
+                    error=f"Unknown workflow type: {workflow_type}",
+                    status=GenerationStatus.FAILED,
+                )
+
         if seed is None:
             seed = random.randint(0, 2**32 - 1)
 

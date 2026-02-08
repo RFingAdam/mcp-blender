@@ -54,6 +54,8 @@ class BackendManager:
         self._preferred_backend: str | None = None
         self._prefer_local: bool = False
         self._fallback_chain: list[str] = [
+            "multiview",
+            "triposg",
             "rodin",
             "meshy",
             "tripo",
@@ -114,6 +116,20 @@ class BackendManager:
             from .ollama_vision import OllamaVisionBackend
 
             self.register_backend(OllamaVisionBackend())
+        except ImportError:
+            pass
+
+        try:
+            from .triposg import TripoSGBackend
+
+            self.register_backend(TripoSGBackend())
+        except ImportError:
+            pass
+
+        try:
+            from .multiview import MultiviewBackend
+
+            self.register_backend(MultiviewBackend())
         except ImportError:
             pass
 
@@ -368,6 +384,13 @@ class BackendManager:
                     success=False, error=str(e), status=GenerationStatus.FAILED,
                 )
 
+        # Convert string workflow_type to backend's enum if possible
+        from .comfyui import WorkflowType
+        if isinstance(workflow_type, str):
+            try:
+                workflow_type = WorkflowType(workflow_type)
+            except (ValueError, KeyError):
+                pass  # Let backend handle unknown types
         return selected.generate_texture(prompt=prompt, workflow_type=workflow_type, **kwargs)
 
     def get_status(self, job_id: str, backend: str | None = None) -> GenerationResult:
