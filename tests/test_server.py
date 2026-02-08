@@ -43,10 +43,10 @@ class TestToolDefinitions:
 
     def test_tool_count(self):
         """Verify expected number of tools."""
-        # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export
-        # + 4 external + 4 ai backend + 5 texture + 20 MSFS + 18 livery
-        # + 4 edit mode mesh + 3 curve + 1 boolean + ... + 2 ai eval/refine = 115
-        assert len(TOOLS) == 115, f"Expected 115 tools, got {len(TOOLS)}"
+        # 125 existing + 30 vehicle modeling toolkit:
+        # 6 selection + 4 shading + 7 topology + 4 cutting
+        # + 3 reference + 3 detail + 3 transform = 30
+        assert len(TOOLS) == 155, f"Expected 155 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:
@@ -153,3 +153,57 @@ class TestToolCategories:
 
         export_tools = [t for t in livery_tools if any(x in t.name for x in ["export", "package", "dds", "validate"])]
         assert len(export_tools) >= 4, "Should have livery export tools"
+
+    def test_vehicle_modeling_toolkit(self):
+        """Vehicle modeling toolkit tools should exist."""
+        # Selection tools (6)
+        selection_tools = [t for t in TOOLS if t.name in (
+            "blender_mesh_select", "blender_mesh_select_trait",
+            "blender_mesh_select_linked_flat", "blender_mesh_select_shortest_path",
+            "blender_mesh_get_selection", "blender_mesh_select_edge_loops",
+        )]
+        assert len(selection_tools) == 6, f"Expected 6 selection tools, got {len(selection_tools)}"
+
+        # Shading tools (4)
+        shading_tools = [t for t in TOOLS if t.name in (
+            "blender_shade_smooth", "blender_mesh_crease",
+            "blender_mesh_mark_sharp", "blender_mesh_mark_seam",
+        )]
+        assert len(shading_tools) == 4, f"Expected 4 shading tools, got {len(shading_tools)}"
+
+        # Topology tools (7)
+        topology_tools = [t for t in TOOLS if t.name in (
+            "blender_mesh_dissolve", "blender_mesh_merge",
+            "blender_mesh_bridge", "blender_mesh_fill",
+            "blender_mesh_subdivide", "blender_mesh_edge_slide",
+            "blender_mesh_tris_to_quads",
+        )]
+        assert len(topology_tools) == 7, f"Expected 7 topology tools, got {len(topology_tools)}"
+
+        # Cutting tools (4)
+        cutting_tools = [t for t in TOOLS if t.name in (
+            "blender_mesh_knife_project", "blender_mesh_bisect",
+            "blender_mesh_separate_selected", "blender_mesh_split",
+        )]
+        assert len(cutting_tools) == 4, f"Expected 4 cutting tools, got {len(cutting_tools)}"
+
+        # Reference tools (3)
+        reference_tools = [t for t in TOOLS if t.name in (
+            "blender_silhouette_compare", "blender_measure",
+            "blender_reference_image_setup",
+        )]
+        assert len(reference_tools) == 3, f"Expected 3 reference tools, got {len(reference_tools)}"
+
+        # Detail tools (3)
+        detail_tools = [t for t in TOOLS if t.name in (
+            "blender_array_along_curve", "blender_scatter_on_surface",
+            "blender_collection_instance",
+        )]
+        assert len(detail_tools) == 3, f"Expected 3 detail tools, got {len(detail_tools)}"
+
+        # Transform tools (3)
+        transform_tools = [t for t in TOOLS if t.name in (
+            "blender_mesh_proportional_transform", "blender_mesh_shrinkwrap",
+            "blender_mesh_flatten",
+        )]
+        assert len(transform_tools) == 3, f"Expected 3 transform tools, got {len(transform_tools)}"

@@ -375,53 +375,78 @@ def auto_uv_unwrap(
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="SELECT")
 
-        # Apply UV projection method
+        # UV operators need a 3D viewport context override when called
+        # from a socket handler thread (no active area by default).
         import math
 
-        if method == "SMART":
-            bpy.ops.uv.smart_project(
-                angle_limit=math.radians(angle_limit),
-                island_margin=island_margin,
-                area_weight=area_weight,
-                correct_aspect=correct_aspect,
-                scale_to_bounds=scale_to_bounds,
+        area = None
+        for window in bpy.context.window_manager.windows:
+            for a in window.screen.areas:
+                if a.type == "VIEW_3D":
+                    area = a
+                    break
+            if area:
+                break
+
+        if area:
+            region = None
+            for r in area.regions:
+                if r.type == "WINDOW":
+                    region = r
+                    break
+            ctx_override = bpy.context.temp_override(
+                window=window, area=area, region=region
             )
-        elif method == "LIGHTMAP":
-            bpy.ops.uv.lightmap_pack(
-                PREF_CONTEXT="ALL_FACES",
-                PREF_PACK_IN_ONE=True,
-                PREF_NEW_UVLAYER=False,
-                PREF_APPLY_IMAGE=False,
-                PREF_IMG_PX_SIZE=1024,
-                PREF_BOX_DIV=12,
-                PREF_MARGIN_DIV=island_margin,
-            )
-        elif method == "CUBE":
-            bpy.ops.uv.cube_project(
-                cube_size=1.0,
-                correct_aspect=correct_aspect,
-                scale_to_bounds=scale_to_bounds,
-            )
-        elif method == "CYLINDER":
-            bpy.ops.uv.cylinder_project(
-                direction="VIEW_ON_EQUATOR",
-                align="POLAR_ZX",
-                radius=1.0,
-                correct_aspect=correct_aspect,
-                scale_to_bounds=scale_to_bounds,
-            )
-        elif method == "SPHERE":
-            bpy.ops.uv.sphere_project(
-                direction="VIEW_ON_EQUATOR",
-                align="POLAR_ZX",
-                correct_aspect=correct_aspect,
-                scale_to_bounds=scale_to_bounds,
-            )
-        elif method == "PROJECT":
-            bpy.ops.uv.project_from_view(
-                scale_to_bounds=scale_to_bounds,
-                correct_aspect=correct_aspect,
-            )
+        else:
+            # Fallback: no 3D viewport found, try without override
+            from contextlib import nullcontext
+            ctx_override = nullcontext()
+
+        with ctx_override:
+            if method == "SMART":
+                bpy.ops.uv.smart_project(
+                    angle_limit=math.radians(angle_limit),
+                    island_margin=island_margin,
+                    area_weight=area_weight,
+                    correct_aspect=correct_aspect,
+                    scale_to_bounds=scale_to_bounds,
+                )
+            elif method == "LIGHTMAP":
+                bpy.ops.uv.lightmap_pack(
+                    PREF_CONTEXT="ALL_FACES",
+                    PREF_PACK_IN_ONE=True,
+                    PREF_NEW_UVLAYER=False,
+                    PREF_APPLY_IMAGE=False,
+                    PREF_IMG_PX_SIZE=1024,
+                    PREF_BOX_DIV=12,
+                    PREF_MARGIN_DIV=island_margin,
+                )
+            elif method == "CUBE":
+                bpy.ops.uv.cube_project(
+                    cube_size=1.0,
+                    correct_aspect=correct_aspect,
+                    scale_to_bounds=scale_to_bounds,
+                )
+            elif method == "CYLINDER":
+                bpy.ops.uv.cylinder_project(
+                    direction="VIEW_ON_EQUATOR",
+                    align="POLAR_ZX",
+                    radius=1.0,
+                    correct_aspect=correct_aspect,
+                    scale_to_bounds=scale_to_bounds,
+                )
+            elif method == "SPHERE":
+                bpy.ops.uv.sphere_project(
+                    direction="VIEW_ON_EQUATOR",
+                    align="POLAR_ZX",
+                    correct_aspect=correct_aspect,
+                    scale_to_bounds=scale_to_bounds,
+                )
+            elif method == "PROJECT":
+                bpy.ops.uv.project_from_view(
+                    scale_to_bounds=scale_to_bounds,
+                    correct_aspect=correct_aspect,
+                )
 
         # Return to object mode
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -643,14 +668,22 @@ def fix_mesh_issues(
         # Remove interior faces (faces with no visible exterior)
         if remove_interior_faces:
             bpy.ops.mesh.select_all(action="SELECT")
+            total_faces = len(obj.data.polygons)
             bpy.ops.mesh.select_interior_faces()
             bpy.ops.object.mode_set(mode="OBJECT")
             interior_count = len([f for f in obj.data.polygons if f.select])
             bpy.ops.object.mode_set(mode="EDIT")
 
-            if interior_count > 0:
+            # Safety: don't delete if it would remove more than half the mesh
+            if 0 < interior_count < total_faces * 0.5:
                 bpy.ops.mesh.delete(type="FACE")
                 fixes_applied.append(f"interior_faces_removed: {interior_count}")
+            elif interior_count > 0:
+                bpy.ops.mesh.select_all(action="DESELECT")
+                fixes_applied.append(
+                    f"interior_faces_skipped: {interior_count}/{total_faces} "
+                    f"(>{50}% of mesh, likely false positives)"
+                )
 
         bpy.ops.object.mode_set(mode="OBJECT")
 
