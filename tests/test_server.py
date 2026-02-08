@@ -44,8 +44,9 @@ class TestToolDefinitions:
     def test_tool_count(self):
         """Verify expected number of tools."""
         # 5 scene + 10 object + 6 material + 5 modifier + 7 animation + 5 render + 6 export
-        # + 4 external + 5 texture + 20 MSFS + 18 livery + ... + 2 ai eval/refine = 100
-        assert len(TOOLS) == 100, f"Expected 100 tools, got {len(TOOLS)}"
+        # + 4 external + 4 ai backend + 5 texture + 20 MSFS + 18 livery
+        # + 4 edit mode mesh + 3 curve + 1 boolean + ... + 2 ai eval/refine = 115
+        assert len(TOOLS) == 115, f"Expected 115 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:

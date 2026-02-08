@@ -56,6 +56,9 @@ class CommandHandlers:
         self._handlers["object_separate"] = self._handle_object_separate
         self._handlers["object_parent"] = self._handle_object_parent
         self._handlers["object_select"] = self._handle_object_select
+        self._handlers["mesh_from_data"] = self._handle_mesh_from_data
+        self._handlers["object_set_origin"] = self._handle_object_set_origin
+        self._handlers["object_apply_transforms"] = self._handle_object_apply_transforms
 
         # Material handlers
         self._handlers["material_create"] = self._handle_material_create
@@ -101,6 +104,9 @@ class CommandHandlers:
         self._handlers["polyhaven_download"] = self._handle_polyhaven_download
         self._handlers["ai_generate_model"] = self._handle_ai_generate_model
         self._handlers["ai_model_status"] = self._handle_ai_model_status
+
+        # Synchronous model generation
+        self._handlers["ai_generate_model_sync"] = self._handle_ai_generate_model_sync
 
         # Texture generation handlers
         self._handlers["ai_generate_texture"] = self._handle_ai_generate_texture
@@ -175,6 +181,20 @@ class CommandHandlers:
         self._handlers["msfs_livery_create_package"] = self._handle_msfs_livery_create_package
         self._handlers["msfs_livery_convert_to_dds"] = self._handle_msfs_livery_convert_to_dds
         self._handlers["msfs_livery_validate_package"] = self._handle_msfs_livery_validate_package
+
+        # Boolean operations
+        self._handlers["boolean_op"] = self._handle_boolean_op
+
+        # Curve tools
+        self._handlers["curve_create"] = self._handle_curve_create
+        self._handlers["curve_to_mesh"] = self._handle_curve_to_mesh
+        self._handlers["curve_from_mesh_edge"] = self._handle_curve_from_mesh_edge
+
+        # Edit mode mesh operations
+        self._handlers["mesh_extrude"] = self._handle_mesh_extrude
+        self._handlers["mesh_inset"] = self._handle_mesh_inset
+        self._handlers["mesh_bevel"] = self._handle_mesh_bevel
+        self._handlers["mesh_loop_cut"] = self._handle_mesh_loop_cut
 
         # AI evaluation & self-refinement handlers
         self._handlers["ai_evaluate"] = self._handle_ai_evaluate
@@ -420,6 +440,76 @@ class CommandHandlers:
                     selected.append(obj.name)
 
         return {"selected": selected}
+
+    def _handle_mesh_from_data(self, params: dict) -> dict:
+        """Create a mesh from vertex/face arrays using from_pydata."""
+        name = require_param(params, "name", str)
+        vertices = require_param(params, "vertices", list)
+        faces = require_param(params, "faces", list)
+        edges = params.get("edges", [])
+        location = params.get("location", [0, 0, 0])
+        smooth_shade = params.get("smooth_shade", False)
+
+        # Convert to tuples for from_pydata
+        verts = [tuple(v) for v in vertices]
+        face_list = [tuple(f) for f in faces]
+        edge_list = [tuple(e) for e in edges]
+
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata(verts, edge_list, face_list)
+        mesh.update()
+
+        obj = bpy.data.objects.new(name, mesh)
+        bpy.context.collection.objects.link(obj)
+        obj.location = location
+
+        if smooth_shade:
+            for poly in mesh.polygons:
+                poly.use_smooth = True
+
+        return serialize_object(obj)
+
+    def _handle_object_set_origin(self, params: dict) -> dict:
+        """Set object origin / pivot point."""
+        obj = get_object_or_error(require_param(params, "object_name", str))
+        origin_type = params.get("origin_type", "GEOMETRY_CENTER")
+
+        # Optionally move cursor first
+        if params.get("cursor_location"):
+            bpy.context.scene.cursor.location = tuple(params["cursor_location"])
+
+        # Select only this object
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        # Map to valid bpy.ops enum
+        type_map = {
+            "GEOMETRY_CENTER": "GEOMETRY_ORIGIN",
+            "ORIGIN_CURSOR": "ORIGIN_CURSOR",
+            "ORIGIN_CENTER_OF_MASS": "ORIGIN_CENTER_OF_MASS",
+            "ORIGIN_CENTER_OF_VOLUME": "ORIGIN_CENTER_OF_VOLUME",
+        }
+        bpy_type = type_map.get(origin_type, "GEOMETRY_ORIGIN")
+        bpy.ops.object.origin_set(type=bpy_type)
+
+        return serialize_object(obj)
+
+    def _handle_object_apply_transforms(self, params: dict) -> dict:
+        """Apply object transforms to mesh data."""
+        obj = get_object_or_error(require_param(params, "object_name", str))
+        apply_loc = params.get("location", True)
+        apply_rot = params.get("rotation", True)
+        apply_scale = params.get("scale", True)
+
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.transform_apply(
+            location=apply_loc, rotation=apply_rot, scale=apply_scale
+        )
+
+        return serialize_object(obj)
 
     # ========== Material Handlers ==========
 
@@ -1117,6 +1207,44 @@ class CommandHandlers:
         return check_status(
             job_id=params["job_id"],
             auto_import=params.get("auto_import", True),
+        )
+
+    def _handle_ai_generate_model_sync(self, params: dict) -> dict:
+        """Generate 3D model and poll until complete (synchronous)."""
+        from .external.ai_models import (
+            generate_model,
+            generate_model_from_image,
+            poll_until_complete,
+        )
+
+        # Generate the model (text-to-3D or image-to-3D)
+        image_path = params.get("image_path")
+        if image_path:
+            result = generate_model_from_image(
+                image_path=image_path,
+                prompt=params.get("prompt"),
+                style=params.get("style"),
+                quality=params.get("quality", "medium"),
+                output_format=params.get("output_format", "glb"),
+            )
+        else:
+            result = generate_model(
+                prompt=params.get("prompt", ""),
+                style=params.get("style"),
+                quality=params.get("quality", "medium"),
+                output_format=params.get("output_format", "glb"),
+            )
+
+        if not result.get("success") or not result.get("job_id"):
+            return result
+
+        # Poll until complete
+        max_wait = params.get("max_wait", 300)
+        auto_import = params.get("auto_import", True)
+        return poll_until_complete(
+            job_id=result["job_id"],
+            max_wait=max_wait,
+            auto_import=auto_import,
         )
 
     # ========== Texture Generation Handlers ==========
@@ -1855,6 +1983,533 @@ class CommandHandlers:
         return validate_livery_package(
             package_dir=require_param(params, "package_dir", str),
         )
+
+    # ========== Boolean Operations Handler ==========
+
+    def _handle_boolean_op(self, params: dict) -> dict:
+        """Perform a boolean operation between two objects."""
+        target_name = require_param(params, "target", str)
+        tool_name = require_param(params, "tool", str)
+        operation = validate_enum(
+            require_param(params, "operation", str),
+            ["UNION", "DIFFERENCE", "INTERSECT"],
+            "operation",
+        )
+        solver = validate_enum(
+            params.get("solver", "EXACT"),
+            ["FAST", "EXACT"],
+            "solver",
+        )
+        apply_mod = params.get("apply", True)
+        hide_tool = params.get("hide_tool", True)
+
+        target_obj = get_object_or_error(target_name)
+        tool_obj = get_object_or_error(tool_name)
+
+        # Add boolean modifier
+        mod_name = f"Boolean_{operation}"
+        mod = target_obj.modifiers.new(name=mod_name, type="BOOLEAN")
+        mod.operation = operation
+        mod.solver = solver
+        mod.object = tool_obj
+
+        result_info = {
+            "success": True,
+            "target": target_name,
+            "tool": tool_name,
+            "operation": operation,
+            "solver": solver,
+            "modifier_name": mod_name,
+            "applied": False,
+            "tool_hidden": False,
+        }
+
+        # Apply modifier if requested
+        if apply_mod:
+            ctx = bpy.context.copy()
+            ctx["object"] = target_obj
+            with bpy.context.temp_override(**ctx):
+                bpy.ops.object.modifier_apply(modifier=mod_name)
+            result_info["applied"] = True
+
+        # Hide tool object if requested
+        if hide_tool:
+            tool_obj.hide_set(True)
+            tool_obj.hide_render = True
+            result_info["tool_hidden"] = True
+
+        return result_info
+
+    # ========== Curve Tools Handlers ==========
+
+    def _handle_curve_create(self, params: dict) -> dict:
+        """Create a Bezier, NURBS, or Poly curve from control points."""
+        name = params.get("name", "Curve")
+        curve_type = validate_enum(
+            params.get("type", "BEZIER"),
+            ["BEZIER", "NURBS", "POLY"],
+            "type",
+        )
+        points = require_param(params, "points", list)
+        cyclic = params.get("cyclic", False)
+        resolution = params.get("resolution", 12)
+        location = params.get("location", [0, 0, 0])
+        handles = params.get("handles")
+
+        if len(points) < 2:
+            raise ValidationError("At least 2 control points are required")
+
+        # Create the curve data
+        curve_data = bpy.data.curves.new(name=name, type="CURVE")
+        curve_data.dimensions = "3D"
+        curve_data.resolution_u = resolution
+
+        # Add a spline
+        if curve_type == "BEZIER":
+            spline = curve_data.splines.new("BEZIER")
+            spline.bezier_points.add(len(points) - 1)  # first point already exists
+            for i, pt in enumerate(points):
+                bp = spline.bezier_points[i]
+                bp.co = (pt[0], pt[1], pt[2] if len(pt) > 2 else 0)
+                # Set handle types
+                if handles and i < len(handles):
+                    h = handles[i]
+                    if isinstance(h, str):
+                        bp.handle_left_type = h
+                        bp.handle_right_type = h
+                    elif isinstance(h, dict):
+                        bp.handle_left_type = h.get("type", "AUTO")
+                        bp.handle_right_type = h.get("type", "AUTO")
+                        if "left" in h:
+                            bp.handle_left = tuple(h["left"])
+                        if "right" in h:
+                            bp.handle_right = tuple(h["right"])
+                else:
+                    bp.handle_left_type = "AUTO"
+                    bp.handle_right_type = "AUTO"
+        elif curve_type == "NURBS":
+            spline = curve_data.splines.new("NURBS")
+            spline.points.add(len(points) - 1)
+            for i, pt in enumerate(points):
+                z = pt[2] if len(pt) > 2 else 0
+                w = pt[3] if len(pt) > 3 else 1.0
+                spline.points[i].co = (pt[0], pt[1], z, w)
+            spline.use_endpoint_u = True
+        else:  # POLY
+            spline = curve_data.splines.new("POLY")
+            spline.points.add(len(points) - 1)
+            for i, pt in enumerate(points):
+                z = pt[2] if len(pt) > 2 else 0
+                spline.points[i].co = (pt[0], pt[1], z, 1.0)
+
+        spline.use_cyclic_u = cyclic
+
+        # Create the object and link to scene
+        curve_obj = bpy.data.objects.new(name, curve_data)
+        curve_obj.location = tuple(location)
+        bpy.context.collection.objects.link(curve_obj)
+
+        return {
+            "success": True,
+            "name": curve_obj.name,
+            "type": curve_type,
+            "point_count": len(points),
+            "cyclic": cyclic,
+            "resolution": resolution,
+        }
+
+    def _handle_curve_to_mesh(self, params: dict) -> dict:
+        """Convert a curve to mesh, optionally with bevel/extrusion."""
+        curve_name = require_param(params, "curve_name", str)
+        bevel_depth = params.get("bevel_depth", 0)
+        bevel_resolution = params.get("bevel_resolution", 4)
+        extrude = params.get("extrude", 0)
+        fill_type = validate_enum(
+            params.get("fill_type", "FULL"),
+            ["FULL", "BACK", "FRONT", "HALF", "NONE"],
+            "fill_type",
+        )
+        twist_method = params.get("twist_method", "MINIMUM")
+        apply_as_mesh = params.get("apply_as_mesh", True)
+
+        curve_obj = get_object_or_error(curve_name)
+        if curve_obj.type != "CURVE":
+            raise ValidationError(f"Object '{curve_name}' is not a curve (type: {curve_obj.type})")
+
+        curve_data = curve_obj.data
+        curve_data.bevel_depth = bevel_depth
+        curve_data.bevel_resolution = bevel_resolution
+        curve_data.extrude = extrude
+        curve_data.fill_mode = fill_type
+        curve_data.twist_mode = twist_method
+
+        result_info = {
+            "success": True,
+            "name": curve_name,
+            "bevel_depth": bevel_depth,
+            "extrude": extrude,
+            "converted_to_mesh": False,
+        }
+
+        if apply_as_mesh:
+            ensure_object_selected(curve_obj)
+            bpy.ops.object.convert(target="MESH")
+            result_info["converted_to_mesh"] = True
+            result_info["vertex_count"] = len(curve_obj.data.vertices)
+            result_info["face_count"] = len(curve_obj.data.polygons)
+
+        return result_info
+
+    def _handle_curve_from_mesh_edge(self, params: dict) -> dict:
+        """Create a curve from mesh edge indices."""
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        edge_indices = require_param(params, "edge_indices", list)
+        curve_type = validate_enum(
+            params.get("curve_type", "POLY"),
+            ["BEZIER", "NURBS", "POLY"],
+            "curve_type",
+        )
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        # Get edge vertex positions from the mesh
+        mesh = obj.data
+        # Build ordered vertex chain from edges
+        edge_verts = {}
+        for idx in edge_indices:
+            if idx >= len(mesh.edges):
+                raise ValidationError(f"Edge index {idx} out of range (mesh has {len(mesh.edges)} edges)")
+            e = mesh.edges[idx]
+            v1, v2 = e.vertices[0], e.vertices[1]
+            edge_verts.setdefault(v1, []).append(v2)
+            edge_verts.setdefault(v2, []).append(v1)
+
+        # Walk the edge chain to get ordered vertices
+        # Find a start vertex (one with only one connection = endpoint, or any if cyclic)
+        start = None
+        for v, neighbors in edge_verts.items():
+            if len(neighbors) == 1:
+                start = v
+                break
+        if start is None:
+            start = next(iter(edge_verts))  # cyclic - pick any
+
+        ordered = [start]
+        visited = {start}
+        current = start
+        while True:
+            neighbors = edge_verts.get(current, [])
+            next_v = None
+            for n in neighbors:
+                if n not in visited:
+                    next_v = n
+                    break
+            if next_v is None:
+                break
+            ordered.append(next_v)
+            visited.add(next_v)
+            current = next_v
+
+        # Get world-space positions
+        world_matrix = obj.matrix_world
+        points = []
+        for vi in ordered:
+            co = world_matrix @ mesh.vertices[vi].co
+            points.append((co.x, co.y, co.z))
+
+        # Create the curve
+        curve_data = bpy.data.curves.new(name=f"{object_name}_curve", type="CURVE")
+        curve_data.dimensions = "3D"
+
+        if curve_type == "BEZIER":
+            spline = curve_data.splines.new("BEZIER")
+            spline.bezier_points.add(len(points) - 1)
+            for i, pt in enumerate(points):
+                spline.bezier_points[i].co = pt
+                spline.bezier_points[i].handle_left_type = "AUTO"
+                spline.bezier_points[i].handle_right_type = "AUTO"
+        elif curve_type == "NURBS":
+            spline = curve_data.splines.new("NURBS")
+            spline.points.add(len(points) - 1)
+            for i, pt in enumerate(points):
+                spline.points[i].co = (pt[0], pt[1], pt[2], 1.0)
+            spline.use_endpoint_u = True
+        else:  # POLY
+            spline = curve_data.splines.new("POLY")
+            spline.points.add(len(points) - 1)
+            for i, pt in enumerate(points):
+                spline.points[i].co = (pt[0], pt[1], pt[2], 1.0)
+
+        # Check if cyclic (start connects to end)
+        if len(ordered) > 2:
+            end_neighbors = edge_verts.get(ordered[-1], [])
+            if ordered[0] in end_neighbors:
+                spline.use_cyclic_u = True
+
+        curve_obj = bpy.data.objects.new(f"{object_name}_curve", curve_data)
+        bpy.context.collection.objects.link(curve_obj)
+
+        return {
+            "success": True,
+            "name": curve_obj.name,
+            "type": curve_type,
+            "point_count": len(points),
+            "source_edges": len(edge_indices),
+            "cyclic": spline.use_cyclic_u,
+        }
+
+    # ========== Edit Mode Mesh Operations Handlers ==========
+
+    def _handle_mesh_extrude(self, params: dict) -> dict:
+        """Extrude faces, edges, or vertices along an offset vector."""
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        mode = validate_enum(
+            params.get("mode", "FACES"),
+            ["FACES", "EDGES", "VERTICES", "REGION"],
+            "mode",
+        )
+        indices = require_param(params, "indices", list)
+        offset = validate_vector3(require_param(params, "offset", list), "offset")
+        individual = params.get("individual", False)
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        bm.edges.ensure_lookup_table()
+        bm.verts.ensure_lookup_table()
+
+        from mathutils import Vector
+
+        offset_vec = Vector(offset)
+        new_geom_count = 0
+
+        if mode in ("FACES", "REGION"):
+            faces = []
+            for i in indices:
+                if i >= len(bm.faces):
+                    bm.free()
+                    raise ValidationError(f"Face index {i} out of range (mesh has {len(bm.faces)} faces)")
+                faces.append(bm.faces[i])
+
+            if individual and mode == "FACES":
+                result = bmesh.ops.extrude_discrete_faces(bm, faces=faces)
+                new_faces = [f for f in result["faces"]]
+                for f in new_faces:
+                    bmesh.ops.translate(bm, verts=f.verts, vec=offset_vec)
+                new_geom_count = len(new_faces)
+            else:
+                result = bmesh.ops.extrude_face_region(bm, geom=faces)
+                new_verts = [v for v in result["geom"] if isinstance(v, bmesh.types.BMVert)]
+                bmesh.ops.translate(bm, verts=new_verts, vec=offset_vec)
+                new_geom_count = len(new_verts)
+
+        elif mode == "EDGES":
+            edges = []
+            for i in indices:
+                if i >= len(bm.edges):
+                    bm.free()
+                    raise ValidationError(f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)")
+                edges.append(bm.edges[i])
+
+            result = bmesh.ops.extrude_edge_only(bm, edges=edges)
+            new_verts = [v for v in result["geom"] if isinstance(v, bmesh.types.BMVert)]
+            bmesh.ops.translate(bm, verts=new_verts, vec=offset_vec)
+            new_geom_count = len(new_verts)
+
+        elif mode == "VERTICES":
+            verts = []
+            for i in indices:
+                if i >= len(bm.verts):
+                    bm.free()
+                    raise ValidationError(f"Vertex index {i} out of range (mesh has {len(bm.verts)} verts)")
+                verts.append(bm.verts[i])
+
+            result = bmesh.ops.extrude_vert_indiv(bm, verts=verts)
+            new_verts = [v for v in result["verts"]]
+            bmesh.ops.translate(bm, verts=new_verts, vec=offset_vec)
+            new_geom_count = len(new_verts)
+
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
+
+        return {
+            "success": True,
+            "object": object_name,
+            "mode": mode,
+            "extruded_count": len(indices),
+            "new_geometry_count": new_geom_count,
+            "offset": list(offset),
+        }
+
+    def _handle_mesh_inset(self, params: dict) -> dict:
+        """Inset faces to create border loops."""
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        face_indices = require_param(params, "face_indices", list)
+        thickness = params.get("thickness", 0.1)
+        depth = params.get("depth", 0.0)
+        use_even_offset = params.get("use_even_offset", True)
+        use_relative_offset = params.get("use_relative_offset", False)
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+
+        faces = []
+        for i in face_indices:
+            if i >= len(bm.faces):
+                bm.free()
+                raise ValidationError(f"Face index {i} out of range (mesh has {len(bm.faces)} faces)")
+            faces.append(bm.faces[i])
+
+        result = bmesh.ops.inset_region(
+            bm,
+            faces=faces,
+            thickness=thickness,
+            depth=depth,
+            use_even_offset=use_even_offset,
+            use_relative_offset=use_relative_offset,
+        )
+
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
+
+        return {
+            "success": True,
+            "object": object_name,
+            "inset_face_count": len(face_indices),
+            "thickness": thickness,
+            "depth": depth,
+        }
+
+    def _handle_mesh_bevel(self, params: dict) -> dict:
+        """Bevel edges or vertices for smooth transitions."""
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        edge_indices = params.get("edge_indices")
+        width = params.get("width", 0.1)
+        segments = params.get("segments", 1)
+        profile = params.get("profile", 0.5)
+        clamp_overlap = params.get("clamp_overlap", True)
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bm.edges.ensure_lookup_table()
+        bm.verts.ensure_lookup_table()
+
+        if edge_indices is not None:
+            edges = []
+            for i in edge_indices:
+                if i >= len(bm.edges):
+                    bm.free()
+                    raise ValidationError(f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)")
+                edges.append(bm.edges[i])
+        else:
+            # Bevel all sharp edges (non-smooth)
+            edges = [e for e in bm.edges if not e.smooth]
+            if not edges:
+                # If no sharp edges, bevel all edges
+                edges = list(bm.edges)
+
+        verts = set()
+        for e in edges:
+            verts.update(e.verts)
+
+        bmesh.ops.bevel(
+            bm,
+            geom=edges,
+            offset=width,
+            segments=segments,
+            profile=profile,
+            affect="EDGES",
+            clamp_overlap=clamp_overlap,
+        )
+
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
+
+        return {
+            "success": True,
+            "object": object_name,
+            "beveled_edge_count": len(edges),
+            "width": width,
+            "segments": segments,
+            "profile": profile,
+        }
+
+    def _handle_mesh_loop_cut(self, params: dict) -> dict:
+        """Add edge loops to a mesh via loop cut."""
+        object_name = require_param(params, "object_name", str)
+        edge_index = require_param(params, "edge_index", int)
+        cuts = params.get("cuts", 1)
+        smoothness = params.get("smoothness", 0.0)
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        mesh = obj.data
+        if edge_index >= len(mesh.edges):
+            raise ValidationError(f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)")
+
+        # Use operator for loop cut - requires specific context
+        ensure_object_selected(obj)
+        bpy.context.view_layer.objects.active = obj
+
+        # Enter edit mode
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="DESELECT")
+
+        # Use loopcut operator
+        bpy.ops.mesh.loopcut_slide(
+            MESH_OT_loopcut={
+                "number_cuts": cuts,
+                "smoothness": smoothness,
+                "falloff": "INVERSE_SQUARE",
+                "object_index": 0,
+                "edge_index": edge_index,
+            },
+            TRANSFORM_OT_edge_slide={
+                "value": 0.0,  # centered
+                "single_side": False,
+                "correct_uv": True,
+            },
+        )
+
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        new_edge_count = len(mesh.edges)
+
+        return {
+            "success": True,
+            "object": object_name,
+            "reference_edge": edge_index,
+            "cuts": cuts,
+            "total_edges": new_edge_count,
+        }
 
     # ========== Script Execution Handler ==========
 
