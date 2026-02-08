@@ -722,6 +722,103 @@ TOOLS: list[Tool] = [
             "required": ["job_id"],
         },
     ),
+    # AI Backend Management Tools
+    Tool(
+        name="blender_ai_list_backends",
+        description="List available AI model generation backends with status (installed, available, capabilities)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "available_only": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Only list backends that are currently available (default: true)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_ai_set_backend",
+        description="Set the preferred AI backend for model generation (e.g., 'comfyui', 'rodin', 'triposr')",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string",
+                    "description": "Backend name to set as preferred",
+                },
+                "prefer_local": {
+                    "type": "boolean",
+                    "description": "Prefer local backends over cloud APIs",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_ai_configure_backend",
+        description="Configure settings for a specific AI backend (API keys, URLs, model paths, device, timeout)",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string",
+                    "description": "Backend name to configure",
+                },
+                "config": {
+                    "type": "object",
+                    "description": "Configuration dictionary (e.g., {'api_base_url': 'http://...', 'api_key': '...', 'timeout': 120})",
+                },
+            },
+            "required": ["backend"],
+        },
+    ),
+    Tool(
+        name="blender_ai_generate_model_sync",
+        description="Generate a 3D model and wait for completion (synchronous). Combines generate + poll + optional import in one call. Returns the final model when done.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the model to generate",
+                },
+                "image_path": {
+                    "type": "string",
+                    "description": "Path to input image for image-to-3D generation",
+                },
+                "style": {
+                    "type": "string",
+                    "enum": ["realistic", "cartoon", "low_poly", "sculpture", "anime"],
+                    "description": "Generation style",
+                },
+                "quality": {
+                    "type": "string",
+                    "enum": ["draft", "medium", "high"],
+                    "default": "medium",
+                    "description": "Generation quality level",
+                },
+                "output_format": {
+                    "type": "string",
+                    "enum": ["glb", "gltf", "fbx", "obj", "usdz"],
+                    "default": "glb",
+                    "description": "Output file format",
+                },
+                "max_wait": {
+                    "type": "integer",
+                    "default": 300,
+                    "description": "Maximum wait time in seconds (default: 300)",
+                },
+                "auto_import": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Automatically import the completed model into Blender",
+                },
+            },
+            "required": [],
+        },
+    ),
     # AI Texture Generation Tools
     Tool(
         name="blender_ai_generate_texture",
@@ -1476,6 +1573,277 @@ TOOLS: list[Tool] = [
                 "package_dir": {"type": "string", "description": "Path to the livery package"},
             },
             "required": ["package_dir"],
+        },
+    ),
+    # ==================== Edit Mode Mesh Operations ====================
+    Tool(
+        name="blender_mesh_extrude",
+        description="Extrude faces, edges, or vertices along an offset vector. The most fundamental mesh modeling operation - creates new geometry by extending existing elements outward.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "mode": {
+                    "type": "string",
+                    "enum": ["FACES", "EDGES", "VERTICES", "REGION"],
+                    "default": "FACES",
+                    "description": "What to extrude: FACES (individual or region), EDGES, or VERTICES",
+                },
+                "indices": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Indices of faces/edges/vertices to extrude",
+                },
+                "offset": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Extrusion direction and distance [x, y, z]",
+                },
+                "individual": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Extrude each face individually (only for FACES mode)",
+                },
+            },
+            "required": ["object_name", "indices", "offset"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_inset",
+        description="Inset faces to create border loops. Essential for panel lines, window frames, recessed details on hard surfaces.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "face_indices": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Indices of faces to inset",
+                },
+                "thickness": {"type": "number", "default": 0.1, "description": "Inset distance from edges"},
+                "depth": {"type": "number", "default": 0.0, "description": "Push inset faces in (+) or out (-)"},
+                "use_even_offset": {"type": "boolean", "default": True, "description": "Even thickness around corners"},
+                "use_relative_offset": {"type": "boolean", "default": False, "description": "Scale offset by face size"},
+            },
+            "required": ["object_name", "face_indices"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_bevel",
+        description="Bevel edges for smooth transitions and rounded corners. Can target specific edges or auto-select all sharp edges.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "edge_indices": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Edge indices to bevel (omit to bevel all sharp edges)",
+                },
+                "width": {"type": "number", "default": 0.1, "description": "Bevel width/offset"},
+                "segments": {"type": "integer", "default": 1, "description": "Number of bevel segments (more = smoother)"},
+                "profile": {"type": "number", "default": 0.5, "description": "Bevel profile shape (0=concave, 0.5=round, 1=convex)"},
+                "clamp_overlap": {"type": "boolean", "default": True, "description": "Prevent overlapping bevels"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_loop_cut",
+        description="Add edge loops (loop cuts) to a mesh for topology control. Adds resolution to specific areas without subdividing the whole mesh.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "edge_index": {"type": "integer", "description": "Reference edge index that defines the loop direction"},
+                "cuts": {"type": "integer", "default": 1, "description": "Number of cuts to add"},
+                "smoothness": {"type": "number", "default": 0.0, "description": "Smoothing factor (0=sharp, 1=smooth)"},
+            },
+            "required": ["object_name", "edge_index"],
+        },
+    ),
+    # ==================== Curve Creation & Conversion ====================
+    Tool(
+        name="blender_curve_create",
+        description="Create a Bezier, NURBS, or Poly curve from control points. Curves enable smooth profiles, body panels, pipe routing, and organic shapes.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name for the curve object"},
+                "type": {
+                    "type": "string",
+                    "enum": ["BEZIER", "NURBS", "POLY"],
+                    "default": "BEZIER",
+                    "description": "Curve type",
+                },
+                "points": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "number"}},
+                    "description": "Control points [[x,y,z], ...]. For NURBS, optional 4th value is weight.",
+                },
+                "handles": {
+                    "type": "array",
+                    "description": "Bezier handle config per point. String ('AUTO','VECTOR','FREE','ALIGNED') or dict with 'type', 'left':[x,y,z], 'right':[x,y,z]",
+                },
+                "cyclic": {"type": "boolean", "default": False, "description": "Close the curve into a loop"},
+                "resolution": {"type": "integer", "default": 12, "description": "Curve smoothness (segments between control points)"},
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Object location [x, y, z]",
+                },
+            },
+            "required": ["points"],
+        },
+    ),
+    Tool(
+        name="blender_curve_to_mesh",
+        description="Convert a curve to mesh with optional bevel (tube) or extrude (flat panel). A curve with bevel_depth becomes a tube; with extrude becomes a flat panel.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "curve_name": {"type": "string", "description": "Name of the curve object"},
+                "bevel_depth": {"type": "number", "default": 0, "description": "Tube radius (0 = no tube)"},
+                "bevel_resolution": {"type": "integer", "default": 4, "description": "Tube cross-section smoothness"},
+                "extrude": {"type": "number", "default": 0, "description": "Flat extrusion depth"},
+                "fill_type": {
+                    "type": "string",
+                    "enum": ["FULL", "BACK", "FRONT", "HALF", "NONE"],
+                    "default": "FULL",
+                    "description": "Cap fill type",
+                },
+                "twist_method": {"type": "string", "default": "MINIMUM", "description": "Twist computation method"},
+                "apply_as_mesh": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Convert to mesh object (default: true)",
+                },
+            },
+            "required": ["curve_name"],
+        },
+    ),
+    Tool(
+        name="blender_curve_from_mesh_edge",
+        description="Extract a curve from mesh edge indices. Useful for creating curves that follow existing geometry for pipe routing or profile extraction.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "edge_indices": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Edge indices to extract as a curve",
+                },
+                "curve_type": {
+                    "type": "string",
+                    "enum": ["BEZIER", "NURBS", "POLY"],
+                    "default": "POLY",
+                    "description": "Output curve type",
+                },
+            },
+            "required": ["object_name", "edge_indices"],
+        },
+    ),
+    # ==================== Boolean Operations ====================
+    Tool(
+        name="blender_boolean_op",
+        description="Perform a boolean operation (union, difference, intersect) between two objects in a single call. Optionally apply immediately and hide the tool object.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "Name of the object to modify"},
+                "tool": {"type": "string", "description": "Name of the object to use as boolean cutter/operand"},
+                "operation": {
+                    "type": "string",
+                    "enum": ["UNION", "DIFFERENCE", "INTERSECT"],
+                    "description": "Boolean operation type",
+                },
+                "solver": {
+                    "type": "string",
+                    "enum": ["FAST", "EXACT"],
+                    "default": "EXACT",
+                    "description": "Boolean solver (EXACT is more reliable, FAST is quicker)",
+                },
+                "apply": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Apply the modifier immediately (default: true)",
+                },
+                "hide_tool": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Hide the tool object after operation (default: true)",
+                },
+            },
+            "required": ["target", "tool", "operation"],
+        },
+    ),
+    # ==================== Mesh & Transform Utilities ====================
+    Tool(
+        name="blender_mesh_from_data",
+        description="Create a mesh object from raw vertex/face data using mesh.from_pydata(). Useful for procedural geometry.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name for the new mesh object"},
+                "vertices": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "number"}},
+                    "description": "List of vertex positions [[x,y,z], ...]",
+                },
+                "faces": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "integer"}},
+                    "description": "List of face vertex-index lists [[0,1,2,3], ...]",
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {"type": "array", "items": {"type": "integer"}},
+                    "description": "Optional list of edge vertex-index pairs [[0,1], ...]",
+                },
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Location [x, y, z]",
+                },
+                "smooth_shade": {"type": "boolean", "description": "Apply smooth shading (default: false)"},
+            },
+            "required": ["name", "vertices", "faces"],
+        },
+    ),
+    Tool(
+        name="blender_object_set_origin",
+        description="Set the origin (pivot point) of an object",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "origin_type": {
+                    "type": "string",
+                    "enum": ["GEOMETRY_CENTER", "ORIGIN_CURSOR", "ORIGIN_CENTER_OF_MASS", "ORIGIN_CENTER_OF_VOLUME"],
+                    "description": "How to compute the new origin",
+                },
+                "cursor_location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Set 3D cursor here first (used with ORIGIN_CURSOR)",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_object_apply_transforms",
+        description="Apply (bake) object transforms to mesh data so location/rotation/scale reset to identity",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the object"},
+                "location": {"type": "boolean", "description": "Apply location (default: true)"},
+                "rotation": {"type": "boolean", "description": "Apply rotation (default: true)"},
+                "scale": {"type": "boolean", "description": "Apply scale (default: true)"},
+            },
+            "required": ["object_name"],
         },
     ),
     # ==================== Script Execution ====================
