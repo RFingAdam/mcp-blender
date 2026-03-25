@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-blender"
-version = "0.2.0"
-description = "MCP server for Blender - Control Blender via Model Context Protocol"
+version = "0.3.0"
+description = "The most comprehensive MCP server for Blender - 218 tools for 3D modeling, AI generation, MSFS content creation, and more"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

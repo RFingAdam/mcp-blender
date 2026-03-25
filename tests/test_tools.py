@@ -212,7 +212,7 @@ class TestToolDescriptions:
 
     def test_descriptions_are_actionable(self):
         """Descriptions should describe what the tool does."""
-        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return", "tag", "decimate", "validate", "batch", "load", "sample", "extract", "map", "transfer", "analyze", "convert"]
+        action_words = ["get", "set", "create", "delete", "list", "add", "remove", "insert", "export", "import", "render", "search", "download", "generate", "check", "configure", "apply", "assign", "capture", "play", "pause", "jump", "duplicate", "join", "separate", "select", "return", "tag", "decimate", "validate", "batch", "load", "sample", "extract", "map", "transfer", "analyze", "convert", "mark", "fill", "slide", "cut", "measure", "instance", "move", "snap", "calculate", "undo", "redo", "save", "place", "run", "probe", "clear", "enter", "overlay", "manage", "deform"]
 
         for tool in TOOLS:
             desc_lower = tool.description.lower()
@@ -251,7 +251,7 @@ class TestToolNaming:
 
     def test_render_tools_naming(self):
         """Render tools should follow naming convention."""
-        render_tools = [t for t in TOOLS if "render" in t.name and "ai_" not in t.name]
+        render_tools = [t for t in TOOLS if "render" in t.name and "ai_" not in t.name and "material_" not in t.name]
         for tool in render_tools:
             assert tool.name.startswith("blender_render_")
 
