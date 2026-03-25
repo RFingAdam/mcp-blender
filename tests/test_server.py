@@ -43,10 +43,10 @@ class TestToolDefinitions:
 
     def test_tool_count(self):
         """Verify expected number of tools."""
-        # 125 existing + 30 vehicle modeling toolkit:
-        # 6 selection + 4 shading + 7 topology + 4 cutting
-        # + 3 reference + 3 detail + 3 transform = 30
-        assert len(TOOLS) == 155, f"Expected 155 tools, got {len(TOOLS)}"
+        # 155 base + 63 new tools:
+        # 7 materials + 7 measurement + 8 collections/system + 6 baking
+        # + 7 geonode + 8 sculpting + 8 rigging + 6 physics + 6 annotation
+        assert len(TOOLS) == 218, f"Expected 218 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:

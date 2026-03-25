@@ -1,0 +1,77 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill out the details below.
+  - type: input
+    id: blender-version
+    attributes:
+      label: Blender Version
+      description: "e.g., 4.2.19 LTS, 5.0"
+      placeholder: "4.2.19"
+    validations:
+      required: true
+  - type: input
+    id: mcp-version
+    attributes:
+      label: MCP Server Version
+      description: "e.g., 0.2.0"
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: tool-name
+    attributes:
+      label: Tool Name
+      description: "Which MCP tool is affected? e.g., blender_object_create"
+      placeholder: "blender_"
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the issue
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Output
+      description: Paste any error messages or logs
+      render: shell
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: mcp-client
+    attributes:
+      label: MCP Client
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - VS Code + Continue
+        - Other
+    validations:
+      required: true
