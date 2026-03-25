@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-25
+
+### Added
+
+- **Material Inspection & Manipulation** (7 new tools):
+  - `material_inspect_graph` — return full shader node graph as structured JSON
+  - `material_node_add` — add any shader node to a material
+  - `material_node_connect` — connect nodes via socket names
+  - `material_node_group_create` — create reusable node groups
+  - `material_procedural_preset` — 23 one-call procedural materials (VEHICLE_PAINT, CHROME, RUST, CARBON_FIBER, etc.)
+  - `material_convert_to_pbr` — convert materials to clean Principled BSDF for GLTF/MSFS/UE5
+  - `material_preview_render` — render material preview on standard shape
+
+- **Measurement & Validation** (7 new tools):
+  - `measure_surface_area` — total + per-material area breakdown
+  - `measure_volume` — mesh volume with manifold check
+  - `measure_clearance` — min/max/avg distance between two objects
+  - `validate_dimensions` — check dimensions against spec with tolerance
+  - `calibrate_from_reference` — scale object to match known real-world dimension
+  - `measure_edge_angle` — dihedral angles at edges with threshold flagging
+  - `validate_mesh_quality` — 11-check comprehensive mesh quality audit
+
+- **Baking** (6 new tools):
+  - `bake_pbr_batch` — bake ALL PBR channels (diffuse, normal, roughness, metallic, AO, emission, displacement) in one call
+  - `bake_highpoly_to_lowpoly` — selected-to-active baking
+  - `bake_from_multires` — bake from multires sculpt data
+  - `bake_to_vertex_colors` — bake lighting/AO to vertex colors
+  - `bake_curvature` — curvature map for wear/edge effects
+  - `bake_id_map` — color ID map per material/object/face_set
+
+- **Geometry Nodes** (7 new tools — first-ever GN support via MCP):
+  - `geonode_create_group` — create typed node group with inputs/outputs
+  - `geonode_apply` — apply GN group as modifier with input values
+  - `geonode_scatter_instances` — one-call scatter with Poisson, density, random scale/rotation
+  - `geonode_array_grid` — parametric arrays (linear, grid, radial, hexagonal)
+  - `geonode_deform_curve` — deform mesh along curve
+  - `geonode_extrude_profile` — sweep profile along curve path
+  - `geonode_inspect` — read current GN setup and input values
+
+- **Sculpting** (8 new tools — pipeline-focused, not brush strokes):
+  - `sculpt_setup` — enter sculpt mode with multires/dyntopo/symmetry config
+  - `sculpt_mesh_filter` — global mesh filters (SMOOTH, SHARPEN, INFLATE, etc.)
+  - `sculpt_mask_by_topology` — mask by cavity/curvature/vertex group
+  - `sculpt_face_set_create` — face sets by linked/material/normal/UV
+  - `sculpt_multires_reshape` — manage multires levels
+  - `sculpt_to_retopo` — full sculpt-to-retopo pipeline with displacement baking
+  - `sculpt_extract_mask` — extract masked region as separate mesh
+  - `sculpt_remesh_voxel` — voxel remesh with configurable resolution
+
+- **Rigging & Armature** (8 new tools — with auto-rig presets):
+  - `armature_create` — create armature from bone chain definitions
+  - `autorig_preset` — one-call auto-rig (BIPED, VEHICLE, MECHANICAL_ARM, WHEEL_ASSEMBLY, TURRET, PISTON, LANDING_GEAR, etc.)
+  - `constraint_add` — add bone/object constraints (IK, COPY_ROT, TRACK_TO, etc.)
+  - `constraint_preset` — preset constraint setups (IK_ARM, PISTON_PAIR, WHEEL_SPIN, etc.)
+  - `bone_shape_assign` — custom control shapes for bones
+  - `pose_library_save` / `pose_library_apply` — save and restore poses with blending
+  - `rig_validate` — validate rig for MIXAMO/UE5/MSFS export
+
+- **Physics Simulation** (6 new tools):
+  - `physics_rigid_body_add` — add rigid body with collision shape config
+  - `physics_rigid_body_batch` — batch add rigid bodies to multiple objects
+  - `physics_simulate` — run simulation with optional apply-to-mesh
+  - `physics_cloth_add` — cloth with 7 presets (SILK, CANVAS, TARP, etc.) + wind
+  - `physics_soft_body_add` — soft body for deformable objects
+  - `physics_fluid_quick` — quick Mantaflow fluid setup
+
+- **Annotations & Grease Pencil** (6 new tools):
+  - `annotation_add` — 3D annotation strokes
+  - `annotation_text` — text labels at 3D points
+  - `annotation_dimension` — dimension lines with measurement display
+  - `annotation_clear` — clear annotation layers
+  - `grease_pencil_create` — create GP objects with strokes
+  - `grease_pencil_markup` — overlay markup on rendered images
+
+- **Collections & System** (8 new tools):
+  - `collection_create`, `collection_list`, `collection_move`, `collection_visibility`
+  - `undo`, `redo`, `save`, `save_as`
+
+- GitHub issue templates (bug report, feature request)
+- Pull request template with tool checklist
+
+### Changed
+
+- Total tool count increased from 155 to **218** (63 new tools across 9 categories)
+- Updated test suite to cover new tool categories (84 tests passing)
+- Added GitHub repo description and topics for discoverability
+
 ## [0.2.1] - 2025-02-06
 
 ### Added

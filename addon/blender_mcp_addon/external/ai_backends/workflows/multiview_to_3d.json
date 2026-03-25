@@ -1,0 +1,110 @@
+{
+    "_parameters": {
+        "image": "1.image",
+        "texture_resolution": "10.texture_resolution",
+        "save_path": "11.save_path"
+    },
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {
+            "image": "input.png"
+        }
+    },
+    "2": {
+        "class_type": "RemBGSession+",
+        "_fallback_class": "RemBGSession+",
+        "inputs": {
+            "model": "u2net: general purpose",
+            "providers": "CPU"
+        }
+    },
+    "3": {
+        "class_type": "ImageRemoveBackground+",
+        "_fallback_class": "ImageRemoveBackground+",
+        "inputs": {
+            "image": ["1", 0],
+            "rembg_session": ["2", 0]
+        }
+    },
+    "4": {
+        "class_type": "[Comfy3D] Image Add Pure Color Background",
+        "_fallback_class": "Image Add Pure Color Background",
+        "inputs": {
+            "images": ["3", 0],
+            "masks": ["3", 1],
+            "R": 1.0,
+            "G": 1.0,
+            "B": 1.0
+        }
+    },
+    "5": {
+        "class_type": "[Comfy3D] Resize Image Foreground",
+        "_fallback_class": "Resize Image Foreground",
+        "inputs": {
+            "images": ["4", 0],
+            "masks": ["3", 1],
+            "foreground_ratio": 0.9
+        }
+    },
+    "6": {
+        "class_type": "[Comfy3D] Load Diffusers Pipeline",
+        "_fallback_class": "Load Diffusers Pipeline",
+        "inputs": {
+            "diffusers_pipeline_name": "Zero123PlusPipeline",
+            "repo_id": "sudo-ai/zero123plus-v1.2",
+            "custom_pipeline": "",
+            "force_download": false
+        }
+    },
+    "7": {
+        "class_type": "[Comfy3D] Zero123Plus Diffusion Model",
+        "_fallback_class": "Zero123Plus Diffusion Model",
+        "inputs": {
+            "zero123plus_pipe": ["6", 0],
+            "reference_image": ["5", 0],
+            "reference_mask": ["3", 1],
+            "num_inference_steps": 75,
+            "guidance_scale": 4.0,
+            "seed": 42
+        }
+    },
+    "8": {
+        "class_type": "[Comfy3D] OrbitPoses JK",
+        "_fallback_class": "OrbitPoses JK",
+        "inputs": {
+            "orbitpose_preset": "Zero123Plus(6)",
+            "radius": "4.0, 4.0, 4.0, 4.0, 4.0, 4.0",
+            "elevations": "0.0, 90.0, 0.0, 0.0, -90.0, 0.0",
+            "azimuths": "-90.0, 0.0, 180.0, 90.0, 0.0, 0.0",
+            "centerX": "0.0, 0.0, 0.0, 0.0, 0.0, 0.0",
+            "centerY": "0.0, 0.0, 0.0, 0.0, 0.0, 0.0",
+            "centerZ": "0.0, 0.0, 0.0, 0.0, 0.0, 0.0"
+        }
+    },
+    "9": {
+        "class_type": "[Comfy3D] Load InstantMesh Reconstruction Model",
+        "_fallback_class": "Load InstantMesh Reconstruction Model",
+        "inputs": {
+            "model_name": "instant_mesh_large.ckpt"
+        }
+    },
+    "10": {
+        "class_type": "[Comfy3D] InstantMesh Reconstruction Model",
+        "_fallback_class": "InstantMesh Reconstruction Model",
+        "inputs": {
+            "lrm_model": ["9", 0],
+            "multiview_images": ["7", 0],
+            "orbit_camera_poses": ["8", 0],
+            "orbit_camera_fovy": 30.0,
+            "texture_resolution": 1024
+        }
+    },
+    "11": {
+        "class_type": "[Comfy3D] Save 3D Mesh",
+        "_fallback_class": "Save3D",
+        "inputs": {
+            "mesh": ["10", 0],
+            "save_path": "multiview_3d.glb"
+        }
+    }
+}

@@ -1,0 +1,84 @@
+{
+    "_parameters": {
+        "image": "1.image",
+        "seed": "7.seed",
+        "guidance_scale": "7.guidance_scale",
+        "num_inference_steps": "7.num_inference_steps",
+        "save_path": "8.save_path"
+    },
+    "1": {
+        "class_type": "LoadImage",
+        "inputs": {
+            "image": "input.png"
+        }
+    },
+    "2": {
+        "class_type": "RemBGSession+",
+        "_fallback_class": "RemBGSession+",
+        "inputs": {
+            "model": "u2net: general purpose",
+            "providers": "CPU"
+        }
+    },
+    "3": {
+        "class_type": "ImageRemoveBackground+",
+        "_fallback_class": "ImageRemoveBackground+",
+        "inputs": {
+            "image": ["1", 0],
+            "rembg_session": ["2", 0]
+        }
+    },
+    "4": {
+        "class_type": "[Comfy3D] Image Add Pure Color Background",
+        "_fallback_class": "Image Add Pure Color Background",
+        "inputs": {
+            "images": ["3", 0],
+            "masks": ["3", 1],
+            "R": 1.0,
+            "G": 1.0,
+            "B": 1.0
+        }
+    },
+    "5": {
+        "class_type": "[Comfy3D] Resize Image Foreground",
+        "_fallback_class": "Resize Image Foreground",
+        "inputs": {
+            "images": ["4", 0],
+            "masks": ["3", 1],
+            "foreground_ratio": 0.9
+        }
+    },
+    "6": {
+        "class_type": "[Comfy3D] Load Diffusers Pipeline",
+        "_fallback_class": "Load Diffusers Pipeline",
+        "inputs": {
+            "diffusers_pipeline_name": "TripoSGPipeline",
+            "repo_id": "VAST-AI/TripoSG",
+            "custom_pipeline": "",
+            "force_download": false
+        }
+    },
+    "7": {
+        "class_type": "[Comfy3D] TripoSG I23D Model",
+        "_fallback_class": "TripoSG I23D Model",
+        "inputs": {
+            "tsg_pipe": ["6", 0],
+            "reference_image": ["5", 0],
+            "seed": 42,
+            "guidance_scale": 7.0,
+            "num_inference_steps": 50,
+            "use_flash_decoder": true,
+            "flash_octree_depth": 9,
+            "hierarchical_octree_depth": 9,
+            "dense_octree_depth": 8
+        }
+    },
+    "8": {
+        "class_type": "[Comfy3D] Save 3D Mesh",
+        "_fallback_class": "Save3D",
+        "inputs": {
+            "mesh": ["7", 0],
+            "save_path": "triposg_output.glb"
+        }
+    }
+}
