@@ -3340,6 +3340,2325 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "vertex_indices"],
         },
     ),
+    # ========== Sculpting Tools ==========
+    Tool(
+        name="blender_sculpt_setup",
+        description=(
+            "Enter sculpt mode with configuration. Supports MULTIRES (subdivision levels), "
+            "DYNTOPO (dynamic topology for adaptive detail), and SIMPLE mode. "
+            "Can configure symmetry axes for mirrored sculpting."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to sculpt",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["MULTIRES", "DYNTOPO", "SIMPLE"],
+                    "description": "Sculpting mode: MULTIRES adds subdivision levels, DYNTOPO enables dynamic topology, SIMPLE enters sculpt mode as-is",
+                },
+                "multires_levels": {
+                    "type": "number",
+                    "description": "Number of multires subdivision levels to add (default: 3, only used with MULTIRES mode)",
+                },
+                "dyntopo_detail": {
+                    "type": "number",
+                    "description": "Dynamic topology detail size (default: 12.0, only used with DYNTOPO mode)",
+                },
+                "dyntopo_method": {
+                    "type": "string",
+                    "enum": ["RELATIVE", "CONSTANT", "BRUSH", "MANUAL"],
+                    "description": "Dynamic topology detail method (default: RELATIVE)",
+                },
+                "symmetry_axes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["X", "Y", "Z"],
+                    },
+                    "description": "Axes to enable sculpt symmetry on, e.g. ['X'] for bilateral symmetry",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_mesh_filter",
+        description=(
+            "Apply global mesh filters to a sculpt-mode object. Unlike brush strokes, "
+            "mesh filters affect the entire mesh uniformly and work reliably over MCP. "
+            "Useful for smoothing, sharpening detail, adding surface noise, inflating, "
+            "or relaxing topology."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object (must be in sculpt mode or will be switched)",
+                },
+                "filter_type": {
+                    "type": "string",
+                    "enum": [
+                        "SMOOTH",
+                        "SHARPEN",
+                        "ENHANCE_DETAIL",
+                        "SURFACE_NOISE",
+                        "INFLATE",
+                        "SPHERE",
+                        "RELAX",
+                        "RELAX_FACE_SETS",
+                        "ERASE_DISPLACEMENT",
+                    ],
+                    "description": "Type of mesh filter to apply",
+                },
+                "strength": {
+                    "type": "number",
+                    "description": "Filter strength (default: 1.0)",
+                },
+                "iterations": {
+                    "type": "number",
+                    "description": "Number of times to apply the filter (default: 1)",
+                },
+            },
+            "required": ["object_name", "filter_type"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_mask_by_topology",
+        description=(
+            "Create sculpt masks based on topology features. Masks control which "
+            "parts of the mesh are affected by sculpting operations. CAVITY masks "
+            "concave areas, ALL fills the entire mask, NONE clears it, RANDOM creates "
+            "a random mask pattern. Optional blur smooths mask edges."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object",
+                },
+                "mask_type": {
+                    "type": "string",
+                    "enum": ["CAVITY", "ALL", "NONE", "RANDOM"],
+                    "description": "Type of mask to create",
+                },
+                "invert": {
+                    "type": "boolean",
+                    "description": "Invert the mask after creation (default: false)",
+                },
+                "blur_iterations": {
+                    "type": "number",
+                    "description": "Number of blur/smooth passes on the mask (default: 0)",
+                },
+            },
+            "required": ["object_name", "mask_type"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_face_set_create",
+        description=(
+            "Create face sets by grouping faces based on criteria. Face sets partition "
+            "the mesh into regions for isolated sculpting. LINKED groups connected geometry, "
+            "MATERIAL groups by material assignment, NORMAL groups by face orientation, "
+            "SHARP_EDGES splits at sharp edges, UV_ISLAND groups by UV islands."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object",
+                },
+                "criteria": {
+                    "type": "string",
+                    "enum": ["LINKED", "MATERIAL", "NORMAL", "SHARP_EDGES", "UV_ISLAND"],
+                    "description": "Criteria for creating face sets",
+                },
+            },
+            "required": ["object_name", "criteria"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_multires_reshape",
+        description=(
+            "Manage multiresolution modifier levels for sculpting. SUBDIVIDE adds a level, "
+            "UNSUBDIVIDE removes the highest level, REBUILD reconstructs subdivisions, "
+            "APPLY_BASE applies sculpted changes to the base mesh, DELETE_HIGHER removes "
+            "levels above current, DELETE_LOWER removes levels below current."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object with a Multires modifier",
+                },
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "SUBDIVIDE",
+                        "UNSUBDIVIDE",
+                        "REBUILD",
+                        "APPLY_BASE",
+                        "DELETE_HIGHER",
+                        "DELETE_LOWER",
+                    ],
+                    "description": "Action to perform on the multires modifier",
+                },
+            },
+            "required": ["object_name", "action"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_to_retopo",
+        description=(
+            "Pipeline tool: convert a high-poly sculpt to a retopologized low-poly mesh "
+            "with optional displacement map baking. Creates a duplicate, applies remesh "
+            "(voxel or quadriflow), auto-UV unwraps, and optionally bakes displacement "
+            "from the original. Essential for game-ready asset production."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the high-poly sculpted mesh object",
+                },
+                "method": {
+                    "type": "string",
+                    "enum": ["VOXEL_REMESH", "QUADRIFLOW"],
+                    "description": "Retopology method (default: VOXEL_REMESH)",
+                },
+                "target_polycount": {
+                    "type": "number",
+                    "description": "Target polygon count for the retopo mesh (default: 5000)",
+                },
+                "bake_displacement": {
+                    "type": "boolean",
+                    "description": "Bake displacement map from original to retopo mesh (default: true)",
+                },
+                "displacement_resolution": {
+                    "type": "number",
+                    "description": "Resolution of the displacement map in pixels (default: 2048)",
+                },
+                "output_displacement_path": {
+                    "type": "string",
+                    "description": "File path to save the baked displacement map (optional, defaults to temp file)",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_extract_mask",
+        description=(
+            "Extract the masked region of a sculpt as a separate mesh object. "
+            "Creates a new mesh from faces above the mask threshold, optionally adding "
+            "thickness via solidify. Useful for creating armor plates, panel lines, "
+            "or detail pieces from sculpted forms."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object with an active sculpt mask",
+                },
+                "thickness": {
+                    "type": "number",
+                    "description": "Thickness of the extracted shell (default: 0.05)",
+                },
+                "smooth_iterations": {
+                    "type": "number",
+                    "description": "Number of smooth iterations on the extracted boundary (default: 2)",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_sculpt_remesh_voxel",
+        description=(
+            "Apply voxel remesh to create a uniform topology. Converts the mesh to a "
+            "voxel representation and back, producing evenly-spaced quads. Useful for "
+            "cleaning up boolean results, imported meshes, or preparing for sculpting. "
+            "Smaller voxel_size = higher detail but more polygons."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to remesh",
+                },
+                "voxel_size": {
+                    "type": "number",
+                    "description": "Size of voxels in world units - smaller = more detail (default: 0.05)",
+                },
+                "smooth": {
+                    "type": "boolean",
+                    "description": "Apply smoothing after remesh (default: false)",
+                },
+                "fix_poles": {
+                    "type": "boolean",
+                    "description": "Attempt to fix topology poles after remesh (default: false)",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    # ========== Rigging & Armature Tools ==========
+    Tool(
+        name="blender_armature_create",
+        description=(
+            "Create an armature from a list of bone definitions. Each bone specifies "
+            "head/tail positions, optional parent, connection state, and roll angle. "
+            "Use this for precise skeleton construction from known bone positions."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the armature object (default: 'Armature')",
+                },
+                "bones": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Bone name",
+                            },
+                            "head": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Head position [x, y, z]",
+                            },
+                            "tail": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Tail position [x, y, z]",
+                            },
+                            "parent": {
+                                "type": "string",
+                                "description": "Name of parent bone (optional)",
+                            },
+                            "connected": {
+                                "type": "boolean",
+                                "description": "Whether bone is connected to parent (head snaps to parent tail)",
+                            },
+                            "roll": {
+                                "type": "number",
+                                "description": "Bone roll angle in degrees (default: 0)",
+                            },
+                        },
+                        "required": ["name", "head", "tail"],
+                    },
+                    "description": "Array of bone definitions",
+                },
+                "display_type": {
+                    "type": "string",
+                    "enum": ["OCTAHEDRAL", "STICK", "BBONE", "WIRE", "ENVELOPE"],
+                    "description": "Armature display style (default: OCTAHEDRAL)",
+                },
+            },
+            "required": ["bones"],
+        },
+    ),
+    Tool(
+        name="blender_autorig_preset",
+        description=(
+            "One-call auto-rig generator. Creates a complete bone hierarchy for common "
+            "use cases: BIPED (humanoid), QUADRUPED (four-legged), VEHICLE (wheels + steering), "
+            "MECHANICAL_ARM (IK chain), TURRET (rotate + elevate), WHEEL_ASSEMBLY (axle + spin), "
+            "DOOR_HINGE (limited rotation), PISTON (stretch-to pair), LANDING_GEAR (retract chain). "
+            "Optionally auto-weights the mesh and configures for MSFS export."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to rig (required for auto-weighting)",
+                },
+                "preset": {
+                    "type": "string",
+                    "enum": [
+                        "BIPED",
+                        "QUADRUPED",
+                        "VEHICLE",
+                        "MECHANICAL_ARM",
+                        "TURRET",
+                        "WHEEL_ASSEMBLY",
+                        "DOOR_HINGE",
+                        "PISTON",
+                        "LANDING_GEAR",
+                    ],
+                    "description": "Preset rig type to generate",
+                },
+                "auto_weight": {
+                    "type": "boolean",
+                    "description": "Automatically parent mesh with armature deform + automatic weights (default: true)",
+                },
+                "msfs_compatible": {
+                    "type": "boolean",
+                    "description": "Use MSFS-compatible bone naming conventions (default: false)",
+                },
+            },
+            "required": ["object_name", "preset"],
+        },
+    ),
+    Tool(
+        name="blender_constraint_add",
+        description=(
+            "Add a constraint to a bone or object. Supports IK, copy transforms, "
+            "tracking, stretch-to, limits, floor, and child-of constraints. "
+            "Specify either bone_name (for pose bone constraint) or object_name "
+            "(for object constraint), plus target and type-specific settings."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object (required for bone constraints)",
+                },
+                "bone_name": {
+                    "type": "string",
+                    "description": "Name of the bone to add constraint to (for bone constraints)",
+                },
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to add constraint to (for object constraints)",
+                },
+                "constraint_type": {
+                    "type": "string",
+                    "enum": [
+                        "IK",
+                        "COPY_ROTATION",
+                        "COPY_LOCATION",
+                        "COPY_SCALE",
+                        "TRACK_TO",
+                        "DAMPED_TRACK",
+                        "STRETCH_TO",
+                        "LIMIT_ROTATION",
+                        "LIMIT_LOCATION",
+                        "FLOOR",
+                        "CHILD_OF",
+                    ],
+                    "description": "Type of constraint to add",
+                },
+                "target_object": {
+                    "type": "string",
+                    "description": "Name of the target object for the constraint",
+                },
+                "target_bone": {
+                    "type": "string",
+                    "description": "Name of the target bone (if target is an armature)",
+                },
+                "influence": {
+                    "type": "number",
+                    "description": "Constraint influence 0-1 (default: 1.0)",
+                },
+                "settings": {
+                    "type": "object",
+                    "description": "Constraint-specific settings as key-value pairs (e.g. chain_count for IK, axis for track_to)",
+                },
+            },
+            "required": ["constraint_type"],
+        },
+    ),
+    Tool(
+        name="blender_constraint_preset",
+        description=(
+            "Apply preset constraint setups that require multiple coordinated constraints. "
+            "IK_ARM: IK chain with pole target. IK_LEG: IK with foot roll. "
+            "PISTON_PAIR: two bones with mutual stretch-to. WHEEL_SPIN: rotation driver. "
+            "DOOR_SWING: limit rotation constraint. TURRET_TRACK: two-axis tracking."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object",
+                },
+                "preset": {
+                    "type": "string",
+                    "enum": [
+                        "IK_ARM",
+                        "IK_LEG",
+                        "PISTON_PAIR",
+                        "WHEEL_SPIN",
+                        "DOOR_SWING",
+                        "TURRET_TRACK",
+                    ],
+                    "description": "Constraint preset to apply",
+                },
+                "bones": {
+                    "type": "object",
+                    "description": (
+                        "Bone name mapping for the preset. Keys depend on preset type:\n"
+                        "IK_ARM: {ik_bone, pole_target, chain_count}\n"
+                        "IK_LEG: {ik_bone, pole_target, foot_bone, chain_count}\n"
+                        "PISTON_PAIR: {bone_a, bone_b}\n"
+                        "WHEEL_SPIN: {wheel_bone, axis}\n"
+                        "DOOR_SWING: {hinge_bone, min_angle, max_angle, axis}\n"
+                        "TURRET_TRACK: {base_bone, elevation_bone, target_bone}"
+                    ),
+                },
+            },
+            "required": ["armature_name", "preset", "bones"],
+        },
+    ),
+    Tool(
+        name="blender_bone_shape_assign",
+        description=(
+            "Assign a custom wireframe control shape to a bone for rig visualization. "
+            "Creates (or reuses) a wire mesh shape and assigns it as the bone's custom_shape. "
+            "Shapes: CIRCLE, SQUARE, CUBE, SPHERE, ARROW, DIAMOND, CROSS."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object",
+                },
+                "bone_name": {
+                    "type": "string",
+                    "description": "Name of the bone to assign the shape to",
+                },
+                "shape": {
+                    "type": "string",
+                    "enum": ["CIRCLE", "SQUARE", "CUBE", "SPHERE", "ARROW", "DIAMOND", "CROSS"],
+                    "description": "Shape type for the bone control widget",
+                },
+                "scale": {
+                    "type": "number",
+                    "description": "Scale factor for the shape (default: 1.0)",
+                },
+            },
+            "required": ["armature_name", "bone_name", "shape"],
+        },
+    ),
+    Tool(
+        name="blender_pose_library_save",
+        description=(
+            "Save the current pose of an armature as a named pose. Stores bone transforms "
+            "(location, rotation, scale) as custom properties on the armature. "
+            "Optionally filter to save only specific bones."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object",
+                },
+                "pose_name": {
+                    "type": "string",
+                    "description": "Name to save the pose under",
+                },
+                "bone_filter": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of bone names to include (all bones if omitted)",
+                },
+            },
+            "required": ["armature_name", "pose_name"],
+        },
+    ),
+    Tool(
+        name="blender_pose_library_apply",
+        description=(
+            "Apply a previously saved pose to an armature. Supports blending with the "
+            "current pose via blend_factor (0=keep current, 1=full saved pose). "
+            "Useful for creating animation keyframes from preset poses."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object",
+                },
+                "pose_name": {
+                    "type": "string",
+                    "description": "Name of the saved pose to apply",
+                },
+                "blend_factor": {
+                    "type": "number",
+                    "description": "Blend factor between current pose (0) and saved pose (1). Default: 1.0",
+                },
+            },
+            "required": ["armature_name", "pose_name"],
+        },
+    ),
+    Tool(
+        name="blender_rig_validate",
+        description=(
+            "Validate an armature rig for export compatibility. Checks bone naming conventions, "
+            "hierarchy structure, constraint setup, deform bone flags, and scale/orientation. "
+            "Returns a list of issues and a compatibility score for the target format."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "armature_name": {
+                    "type": "string",
+                    "description": "Name of the armature object to validate",
+                },
+                "target_format": {
+                    "type": "string",
+                    "enum": ["MIXAMO", "UE5", "MSFS", "GENERIC"],
+                    "description": "Target export format to validate against (default: GENERIC)",
+                },
+            },
+            "required": ["armature_name"],
+        },
+    ),
+    # ========== Physics Simulation Tools ==========
+    Tool(
+        name="blender_physics_rigid_body_add",
+        description="Add a rigid body physics simulation to an object. Makes it participate in physics as either an active (affected by forces) or passive (static collider) body.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to add rigid body to",
+                },
+                "body_type": {
+                    "type": "string",
+                    "enum": ["ACTIVE", "PASSIVE"],
+                    "description": "Type of rigid body: ACTIVE (dynamic, affected by forces) or PASSIVE (static collider). Default: ACTIVE",
+                },
+                "mass": {
+                    "type": "number",
+                    "description": "Mass of the object in kilograms. Default: 1.0",
+                },
+                "friction": {
+                    "type": "number",
+                    "description": "Surface friction coefficient (0=frictionless, 1=maximum). Default: 0.5",
+                },
+                "bounciness": {
+                    "type": "number",
+                    "description": "Restitution/bounciness (0=no bounce, 1=fully elastic). Default: 0.0",
+                },
+                "collision_shape": {
+                    "type": "string",
+                    "enum": [
+                        "BOX",
+                        "SPHERE",
+                        "CAPSULE",
+                        "CYLINDER",
+                        "CONE",
+                        "CONVEX_HULL",
+                        "MESH",
+                    ],
+                    "description": "Collision shape type. CONVEX_HULL is a good default for most objects. MESH is most accurate but slowest. Default: CONVEX_HULL",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_physics_rigid_body_batch",
+        description="Add rigid body physics to multiple objects at once. Optionally designate a ground/floor object as a PASSIVE collider.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of object names to add rigid bodies to",
+                },
+                "body_type": {
+                    "type": "string",
+                    "enum": ["ACTIVE", "PASSIVE"],
+                    "description": "Type of rigid body for all listed objects. Default: ACTIVE",
+                },
+                "mass": {
+                    "type": "number",
+                    "description": "Mass for all objects in kilograms. Default: 1.0",
+                },
+                "ground_object": {
+                    "type": "string",
+                    "description": "Optional name of an object to set as PASSIVE (ground/floor collider). This object does not need to be in object_names.",
+                },
+            },
+            "required": ["object_names"],
+        },
+    ),
+    Tool(
+        name="blender_physics_simulate",
+        description="Run the physics simulation for a frame range. Optionally apply results to make the final positions permanent (freezes simulation).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "frame_start": {
+                    "type": "number",
+                    "description": "First frame of simulation. Default: 1",
+                },
+                "frame_end": {
+                    "type": "number",
+                    "description": "Last frame of simulation. Default: 250",
+                },
+                "apply_results": {
+                    "type": "boolean",
+                    "description": "If true, apply the visual transform at frame_end and remove rigid bodies, making positions permanent. Default: false",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_physics_cloth_add",
+        description="Add cloth simulation to a mesh object. Supports material presets (silk, cotton, denim, etc.), vertex group pinning, collision objects, and wind.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to add cloth simulation to",
+                },
+                "preset": {
+                    "type": "string",
+                    "enum": [
+                        "SILK",
+                        "COTTON",
+                        "DENIM",
+                        "LEATHER",
+                        "RUBBER",
+                        "CANVAS",
+                        "TARP",
+                    ],
+                    "description": "Material preset controlling stiffness, mass, and damping. Default: COTTON",
+                },
+                "pin_vertex_group": {
+                    "type": "string",
+                    "description": "Name of a vertex group to pin (vertices in this group stay fixed in place)",
+                },
+                "collision_objects": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of objects that the cloth should collide with",
+                },
+                "wind_strength": {
+                    "type": "number",
+                    "description": "Strength of wind force. 0 = no wind. Default: 0.0",
+                },
+                "wind_direction": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Wind direction as [x, y, z] vector. Default: [1, 0, 0]",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_physics_soft_body_add",
+        description="Add soft body simulation to a mesh object. Soft bodies deform under forces while trying to maintain their shape.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to add soft body to",
+                },
+                "goal_strength": {
+                    "type": "number",
+                    "description": "How strongly the object tries to return to its original shape (0=fully soft, 1=rigid). Default: 0.7",
+                },
+                "mass": {
+                    "type": "number",
+                    "description": "Mass of the soft body in kilograms. Default: 1.0",
+                },
+                "friction": {
+                    "type": "number",
+                    "description": "Friction coefficient for the soft body surface. Default: 0.5",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_physics_fluid_quick",
+        description="Quick fluid simulation setup with a domain and flow object. Creates a Mantaflow-based liquid or gas simulation.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain_object": {
+                    "type": "string",
+                    "description": "Name of the object to use as the fluid domain (bounding box for the simulation)",
+                },
+                "flow_object": {
+                    "type": "string",
+                    "description": "Name of the object to use as the fluid inflow source",
+                },
+                "fluid_type": {
+                    "type": "string",
+                    "enum": ["LIQUID", "GAS"],
+                    "description": "Type of fluid simulation. Default: LIQUID",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Simulation grid resolution (higher = more detailed but slower). Default: 64",
+                },
+                "viscosity": {
+                    "type": "number",
+                    "description": "Fluid viscosity (0=water-like, higher=thicker). Default: 0.0",
+                },
+            },
+            "required": ["domain_object", "flow_object"],
+        },
+    ),
+    # ========== Annotation & Grease Pencil Tools ==========
+    Tool(
+        name="blender_annotation_add",
+        description="Add 3D annotation strokes to the scene as a grease pencil annotation layer. Useful for marking up geometry, drawing guides, or highlighting areas of interest.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                    },
+                    "description": "Array of [x, y, z] points defining the stroke path",
+                },
+                "color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Stroke color as [R, G, B, A] with values 0-1. Default: [1, 0, 0, 1] (red)",
+                },
+                "thickness": {
+                    "type": "number",
+                    "description": "Stroke thickness in pixels. Default: 3",
+                },
+                "layer_name": {
+                    "type": "string",
+                    "description": "Name of the annotation layer to add strokes to. Created if it doesn't exist. Default: 'Annotations'",
+                },
+            },
+            "required": ["points"],
+        },
+    ),
+    Tool(
+        name="blender_annotation_text",
+        description="Add a 3D text annotation at a specific location. Creates a font/text object that can be used as a label or callout.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The text content to display",
+                },
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Position as [x, y, z] where the text should be placed",
+                },
+                "size": {
+                    "type": "number",
+                    "description": "Text size. Default: 1.0",
+                },
+                "color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Text color as [R, G, B, A] with values 0-1. Default: [1, 1, 1, 1] (white)",
+                },
+            },
+            "required": ["text", "location"],
+        },
+    ),
+    Tool(
+        name="blender_annotation_dimension",
+        description="Add a dimension line between two 3D points showing the distance measurement. Creates endpoint markers, a connecting line, and a text label with the calculated distance.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "point_a": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "First point as [x, y, z]",
+                },
+                "point_b": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Second point as [x, y, z]",
+                },
+                "offset": {
+                    "type": "number",
+                    "description": "Perpendicular offset distance for the dimension line from the measured points. Default: 0.5",
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["METERS", "CM", "MM", "INCHES", "FEET"],
+                    "description": "Display units for the measurement. Default: METERS",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Override label text. If omitted, the calculated distance with units is used.",
+                },
+            },
+            "required": ["point_a", "point_b"],
+        },
+    ),
+    Tool(
+        name="blender_annotation_clear",
+        description="Clear annotation layers. Can clear a specific layer by name or all annotation layers at once.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "layer_name": {
+                    "type": "string",
+                    "description": "Name of the annotation layer to clear. If omitted, clears ALL annotation layers.",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_grease_pencil_create",
+        description="Create a grease pencil object with one or more strokes. Grease pencil objects are persistent 2D/3D drawing objects in the scene.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the grease pencil object. Default: 'GPencil'",
+                },
+                "strokes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "points": {
+                                "type": "array",
+                                "items": {
+                                    "type": "array",
+                                    "items": {"type": "number"},
+                                },
+                                "description": "Array of [x, y, z] points for this stroke",
+                            },
+                            "thickness": {
+                                "type": "number",
+                                "description": "Line thickness for this stroke. Default: 10",
+                            },
+                        },
+                        "required": ["points"],
+                    },
+                    "description": "Array of stroke definitions, each with points and optional thickness",
+                },
+                "color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Stroke color as [R, G, B, A] with values 0-1. Default: [0, 0, 0, 1] (black)",
+                },
+            },
+            "required": ["strokes"],
+        },
+    ),
+    Tool(
+        name="blender_grease_pencil_markup",
+        description="Overlay markup annotations (arrows, circles, rectangles, text) on a rendered image. Uses Pillow if available, otherwise falls back to Blender compositor.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "render_path": {
+                    "type": "string",
+                    "description": "Path to the input rendered image file (PNG, JPG, etc.)",
+                },
+                "annotations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["arrow", "circle", "rectangle", "text"],
+                                "description": "Type of annotation to draw",
+                            },
+                            "start": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Start point [x, y] in pixel coordinates. Used by arrow and rectangle.",
+                            },
+                            "end": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "End point [x, y] in pixel coordinates. Used by arrow and rectangle.",
+                            },
+                            "center": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Center point [x, y] in pixel coordinates. Used by circle.",
+                            },
+                            "radius": {
+                                "type": "number",
+                                "description": "Radius in pixels. Used by circle.",
+                            },
+                            "position": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "description": "Position [x, y] in pixel coordinates. Used by text.",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "Text content. Used by text annotation type.",
+                            },
+                            "color": {
+                                "type": "string",
+                                "description": "Color as a CSS-style string (e.g., 'red', '#FF0000'). Default: 'red'",
+                            },
+                            "thickness": {
+                                "type": "number",
+                                "description": "Line thickness in pixels. Default: 3",
+                            },
+                            "font_size": {
+                                "type": "number",
+                                "description": "Font size for text annotations. Default: 24",
+                            },
+                        },
+                        "required": ["type"],
+                    },
+                    "description": "Array of annotation objects to draw on the image",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Path to save the annotated output image",
+                },
+            },
+            "required": ["render_path", "annotations", "output_path"],
+        },
+    ),
+
+
+    # ── Material Inspection & Manipulation (7 tools) ──
+
+    # ── Material Inspection & Manipulation ──
+    Tool(
+        name="blender_material_inspect_graph",
+        description=(
+            "Return the full shader node graph of a material as structured JSON. "
+            "Lists every node (name, type, location, input values/connections, output connections) "
+            "and every link (from_node, from_output, to_node, to_input)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material to inspect",
+                },
+            },
+            "required": ["material_name"],
+        },
+    ),
+    Tool(
+        name="blender_material_node_add",
+        description=(
+            "Add a shader node to a material's node tree. "
+            "Supports any Blender node type (e.g. ShaderNodeTexNoise, ShaderNodeMixRGB, "
+            "ShaderNodeBump, ShaderNodeMapping, ShaderNodeNormalMap, ShaderNodeValToRGB, etc.). "
+            "Optionally set location and input default values."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material",
+                },
+                "node_type": {
+                    "type": "string",
+                    "description": "Blender node type identifier (e.g. 'ShaderNodeTexNoise', 'ShaderNodeBump')",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Optional display name for the node",
+                },
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Node location [x, y] in the node editor",
+                },
+                "inputs": {
+                    "type": "object",
+                    "description": (
+                        "Object mapping input socket names to default values. "
+                        "Scalar inputs use a number, vector/color inputs use an array."
+                    ),
+                },
+            },
+            "required": ["material_name", "node_type"],
+        },
+    ),
+    Tool(
+        name="blender_material_node_connect",
+        description=(
+            "Connect two nodes in a material's shader graph via their socket names. "
+            "Creates a link from an output socket on one node to an input socket on another."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material",
+                },
+                "from_node": {
+                    "type": "string",
+                    "description": "Name of the source node",
+                },
+                "from_output": {
+                    "type": "string",
+                    "description": "Name of the output socket on the source node",
+                },
+                "to_node": {
+                    "type": "string",
+                    "description": "Name of the destination node",
+                },
+                "to_input": {
+                    "type": "string",
+                    "description": "Name of the input socket on the destination node",
+                },
+            },
+            "required": ["material_name", "from_node", "from_output", "to_node", "to_input"],
+        },
+    ),
+    Tool(
+        name="blender_material_node_group_create",
+        description=(
+            "Create a reusable shader node group with defined inputs and outputs. "
+            "The group can later be instanced inside any material via a ShaderNodeGroup node."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the node group",
+                },
+                "inputs": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Input socket name"},
+                            "type": {
+                                "type": "string",
+                                "enum": ["FLOAT", "RGBA", "VECTOR", "VALUE", "SHADER"],
+                                "description": "Socket type",
+                            },
+                            "default": {
+                                "description": "Default value (number for FLOAT/VALUE, [r,g,b,a] for RGBA, [x,y,z] for VECTOR)",
+                            },
+                        },
+                        "required": ["name", "type"],
+                    },
+                    "description": "Input socket definitions",
+                },
+                "outputs": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Output socket name"},
+                            "type": {
+                                "type": "string",
+                                "enum": ["FLOAT", "RGBA", "VECTOR", "VALUE", "SHADER"],
+                                "description": "Socket type",
+                            },
+                        },
+                        "required": ["name", "type"],
+                    },
+                    "description": "Output socket definitions",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    Tool(
+        name="blender_material_procedural_preset",
+        description=(
+            "Create a complex procedural material from a named preset with one call. "
+            "Builds a full shader node tree. Presets: VEHICLE_PAINT, BRUSHED_METAL, CHROME, "
+            "RUBBER, CARBON_FIBER, ASPHALT, TARMAC, WORN_METAL, GLASS, PLASTIC_GLOSSY, "
+            "PLASTIC_MATTE, CONCRETE, FABRIC, REFLECTIVE_TAPE, LED_DISPLAY, RUST, GOLD, "
+            "COPPER, SCRATCHED_PAINT, SNOW, WATER, WOOD, BRICK."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the new material",
+                },
+                "preset": {
+                    "type": "string",
+                    "enum": [
+                        "VEHICLE_PAINT", "BRUSHED_METAL", "CHROME", "RUBBER",
+                        "CARBON_FIBER", "ASPHALT", "TARMAC", "WORN_METAL",
+                        "GLASS", "PLASTIC_GLOSSY", "PLASTIC_MATTE", "CONCRETE",
+                        "FABRIC", "REFLECTIVE_TAPE", "LED_DISPLAY", "RUST",
+                        "GOLD", "COPPER", "SCRATCHED_PAINT", "SNOW", "WATER",
+                        "WOOD", "BRICK",
+                    ],
+                    "description": "Preset type to create",
+                },
+                "color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Override base color as RGBA (0-1). Optional; each preset has a sensible default.",
+                },
+                "wear_amount": {
+                    "type": "number",
+                    "description": "Wear/aging intensity 0-1 (used by presets that support it, e.g. WORN_METAL, SCRATCHED_PAINT)",
+                },
+                "scale": {
+                    "type": "number",
+                    "description": "Texture scale multiplier (default 1.0). Affects procedural pattern size.",
+                },
+            },
+            "required": ["name", "preset"],
+        },
+    ),
+    Tool(
+        name="blender_material_convert_to_pbr",
+        description=(
+            "Convert a material's existing node tree to a clean Principled BSDF setup. "
+            "Analyzes current nodes to extract color, roughness, metallic, etc., then rebuilds "
+            "as a standard PBR graph compatible with the target format."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material to convert",
+                },
+                "target_format": {
+                    "type": "string",
+                    "enum": ["GLTF", "MSFS", "UE5", "GENERIC"],
+                    "description": "Target format to optimize the PBR setup for",
+                },
+            },
+            "required": ["material_name", "target_format"],
+        },
+    ),
+    Tool(
+        name="blender_material_preview_render",
+        description=(
+            "Render a material preview on a standard shape. Creates a temporary scene "
+            "with the chosen shape, assigns the material, renders it, and returns the output path."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material to preview",
+                },
+                "preview_shape": {
+                    "type": "string",
+                    "enum": ["SPHERE", "CUBE", "PLANE", "CYLINDER"],
+                    "description": "Shape to render the material on (default: SPHERE)",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Output file path (default: /tmp/material_preview_<name>.png)",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Render resolution in pixels, used for both width and height (default: 512)",
+                },
+                "engine": {
+                    "type": "string",
+                    "enum": ["EEVEE", "CYCLES"],
+                    "description": "Render engine (default: EEVEE)",
+                },
+            },
+            "required": ["material_name"],
+        },
+    ),
+
+    # ── Measurement & Validation (7 tools) ──
+
+    # ── 1. Surface Area ──────────────────────────────────────────────
+    Tool(
+        name="blender_measure_surface_area",
+        description=(
+            "Calculate total surface area of a mesh object, with optional "
+            "per-material breakdown.  Reports area in scene units squared "
+            "(typically m^2).  Supports local or world-space calculation."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to measure",
+                },
+                "per_material": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "If true, return area breakdown grouped by material slot"
+                    ),
+                },
+                "world_space": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "If true, apply the object's world matrix so the area "
+                        "reflects actual scene-space size"
+                    ),
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
+    # ── 2. Volume ────────────────────────────────────────────────────
+    Tool(
+        name="blender_measure_volume",
+        description=(
+            "Calculate the enclosed volume of a mesh object.  Returns "
+            "volume in scene units cubed (typically m^3).  Also reports "
+            "whether the mesh is manifold (watertight)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to measure",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
+    # ── 3. Clearance ─────────────────────────────────────────────────
+    Tool(
+        name="blender_measure_clearance",
+        description=(
+            "Measure the minimum, average, and maximum distance between "
+            "two mesh objects.  Detects intersection (overlap) and returns "
+            "the closest point pair.  Useful for collision/clearance checks."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_a": {
+                    "type": "string",
+                    "description": "Name of the first mesh object",
+                },
+                "object_b": {
+                    "type": "string",
+                    "description": "Name of the second mesh object",
+                },
+                "sample_count": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": (
+                        "Maximum number of vertices to sample from object_a "
+                        "when computing distances (higher = more accurate, slower)"
+                    ),
+                },
+            },
+            "required": ["object_a", "object_b"],
+        },
+    ),
+
+    # ── 4. Validate Dimensions ───────────────────────────────────────
+    Tool(
+        name="blender_validate_dimensions",
+        description=(
+            "Check an object's bounding-box dimensions against expected "
+            "values with a configurable tolerance.  Reports per-axis "
+            "pass/fail with deviations."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to validate",
+                },
+                "expected": {
+                    "type": "object",
+                    "properties": {
+                        "length": {
+                            "type": "number",
+                            "description": "Expected length (mapped via axis_mapping)",
+                        },
+                        "width": {
+                            "type": "number",
+                            "description": "Expected width (mapped via axis_mapping)",
+                        },
+                        "height": {
+                            "type": "number",
+                            "description": "Expected height (mapped via axis_mapping)",
+                        },
+                    },
+                    "description": (
+                        "Expected dimensions. Provide any subset of "
+                        "length/width/height."
+                    ),
+                },
+                "tolerance": {
+                    "type": "number",
+                    "default": 0.01,
+                    "description": (
+                        "Allowed absolute deviation per axis (scene units)"
+                    ),
+                },
+                "axis_mapping": {
+                    "type": "object",
+                    "properties": {
+                        "length": {
+                            "type": "string",
+                            "enum": ["x", "y", "z"],
+                            "description": "Which axis corresponds to length",
+                        },
+                        "width": {
+                            "type": "string",
+                            "enum": ["x", "y", "z"],
+                            "description": "Which axis corresponds to width",
+                        },
+                        "height": {
+                            "type": "string",
+                            "enum": ["x", "y", "z"],
+                            "description": "Which axis corresponds to height",
+                        },
+                    },
+                    "description": (
+                        "Map length/width/height to scene axes.  "
+                        "Defaults to length=x, width=y, height=z."
+                    ),
+                },
+            },
+            "required": ["object_name", "expected"],
+        },
+    ),
+
+    # ── 5. Calibrate from Reference ──────────────────────────────────
+    Tool(
+        name="blender_calibrate_from_reference",
+        description=(
+            "Scale an object uniformly so that a known real-world "
+            "dimension matches along a chosen axis.  Applies transforms "
+            "afterwards so scale returns to (1,1,1)."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to calibrate",
+                },
+                "known_dimension": {
+                    "type": "number",
+                    "description": (
+                        "Real-world size the object should be along the "
+                        "chosen axis, in target_units"
+                    ),
+                },
+                "dimension_axis": {
+                    "type": "string",
+                    "enum": ["X", "Y", "Z"],
+                    "description": "Axis to match the known dimension on",
+                },
+                "target_units": {
+                    "type": "string",
+                    "enum": ["METERS", "CM", "MM", "INCHES", "FEET"],
+                    "default": "METERS",
+                    "description": (
+                        "Unit system for known_dimension.  The value is "
+                        "converted to scene units (meters) before scaling."
+                    ),
+                },
+            },
+            "required": ["object_name", "known_dimension", "dimension_axis"],
+        },
+    ),
+
+    # ── 6. Edge Angle ────────────────────────────────────────────────
+    Tool(
+        name="blender_measure_edge_angle",
+        description=(
+            "Measure dihedral angles (face-to-face) at mesh edges.  "
+            "Optionally filter to specific edge indices and flag edges "
+            "outside a threshold range.  Angles are in degrees."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object",
+                },
+                "edge_indices": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": (
+                        "Specific edge indices to measure.  "
+                        "If omitted, all edges with 2+ linked faces are measured."
+                    ),
+                },
+                "threshold_min": {
+                    "type": "number",
+                    "description": (
+                        "Minimum acceptable angle in degrees.  "
+                        "Edges below this are flagged."
+                    ),
+                },
+                "threshold_max": {
+                    "type": "number",
+                    "description": (
+                        "Maximum acceptable angle in degrees.  "
+                        "Edges above this are flagged."
+                    ),
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
+    # ── 7. Validate Mesh Quality ─────────────────────────────────────
+    Tool(
+        name="blender_validate_mesh_quality",
+        description=(
+            "Run a comprehensive mesh quality audit.  Returns an overall "
+            "score (0-1), per-check pass/fail results, and a list of "
+            "blocking issues that would prevent clean export."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to validate",
+                },
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "NON_MANIFOLD",
+                            "DEGENERATE",
+                            "FLIPPED_NORMALS",
+                            "ZERO_AREA",
+                            "NGONS",
+                            "TRIS",
+                            "UV_COVERAGE",
+                            "UV_OVERLAP",
+                            "MATERIAL_ASSIGNMENT",
+                            "SCALE_APPLIED",
+                            "ORIGIN_CENTERED",
+                        ],
+                    },
+                    "description": (
+                        "List of checks to run.  If omitted, all checks "
+                        "are executed."
+                    ),
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
+    # ── Collections & System (8 tools) ──
+
+    # ========== Collection Tools ==========
+    Tool(
+        name="blender_collection_create",
+        description="Create a new collection. Collections organize objects into logical groups in the scene hierarchy.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the new collection",
+                },
+                "parent": {
+                    "type": "string",
+                    "description": "Name of parent collection to nest under (defaults to Scene Collection)",
+                },
+                "color_tag": {
+                    "type": "string",
+                    "enum": [
+                        "NONE",
+                        "COLOR_01",
+                        "COLOR_02",
+                        "COLOR_03",
+                        "COLOR_04",
+                        "COLOR_05",
+                        "COLOR_06",
+                        "COLOR_07",
+                        "COLOR_08",
+                    ],
+                    "description": "Color tag for the collection in the outliner",
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+    Tool(
+        name="blender_collection_list",
+        description="List all collections in the scene with their full hierarchy, objects, visibility, and render state. Returns a nested tree structure.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_collection_move",
+        description="Move one or more objects to a target collection. Can optionally remove them from their current collections.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of objects to move",
+                },
+                "target_collection": {
+                    "type": "string",
+                    "description": "Name of the target collection to move objects into",
+                },
+                "remove_from_current": {
+                    "type": "boolean",
+                    "description": "Remove objects from their current collections (default: true). Set false to link into multiple collections.",
+                },
+            },
+            "required": ["object_names", "target_collection"],
+        },
+    ),
+    Tool(
+        name="blender_collection_visibility",
+        description="Toggle collection visibility, renderability, and selectability in the current view layer.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "collection_name": {
+                    "type": "string",
+                    "description": "Name of the collection",
+                },
+                "visible": {
+                    "type": "boolean",
+                    "description": "Set viewport visibility (hide_viewport on the layer collection)",
+                },
+                "renderable": {
+                    "type": "boolean",
+                    "description": "Set whether the collection renders",
+                },
+                "selectable": {
+                    "type": "boolean",
+                    "description": "Set whether objects in the collection are selectable",
+                },
+            },
+            "required": ["collection_name"],
+        },
+    ),
+    # ========== System Tools ==========
+    Tool(
+        name="blender_undo",
+        description="Undo the last operation in Blender. Equivalent to Ctrl+Z.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_redo",
+        description="Redo the last undone operation in Blender. Equivalent to Ctrl+Shift+Z.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_save",
+        description="Save the current Blender file. The file must have been saved at least once before (has a filepath).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "compress": {
+                    "type": "boolean",
+                    "description": "Use file compression (default: false)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_save_as",
+        description="Save the current Blender file to a new path. Creates parent directories if needed.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "filepath": {
+                    "type": "string",
+                    "description": "Full file path to save to (should end in .blend)",
+                },
+                "compress": {
+                    "type": "boolean",
+                    "description": "Use file compression (default: false)",
+                },
+                "copy": {
+                    "type": "boolean",
+                    "description": "Save a copy without changing the current file path (default: false)",
+                },
+            },
+            "required": ["filepath"],
+        },
+    ),
+
+    # ── Baking (6 tools) ──
+
+    # ── 1. Batch PBR Baking ──
+    Tool(
+        name="blender_bake_pbr_batch",
+        description=(
+            "Bake ALL PBR texture channels in one call. Switches to Cycles, iterates "
+            "over requested channels (DIFFUSE, ROUGHNESS, METALLIC, NORMAL, AO, EMISSION, "
+            "DISPLACEMENT, COMBINED), creates temp images, configures bake settings, and "
+            "saves each map to disk. Returns a dict mapping channel name to output file path."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to bake from",
+                },
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "DIFFUSE", "ROUGHNESS", "METALLIC", "NORMAL",
+                            "AO", "EMISSION", "DISPLACEMENT", "COMBINED",
+                        ],
+                    },
+                    "description": (
+                        "Which PBR channels to bake. Default: all channels. "
+                        "Each channel produces a separate texture file."
+                    ),
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Texture resolution in pixels (default 2048)",
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Directory to save baked textures",
+                },
+                "output_prefix": {
+                    "type": "string",
+                    "description": "Filename prefix (defaults to object name)",
+                },
+                "output_format": {
+                    "type": "string",
+                    "enum": ["PNG", "TARGA", "OPEN_EXR"],
+                    "description": "Image output format (default PNG)",
+                },
+                "margin": {
+                    "type": "number",
+                    "description": "Bake margin in pixels (default 16)",
+                },
+                "samples": {
+                    "type": "number",
+                    "description": "Cycles render samples for baking (default 128)",
+                },
+                "use_cage": {
+                    "type": "boolean",
+                    "description": "Use cage for ray casting (default false)",
+                },
+                "cage_extrusion": {
+                    "type": "number",
+                    "description": "Cage extrusion distance (default 0.1)",
+                },
+                "normal_space": {
+                    "type": "string",
+                    "enum": ["TANGENT", "OBJECT"],
+                    "description": "Normal map space (default TANGENT)",
+                },
+            },
+            "required": ["object_name", "output_dir"],
+        },
+    ),
+
+    # ── 2. High-poly to Low-poly Baking ──
+    Tool(
+        name="blender_bake_highpoly_to_lowpoly",
+        description=(
+            "Bake detail from a high-poly mesh onto a low-poly mesh using 'selected to active'. "
+            "Ideal for transferring normals, AO, and other maps from a sculpt or subdivision "
+            "model to a game-ready low-poly mesh."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "lowpoly_name": {
+                    "type": "string",
+                    "description": "Name of the low-poly target object (active)",
+                },
+                "highpoly_name": {
+                    "type": "string",
+                    "description": "Name of the high-poly source object (selected)",
+                },
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "DIFFUSE", "ROUGHNESS", "METALLIC", "NORMAL",
+                            "AO", "EMISSION", "DISPLACEMENT", "COMBINED",
+                        ],
+                    },
+                    "description": "Channels to bake (default: [NORMAL, AO])",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Texture resolution in pixels (default 2048)",
+                },
+                "cage_extrusion": {
+                    "type": "number",
+                    "description": "Cage extrusion distance (default 0.1)",
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Directory to save baked textures",
+                },
+                "output_prefix": {
+                    "type": "string",
+                    "description": "Filename prefix (defaults to lowpoly object name)",
+                },
+                "output_format": {
+                    "type": "string",
+                    "enum": ["PNG", "TARGA", "OPEN_EXR"],
+                    "description": "Image output format (default PNG)",
+                },
+                "margin": {
+                    "type": "number",
+                    "description": "Bake margin in pixels (default 16)",
+                },
+                "samples": {
+                    "type": "number",
+                    "description": "Cycles render samples (default 128)",
+                },
+            },
+            "required": ["lowpoly_name", "highpoly_name", "output_dir"],
+        },
+    ),
+
+    # ── 3. Multires Baking ──
+    Tool(
+        name="blender_bake_from_multires",
+        description=(
+            "Bake maps from a Multiresolution modifier (normals or displacement). "
+            "Uses Blender's multires bake mode to transfer detail from higher "
+            "subdivision levels to a texture."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object with a Multiresolution modifier",
+                },
+                "map_type": {
+                    "type": "string",
+                    "enum": ["NORMALS", "DISPLACEMENT"],
+                    "description": "Type of map to bake (default NORMALS)",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Texture resolution in pixels (default 2048)",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Full file path for the output image",
+                },
+                "margin": {
+                    "type": "number",
+                    "description": "Bake margin in pixels (default 16)",
+                },
+            },
+            "required": ["object_name", "output_path"],
+        },
+    ),
+
+    # ── 4. Bake to Vertex Colors ──
+    Tool(
+        name="blender_bake_to_vertex_colors",
+        description=(
+            "Bake lighting or material information directly to vertex colors. "
+            "Creates a vertex color layer, bakes to a temporary image, then transfers "
+            "pixel data to per-vertex colors via UV lookup. Useful for mobile/performance "
+            "rendering where texture lookups are expensive."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to bake",
+                },
+                "bake_type": {
+                    "type": "string",
+                    "enum": ["AO", "DIFFUSE", "COMBINED"],
+                    "description": "Type of bake (default AO)",
+                },
+                "vertex_color_name": {
+                    "type": "string",
+                    "description": "Name for the vertex color layer (default 'BakedColor')",
+                },
+                "samples": {
+                    "type": "number",
+                    "description": "Cycles render samples (default 64)",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
+    # ── 5. Curvature Map Baking ──
+    Tool(
+        name="blender_bake_curvature",
+        description=(
+            "Bake a curvature map from mesh geometry. Calculates per-vertex curvature "
+            "using the dot product of vertex normals vs averaged neighbor normals. "
+            "Maps concave areas to dark, convex to bright (or both). Useful for "
+            "edge wear, dirt accumulation, and procedural texturing masks."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to calculate curvature for",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Output texture resolution in pixels (default 2048)",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Full file path for the output curvature map",
+                },
+                "cavity_type": {
+                    "type": "string",
+                    "enum": ["CONCAVE", "CONVEX", "BOTH"],
+                    "description": (
+                        "Which curvature to capture: CONCAVE (cavities dark), "
+                        "CONVEX (edges bright), or BOTH (default BOTH)"
+                    ),
+                },
+            },
+            "required": ["object_name", "output_path"],
+        },
+    ),
+
+    # ── 6. ID Map Baking ──
+    Tool(
+        name="blender_bake_id_map",
+        description=(
+            "Bake a color ID map where each material, object, or face set is assigned "
+            "a distinct flat color. Temporarily overrides materials with emission shaders, "
+            "bakes EMIT, then restores originals. Essential for texture painting workflows "
+            "and Substance Painter masks."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to bake ID map for",
+                },
+                "resolution": {
+                    "type": "number",
+                    "description": "Output texture resolution in pixels (default 2048)",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "Full file path for the output ID map",
+                },
+                "color_mode": {
+                    "type": "string",
+                    "enum": ["PER_MATERIAL", "PER_OBJECT", "PER_FACE_SET"],
+                    "description": (
+                        "How to assign ID colors: PER_MATERIAL (one color per material slot), "
+                        "PER_OBJECT (one color per joined sub-object), or PER_FACE_SET "
+                        "(one color per face set). Default PER_MATERIAL."
+                    ),
+                },
+            },
+            "required": ["object_name", "output_path"],
+        },
+    ),
+
+    # ── Geometry Nodes (7 tools) ──
+
+    # ── 1. Create Group ──────────────────────────────────────────────
+    Tool(
+        name="blender_geonode_create_group",
+        description=(
+            "Create a new Geometry Nodes node group with typed inputs "
+            "and outputs.  A Geometry input and Geometry output are always "
+            "added automatically.  Returns the group name and socket layout."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the new geometry node group",
+                },
+                "inputs": {
+                    "type": "array",
+                    "description": (
+                        "Extra input sockets to add (beyond the default "
+                        "Geometry input)"
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Socket display name",
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": ["FLOAT", "INT", "VECTOR", "BOOLEAN", "OBJECT", "COLLECTION", "MATERIAL", "IMAGE", "STRING"],
+                                "description": "Socket data type",
+                            },
+                            "default": {
+                                "description": (
+                                    "Default value for the socket (number, "
+                                    "bool, [x,y,z], or string)"
+                                ),
+                            },
+                        },
+                        "required": ["name", "type"],
+                    },
+                },
+                "outputs": {
+                    "type": "array",
+                    "description": (
+                        "Extra output sockets to add (beyond the default "
+                        "Geometry output)"
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Socket display name",
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": ["FLOAT", "INT", "VECTOR", "BOOLEAN", "OBJECT", "COLLECTION", "MATERIAL", "IMAGE", "STRING"],
+                                "description": "Socket data type",
+                            },
+                        },
+                        "required": ["name", "type"],
+                    },
+                },
+            },
+            "required": ["name"],
+        },
+    ),
+
+    # ── 2. Apply to Object ───────────────────────────────────────────
+    Tool(
+        name="blender_geonode_apply",
+        description=(
+            "Apply an existing Geometry Nodes group to an object as a "
+            "modifier and optionally set input values.  Returns the "
+            "modifier name and current input state."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to add the modifier to",
+                },
+                "node_group": {
+                    "type": "string",
+                    "description": (
+                        "Name of an existing GeometryNodeTree in bpy.data.node_groups"
+                    ),
+                },
+                "inputs": {
+                    "type": "object",
+                    "description": (
+                        "Mapping of input socket names to values.  "
+                        "Numbers, booleans, [x,y,z] vectors, and object/"
+                        "material names (as strings) are accepted."
+                    ),
+                },
+            },
+            "required": ["object_name", "node_group"],
+        },
+    ),
+
+    # ── 3. Scatter Instances ─────────────────────────────────────────
+    Tool(
+        name="blender_geonode_scatter_instances",
+        description=(
+            "One-call scatter: build a complete Geometry Nodes setup that "
+            "distributes instances of one object across the surface of "
+            "another.  Supports density, Poisson-disk spacing, random "
+            "scale range, random rotation, and normal alignment."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target_object": {
+                    "type": "string",
+                    "description": "Name of the surface object to scatter onto",
+                },
+                "instance_object": {
+                    "type": "string",
+                    "description": "Name of the object to instance",
+                },
+                "density": {
+                    "type": "number",
+                    "default": 10.0,
+                    "description": "Points per unit area (higher = more instances)",
+                },
+                "seed": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Random seed for distribution",
+                },
+                "min_distance": {
+                    "type": "number",
+                    "default": 0.0,
+                    "description": (
+                        "Minimum distance between points.  If > 0, Poisson "
+                        "Disk distribution is used instead of random."
+                    ),
+                },
+                "scale_min": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": "Minimum random scale factor",
+                },
+                "scale_max": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": "Maximum random scale factor",
+                },
+                "rotation_random": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "default": [0, 0, 0],
+                    "description": (
+                        "Random rotation range in degrees [X, Y, Z].  "
+                        "Each axis gets uniform random rotation from "
+                        "-value to +value."
+                    ),
+                },
+                "align_to_normal": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "Rotate instances to align with the surface normal"
+                    ),
+                },
+            },
+            "required": ["target_object", "instance_object"],
+        },
+    ),
+
+    # ── 4. Array / Grid ──────────────────────────────────────────────
+    Tool(
+        name="blender_geonode_array_grid",
+        description=(
+            "Parametric array patterns via Geometry Nodes.  Instances an "
+            "object in LINEAR, GRID_2D, RADIAL, or HEXAGONAL arrangements.  "
+            "The modifier is applied to object_name."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": (
+                        "Object that receives the GN modifier (typically "
+                        "an empty or the instance_object itself)"
+                    ),
+                },
+                "instance_object": {
+                    "type": "string",
+                    "description": "Object to be instanced in the pattern",
+                },
+                "grid_type": {
+                    "type": "string",
+                    "enum": ["LINEAR", "GRID_2D", "RADIAL", "HEXAGONAL"],
+                    "description": "Type of array pattern",
+                },
+                "count_x": {
+                    "type": "number",
+                    "default": 5,
+                    "description": "Count along primary axis (or total for LINEAR)",
+                },
+                "count_y": {
+                    "type": "number",
+                    "default": 5,
+                    "description": "Count along secondary axis (GRID_2D / HEXAGONAL)",
+                },
+                "spacing_x": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": "Spacing along primary axis (scene units)",
+                },
+                "spacing_y": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": "Spacing along secondary axis (scene units)",
+                },
+                "radial_count": {
+                    "type": "number",
+                    "default": 8,
+                    "description": "Number of instances around the circle (RADIAL)",
+                },
+                "radial_radius": {
+                    "type": "number",
+                    "default": 1.0,
+                    "description": "Radius of the circle (RADIAL)",
+                },
+            },
+            "required": ["object_name", "instance_object", "grid_type"],
+        },
+    ),
+
+    # ── 5. Deform Along Curve ────────────────────────────────────────
+    Tool(
+        name="blender_geonode_deform_curve",
+        description=(
+            "Deform a mesh along a curve using Geometry Nodes.  "
+            "The mesh is stretched or fitted along the curve length.  "
+            "Useful for roads, rails, cables, and profile sweeps."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the mesh object to deform",
+                },
+                "curve_name": {
+                    "type": "string",
+                    "description": "Name of the curve object to deform along",
+                },
+                "stretch": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "If true, stretch the mesh to fill the curve length; "
+                        "otherwise clamp to original mesh length"
+                    ),
+                },
+            },
+            "required": ["object_name", "curve_name"],
+        },
+    ),
+
+    # ── 6. Extrude Profile Along Curve ───────────────────────────────
+    Tool(
+        name="blender_geonode_extrude_profile",
+        description=(
+            "Extrude a 2D profile mesh along a curve path using the "
+            "Curve to Mesh node.  Creates a new object with the extruded "
+            "geometry.  Great for pipes, railings, moulding, and trim."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "profile_object": {
+                    "type": "string",
+                    "description": (
+                        "Name of the profile object (mesh or curve) to "
+                        "sweep along the path"
+                    ),
+                },
+                "curve_name": {
+                    "type": "string",
+                    "description": "Name of the curve to extrude along",
+                },
+                "name": {
+                    "type": "string",
+                    "default": "ExtrudedProfile",
+                    "description": "Name for the resulting object",
+                },
+                "fill_caps": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Fill the start and end caps of the extrusion",
+                },
+                "resolution": {
+                    "type": "number",
+                    "default": 12,
+                    "description": (
+                        "Curve resolution (segments per spline point).  "
+                        "Higher values produce smoother bends."
+                    ),
+                },
+            },
+            "required": ["profile_object", "curve_name"],
+        },
+    ),
+
+    # ── 7. Inspect GN Setup ──────────────────────────────────────────
+    Tool(
+        name="blender_geonode_inspect",
+        description=(
+            "Read the current Geometry Nodes setup on an object.  "
+            "Returns the node group name, all input names/types/current "
+            "values, and output names.  Useful for introspection before "
+            "tweaking values with geonode_apply."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to inspect",
+                },
+                "modifier_name": {
+                    "type": "string",
+                    "description": (
+                        "Name of a specific GN modifier.  If omitted, the "
+                        "first Geometry Nodes modifier found is used."
+                    ),
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+
 ]
 
 

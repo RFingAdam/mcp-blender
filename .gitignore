@@ -19,11 +19,13 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.whl
 
 # Virtual environments
 .venv/
 venv/
 ENV/
+env/
 
 # IDE
 .idea/
@@ -42,14 +44,48 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+._*
 
 # Blender
 *.blend1
+*.blend2
 
-# Generated assets & models
+# Assets — keep only banner.svg for README, ignore everything else
+# (renders, screenshots, reference images, 3D models, blend files)
+assets/*.png
+assets/*.jpg
+assets/*.jpeg
+assets/*.glb
+assets/*.gltf
+assets/*.fbx
+assets/*.obj
+assets/*.stl
+assets/*.usd
+assets/*.blend
+assets/*.py
 assets/generated/
-mototok_spacer_8600.blend
+
+# Exports
+exports/
 
 # Build artifacts
 *.zip
 *.tar.gz
+
+# Generated tool files (used during development)
+new_tools/
+
+# Environment and secrets
+.env
+.env.*
+*.key
+*.pem
+credentials.*
+
+# Logs
+*.log
+
+# Claude/MCP local config
+.claude/
+tasks/

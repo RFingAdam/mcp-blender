@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 WORKFLOWS_DIR = Path(__file__).parent.parent / "addon" / "blender_mcp_addon" / "external" / "ai_backends" / "workflows"
 
 EXPECTED_TEMPLATES = [
