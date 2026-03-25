@@ -2,6 +2,7 @@
 
 import contextlib
 import io
+import json
 import math
 import os
 import tempfile
@@ -26,8 +27,6 @@ from .validation import (
     validate_filepath,
     validate_vector3,
 )
-
-
 
 # ---------------------------------------------------------------------------
 # Module-level constants used by handlers
@@ -1804,8 +1803,8 @@ class CommandHandlers:
     def _handle_ai_probe_backends(self, params: dict) -> dict:
         """Probe ComfyUI and report available 3D generation nodes, GPU info, and queue status."""
         import json
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         # Default 3D generation node classes to check
         default_nodes = [
@@ -2481,7 +2480,6 @@ class CommandHandlers:
 
     def _handle_curve_from_mesh_edge(self, params: dict) -> dict:
         """Create a curve from mesh edge indices."""
-        import bmesh
 
         object_name = require_param(params, "object_name", str)
         edge_indices = require_param(params, "edge_indices", list)
@@ -2697,7 +2695,7 @@ class CommandHandlers:
                 raise ValidationError(f"Face index {i} out of range (mesh has {len(bm.faces)} faces)")
             faces.append(bm.faces[i])
 
-        result = bmesh.ops.inset_region(
+        bmesh.ops.inset_region(
             bm,
             faces=faces,
             thickness=thickness,
@@ -3377,7 +3375,6 @@ class CommandHandlers:
                     mod = obj.modifiers[-1]
                     # Use the built-in Smooth by Angle geometry node group
                     try:
-                        import os
                         # The modifier is added via operator in 4.2+
                         # Remove the generic one and use shade_smooth_by_angle
                         obj.modifiers.remove(mod)
@@ -4154,7 +4151,7 @@ class CommandHandlers:
             raise ValidationError(f"Reference image not found: {reference_image}")
 
         output_path = os.path.join(tempfile.gettempdir(), f"silhouette_{object_name}.png")
-        overlay_path = os.path.join(tempfile.gettempdir(), f"silhouette_overlay_{object_name}.png")
+        os.path.join(tempfile.gettempdir(), f"silhouette_overlay_{object_name}.png")
 
         # Store original state
         scene = bpy.context.scene
@@ -4505,7 +4502,7 @@ class CommandHandlers:
             raise ValidationError(f"Target '{target_name}' is not a mesh")
 
         # Add particle system
-        ps_mod = target.modifiers.new(name="Scatter", type="PARTICLE_SYSTEM")
+        target.modifiers.new(name="Scatter", type="PARTICLE_SYSTEM")
         ps = target.particle_systems[-1]
         settings = ps.settings
 
@@ -4577,7 +4574,7 @@ class CommandHandlers:
     def _handle_mesh_proportional_transform(self, params: dict) -> dict:
         """Move, rotate, or scale vertices with proportional falloff."""
         import bmesh
-        from mathutils import Vector, Matrix
+        from mathutils import Matrix, Vector
 
         object_name = require_param(params, "object_name", str)
         vertex_indices = require_param(params, "vertex_indices", list)
@@ -4845,9 +4842,9 @@ class CommandHandlers:
             cx = sum((c.x - center.x) ** 2 for c in coords)
             cy = sum((c.y - center.y) ** 2 for c in coords)
             cz = sum((c.z - center.z) ** 2 for c in coords)
-            cxy = sum((c.x - center.x) * (c.y - center.y) for c in coords)
-            cxz = sum((c.x - center.x) * (c.z - center.z) for c in coords)
-            cyz = sum((c.y - center.y) * (c.z - center.z) for c in coords)
+            sum((c.x - center.x) * (c.y - center.y) for c in coords)
+            sum((c.x - center.x) * (c.z - center.z) for c in coords)
+            sum((c.y - center.y) * (c.z - center.z) for c in coords)
 
             # Find axis with least variance (normal to best-fit plane)
             variances = [cx, cy, cz]
@@ -5509,7 +5506,6 @@ class CommandHandlers:
             bpy.ops.sculpt.dirty_mask(dirty_only=False)
         elif mask_type == "RANDOM":
             # Create a random mask using bmesh vertex paint_mask
-            import bmesh
             import random
 
             # Exit sculpt mode temporarily to edit mask data
@@ -5733,7 +5729,7 @@ class CommandHandlers:
                     use_preserve_boundary=True,
                     use_mesh_symmetry=False,
                 )
-            except RuntimeError as e:
+            except RuntimeError:
                 # Quadriflow can fail on complex meshes, fall back to voxel
                 retopo_obj.data.remesh_voxel_size = 0.05
                 bpy.ops.object.voxel_remesh()
@@ -6125,7 +6121,6 @@ class CommandHandlers:
 
         # Get object dimensions for scaling the rig
         dims = obj.dimensions
-        loc = obj.location
         sx, sy, sz = dims.x, dims.y, dims.z
 
         # Prefix for MSFS naming
@@ -6498,7 +6493,7 @@ class CommandHandlers:
                 if hasattr(constraint, key):
                     try:
                         setattr(constraint, key, value)
-                    except (TypeError, AttributeError) as e:
+                    except (TypeError, AttributeError):
                         pass  # Skip incompatible settings
 
         # Return to object mode if we were working with bones
@@ -6558,7 +6553,7 @@ class CommandHandlers:
             c.chain_count = chain_count
 
             if pole_target_name:
-                pole_bone = get_pose_bone(pole_target_name)
+                get_pose_bone(pole_target_name)
                 c.pole_target = arm_obj
                 c.pole_subtarget = pole_target_name
                 c.pole_angle = math.radians(90)
@@ -6984,7 +6979,7 @@ class CommandHandlers:
 
     def _handle_pose_library_apply(self, params: dict) -> dict:
         """Apply a previously saved pose to an armature."""
-        from mathutils import Quaternion, Euler, Vector
+        from mathutils import Euler, Quaternion, Vector
 
         armature_name = require_param(params, "armature_name", str)
         pose_name = require_param(params, "pose_name", str)
@@ -7113,7 +7108,7 @@ class CommandHandlers:
         rot = arm_obj.rotation_euler
         if abs(rot.x) > 0.01 or abs(rot.y) > 0.01 or abs(rot.z) > 0.01:
             warnings.append(
-                f"Armature has non-zero rotation. Apply rotation before export."
+                "Armature has non-zero rotation. Apply rotation before export."
             )
 
         # Check for bones without deform flag
@@ -7407,8 +7402,8 @@ class CommandHandlers:
         if rb_group:
             for obj in rb_group.objects:
                 final_positions[obj.name] = {
-                    "location": serialize_vector(obj.location),
-                    "rotation_euler": serialize_vector(obj.rotation_euler),
+                    "location": [round(v, 6) for v in obj.location],
+                    "rotation_euler": [round(v, 6) for v in obj.rotation_euler],
                 }
 
         # Apply results if requested
@@ -7424,7 +7419,7 @@ class CommandHandlers:
                         # Remove rigid body
                         bpy.ops.rigidbody.object_remove()
                         applied_objects.append(obj.name)
-                    except Exception as e:
+                    except Exception:
                         # Skip objects that fail
                         pass
 
@@ -8014,7 +8009,7 @@ class CommandHandlers:
             # Remove a specific layer
             gpl = gpd.layers.get(layer_name)
             if gpl is None:
-                available = [l.info for l in gpd.layers]
+                available = [layer.info for layer in gpd.layers]
                 return {
                     "error": f"Annotation layer '{layer_name}' not found. "
                     f"Available layers: {available}"
@@ -8311,7 +8306,7 @@ class CommandHandlers:
             available = [i.name for i in to_node.inputs]
             return {"error": f"Input '{to_input_name}' not found on '{to_node_name}'. Available: {available}"}
 
-        link = tree.links.new(from_socket, to_socket)
+        tree.links.new(from_socket, to_socket)
 
         return {
             "material": mat.name,
@@ -8606,7 +8601,6 @@ class CommandHandlers:
             # Point at origin
             direction = cam_obj.location.copy()
             direction.negate()
-            from mathutils import Vector
             rot_quat = direction.to_track_quat('-Z', 'Y')
             cam_obj.rotation_euler = rot_quat.to_euler()
 
@@ -8672,9 +8666,7 @@ class CommandHandlers:
 
     def _handle_measure_surface_area(self, params: dict) -> dict:
         """Calculate total surface area with optional per-material breakdown."""
-        import bpy
         import bmesh
-        from mathutils import Matrix
 
         from .utils import get_object_or_error
         from .validation import ValidationError, require_param
@@ -8732,9 +8724,7 @@ class CommandHandlers:
 
     def _handle_measure_volume(self, params: dict) -> dict:
         """Calculate mesh volume using the signed-tetrahedron method."""
-        import bpy
         import bmesh
-        from mathutils import Vector
 
         from .utils import get_object_or_error
         from .validation import ValidationError, require_param
@@ -8798,9 +8788,7 @@ class CommandHandlers:
 
     def _handle_measure_clearance(self, params: dict) -> dict:
         """Min/avg/max distance between two mesh objects via BVHTree."""
-        import bpy
         import bmesh
-        from mathutils import Vector
         from mathutils.bvhtree import BVHTree
 
         from .utils import get_object_or_error
@@ -8923,7 +8911,6 @@ class CommandHandlers:
 
     def _handle_validate_dimensions(self, params: dict) -> dict:
         """Check object bbox dimensions against expected with tolerance."""
-        import bpy
         from mathutils import Vector
 
         from .utils import get_object_or_error
@@ -9002,7 +8989,7 @@ class CommandHandlers:
         import bpy
         from mathutils import Vector
 
-        from .utils import get_object_or_error, ensure_object_selected
+        from .utils import ensure_object_selected, get_object_or_error
         from .validation import ValidationError, require_param, validate_enum
 
         object_name = require_param(params, "object_name", str)
@@ -9095,7 +9082,6 @@ class CommandHandlers:
 
     def _handle_measure_edge_angle(self, params: dict) -> dict:
         """Measure dihedral angles at mesh edges."""
-        import bpy
         import bmesh
 
         from .utils import get_object_or_error
@@ -9181,7 +9167,6 @@ class CommandHandlers:
 
     def _handle_validate_mesh_quality(self, params: dict) -> dict:
         """Comprehensive mesh quality audit."""
-        import bpy
         import bmesh
         from mathutils import Vector
 
@@ -9416,7 +9401,6 @@ class CommandHandlers:
                 uv_layers = obj.data.uv_layers
                 has_uv = len(uv_layers) > 0
 
-                uv_island_count = 0
                 uv_coverage_ratio = 0.0
 
                 if has_uv:
@@ -9982,6 +9966,7 @@ class CommandHandlers:
     def _handle_bake_pbr_batch(self, params: dict) -> dict:
         """Bake all requested PBR channels in one call."""
         import bpy
+
         from .validation import require_param
 
         object_name = require_param(params, "object_name", str)
@@ -10101,6 +10086,7 @@ class CommandHandlers:
     def _handle_bake_highpoly_to_lowpoly(self, params: dict) -> dict:
         """Bake detail from high-poly onto low-poly using selected_to_active."""
         import bpy
+
         from .validation import require_param
 
         lowpoly_name = require_param(params, "lowpoly_name", str)
@@ -10227,6 +10213,7 @@ class CommandHandlers:
     def _handle_bake_from_multires(self, params: dict) -> dict:
         """Bake normals or displacement from a Multiresolution modifier."""
         import bpy
+
         from .validation import require_param
 
         object_name = require_param(params, "object_name", str)
@@ -10319,8 +10306,8 @@ class CommandHandlers:
     def _handle_bake_to_vertex_colors(self, params: dict) -> dict:
         """Bake to a temporary image then transfer pixel data to vertex colors."""
         import bpy
-        import bmesh
         import numpy as np
+
         from .validation import require_param
 
         object_name = require_param(params, "object_name", str)
@@ -10432,10 +10419,11 @@ class CommandHandlers:
 
     def _handle_bake_curvature(self, params: dict) -> dict:
         """Calculate per-vertex curvature via bmesh and bake to an image."""
-        import bpy
         import bmesh
+        import bpy
         import numpy as np
         from mathutils import Vector
+
         from .validation import require_param
 
         object_name = require_param(params, "object_name", str)
@@ -10635,8 +10623,10 @@ class CommandHandlers:
 
     def _handle_bake_id_map(self, params: dict) -> dict:
         """Bake a color ID map with distinct colors per material/object/face set."""
-        import bpy
         import random
+
+        import bpy
+
         from .validation import require_param
 
         object_name = require_param(params, "object_name", str)
@@ -11642,7 +11632,6 @@ class CommandHandlers:
 
     def _handle_geonode_inspect(self, params: dict) -> dict:
         """Read the GN setup on an object: group name, inputs, outputs, values."""
-        import bpy
 
         from .utils import get_object_or_error
         from .validation import require_param
