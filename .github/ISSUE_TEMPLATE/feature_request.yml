@@ -1,0 +1,54 @@
+name: Feature Request
+description: Suggest a new tool or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe what you'd like.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Tool Category
+      description: Which area does this feature relate to?
+      options:
+        - Scene / Object Management
+        - Modeling / Mesh Editing
+        - Materials / Shaders
+        - Sculpting
+        - Rigging / Armature
+        - Animation
+        - Rendering
+        - Baking
+        - Geometry Nodes
+        - Physics Simulation
+        - Export / Import
+        - AI Generation Pipeline
+        - MSFS Content Creation
+        - Livery System
+        - Measurement / Validation
+        - Collections / System
+        - Annotations
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the feature or tool you'd like to see
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: How would you use this? What workflow does it enable?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any workarounds you've tried (e.g., using execute_script)
