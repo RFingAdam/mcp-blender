@@ -11695,6 +11695,105 @@ class CommandHandlers:
 
 
 
+# ---------------------------------------------------------------------------
+# Geometry Nodes helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_socket_info(group):
+    """Return (inputs, outputs) socket descriptions from a node group interface."""
+    inputs = []
+    outputs = []
+    for item in group.interface.items_tree:
+        if item.item_type != 'SOCKET':
+            continue
+        info = {
+            "name": item.name,
+            "type": _socket_type_label(item),
+            "bl_socket_idname": item.bl_socket_idname,
+            "identifier": item.identifier,
+        }
+        if item.in_out == 'INPUT':
+            inputs.append(info)
+        else:
+            outputs.append(info)
+    return inputs, outputs
+
+def _link(tree, from_socket, to_socket):
+    """Shortcut: create a node link."""
+    tree.links.new(from_socket, to_socket)
+
+
+def _new_node(tree, bl_idname, label=None, location=(0, 0)):
+    """Create a node, optionally set its label and position."""
+    node = tree.nodes.new(type=bl_idname)
+    if label:
+        node.label = label
+    node.location = location
+    return node
+
+
+def _get_gn_modifier(obj, modifier_name=None):
+    """Return the first (or named) Geometry Nodes modifier, or None."""
+    if modifier_name:
+        mod = obj.modifiers.get(modifier_name)
+        if mod and mod.type == 'NODES':
+            return mod
+        return None
+    for mod in obj.modifiers:
+        if mod.type == 'NODES':
+            return mod
+    return None
+
+
+def _socket_type_label(socket):
+    """Return a human-friendly type label for a node-group interface socket."""
+    bl_type = socket.bl_socket_idname
+    mapping = {
+        "FLOAT": "NodeSocketFloat", "INT": "NodeSocketInt",
+        "VECTOR": "NodeSocketVector", "BOOLEAN": "NodeSocketBool",
+        "OBJECT": "NodeSocketObject", "COLLECTION": "NodeSocketCollection",
+        "MATERIAL": "NodeSocketMaterial", "IMAGE": "NodeSocketImage",
+        "STRING": "NodeSocketString", "GEOMETRY": "NodeSocketGeometry",
+    }
+    for label, bl_name in mapping.items():
+        if bl_name == bl_type:
+            return label
+    return bl_type
+
+
+def _read_modifier_input(modifier, identifier):
+    """Read a modifier input value, converting Blender types to plain Python."""
+    try:
+        val = modifier[identifier]
+    except KeyError:
+        return None
+    if hasattr(val, "__iter__") and not isinstance(val, (str, bytes)):
+        return [float(v) for v in val]
+    if isinstance(val, (float, int, bool)):
+        return val
+    if val is not None and hasattr(val, "name"):
+        return val.name
+    return str(val) if val is not None else None
+
+
+def _set_modifier_input(modifier, identifier, value, socket_type):
+    """Set a modifier input value, coercing types as needed."""
+    import bpy
+    if socket_type in ("NodeSocketObject", "NodeSocketCollection", "NodeSocketMaterial", "NodeSocketImage"):
+        coll_map = {
+            "NodeSocketObject": bpy.data.objects,
+            "NodeSocketCollection": bpy.data.collections,
+            "NodeSocketMaterial": bpy.data.materials,
+            "NodeSocketImage": bpy.data.images,
+        }
+        data_coll = coll_map.get(socket_type)
+        if data_coll and isinstance(value, str):
+            modifier[identifier] = data_coll.get(value)
+            return
+    modifier[identifier] = value
+
+
 _CLOTH_PRESETS = {
     "SILK": {
         "quality": 8,
