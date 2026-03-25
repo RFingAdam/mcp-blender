@@ -1540,7 +1540,7 @@ class CommandHandlers:
 
         object_name = require_param(params, "object_name", str)
         control_type = params.get("control_type", "depth")
-        validate_enum(control_type, ["depth", "normal"], "control_type")
+        validate_enum(control_type, "control_type", ["depth", "normal"])
 
         # Render the object to get control image
         render_path = self._render_control_image(object_name, control_type)
@@ -2311,13 +2311,13 @@ class CommandHandlers:
         tool_name = require_param(params, "tool", str)
         operation = validate_enum(
             require_param(params, "operation", str),
-            ["UNION", "DIFFERENCE", "INTERSECT"],
             "operation",
+            ["UNION", "DIFFERENCE", "INTERSECT"],
         )
         solver = validate_enum(
             params.get("solver", "EXACT"),
-            ["FAST", "EXACT"],
             "solver",
+            ["FAST", "EXACT"],
         )
         apply_mod = params.get("apply", True)
         hide_tool = params.get("hide_tool", True)
@@ -3054,7 +3054,7 @@ class CommandHandlers:
 
         object_name = require_param(params, "object_name", str)
         trait = require_param(params, "trait", str)
-        validate_enum(trait, ["NON_MANIFOLD", "BOUNDARY", "LOOSE", "INTERIOR_FACES", "FACE_SIDES", "UNGROUPED", "NON_PLANAR"], "trait")
+        validate_enum(trait, "trait", ["NON_MANIFOLD", "BOUNDARY", "LOOSE", "INTERIOR_FACES", "FACE_SIDES", "UNGROUPED", "NON_PLANAR"])
         extend = params.get("extend", False)
 
         obj = get_object_or_error(object_name)
@@ -3348,7 +3348,7 @@ class CommandHandlers:
     def _handle_shade_smooth(self, params: dict) -> dict:
         """Set smooth, flat, or auto-smooth shading."""
         object_name = require_param(params, "object_name", str)
-        shade_type = validate_enum(params.get("shade_type", "AUTO"), ["SMOOTH", "FLAT", "AUTO"], "shade_type")
+        shade_type = validate_enum(params.get("shade_type", "AUTO"), "shade_type", ["SMOOTH", "FLAT", "AUTO"])
         auto_smooth_angle = math.radians(params.get("auto_smooth_angle", 30.0))
 
         obj = get_object_or_error(object_name)
@@ -3778,8 +3778,8 @@ class CommandHandlers:
         smoothness = params.get("smoothness", 0.0)
         quad_corner_type = validate_enum(
             params.get("quad_corner_type", "STRAIGHT_CUT"),
-            ["STRAIGHT_CUT", "INNERVERT", "PATH", "FAN"],
             "quad_corner_type",
+            ["STRAIGHT_CUT", "INNERVERT", "PATH", "FAN"],
         )
 
         obj = get_object_or_error(object_name)
@@ -5453,12 +5453,12 @@ class CommandHandlers:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
-        # Ensure object is selected, active, and in sculpt mode
+        # Ensure correct mode: need sculpt mode on the target object
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
         ensure_object_selected(obj)
-        if bpy.context.mode != "SCULPT":
-            if bpy.context.mode != "OBJECT":
-                bpy.ops.object.mode_set(mode="OBJECT")
-            bpy.ops.object.mode_set(mode="SCULPT")
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="SCULPT")
 
         # Apply the mesh filter the requested number of iterations
         for i in range(iterations):
@@ -5717,7 +5717,8 @@ class CommandHandlers:
 
             retopo_obj.data.remesh_voxel_size = voxel_size
             retopo_obj.data.use_remesh_fix_poles = True
-            retopo_obj.data.use_remesh_smooth_normals = True
+            if hasattr(retopo_obj.data, "use_remesh_smooth_normals"):
+                retopo_obj.data.use_remesh_smooth_normals = True
             retopo_obj.data.use_remesh_preserve_volume = True
 
             ensure_object_selected(retopo_obj)
@@ -5982,7 +5983,8 @@ class CommandHandlers:
         # Configure remesh settings
         obj.data.remesh_voxel_size = voxel_size
         obj.data.use_remesh_fix_poles = fix_poles
-        obj.data.use_remesh_smooth_normals = smooth
+        if hasattr(obj.data, "use_remesh_smooth_normals"):
+            obj.data.use_remesh_smooth_normals = smooth
         obj.data.use_remesh_preserve_volume = True
 
         # Apply voxel remesh
