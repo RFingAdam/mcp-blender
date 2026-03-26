@@ -1,74 +1,137 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" width="900" height="250">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="100%" style="stop-color:#16213e"/>
+      <stop offset="0%" style="stop-color:#0f0f1a"/>
+      <stop offset="50%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0d1b2a"/>
     </linearGradient>
     <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF7043"/>
+      <stop offset="0%" style="stop-color:#FF8A65"/>
       <stop offset="100%" style="stop-color:#E64A19"/>
     </linearGradient>
     <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#42A5F5"/>
-      <stop offset="100%" style="stop-color:#1976D2"/>
+      <stop offset="0%" style="stop-color:#64B5F6"/>
+      <stop offset="100%" style="stop-color:#1565C0"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFB74D"/>
+      <stop offset="100%" style="stop-color:#FF7043"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#66BB6A"/>
+      <stop offset="100%" style="stop-color:#388E3C"/>
     </linearGradient>
     <filter id="glow">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
       <feMerge>
         <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="800" height="200" rx="10" fill="url(#bgGrad)"/>
+  <rect width="900" height="250" rx="12" fill="url(#bgGrad)"/>
 
-  <!-- Connection lines -->
-  <g stroke="url(#blueGrad)" stroke-width="2" stroke-dasharray="8,4" opacity="0.5">
-    <path d="M 120 100 Q 250 50 400 100 Q 550 150 680 100" fill="none"/>
-    <path d="M 120 100 Q 250 150 400 100 Q 550 50 680 100" fill="none"/>
+  <!-- Subtle grid pattern -->
+  <g opacity="0.04" stroke="#64B5F6" stroke-width="0.5">
+    <line x1="0" y1="50" x2="900" y2="50"/>
+    <line x1="0" y1="100" x2="900" y2="100"/>
+    <line x1="0" y1="150" x2="900" y2="150"/>
+    <line x1="0" y1="200" x2="900" y2="200"/>
+    <line x1="100" y1="0" x2="100" y2="250"/>
+    <line x1="200" y1="0" x2="200" y2="250"/>
+    <line x1="300" y1="0" x2="300" y2="250"/>
+    <line x1="400" y1="0" x2="400" y2="250"/>
+    <line x1="500" y1="0" x2="500" y2="250"/>
+    <line x1="600" y1="0" x2="600" y2="250"/>
+    <line x1="700" y1="0" x2="700" y2="250"/>
+    <line x1="800" y1="0" x2="800" y2="250"/>
   </g>
 
-  <!-- Connection nodes -->
+  <!-- MCP connection arcs -->
+  <g stroke="url(#blueGrad)" stroke-width="1.5" fill="none" opacity="0.25">
+    <path d="M 60 125 Q 200 30 350 125 Q 500 220 650 125 Q 760 60 850 125"/>
+    <path d="M 60 125 Q 200 220 350 125 Q 500 30 650 125 Q 760 190 850 125"/>
+  </g>
+
+  <!-- Glowing connection nodes -->
   <g filter="url(#glow)">
-    <circle cx="120" cy="100" r="8" fill="#42A5F5"/>
-    <circle cx="680" cy="100" r="8" fill="#42A5F5"/>
+    <circle cx="60" cy="125" r="5" fill="#42A5F5" opacity="0.8"/>
+    <circle cx="350" cy="125" r="4" fill="#42A5F5" opacity="0.5"/>
+    <circle cx="650" cy="125" r="4" fill="#42A5F5" opacity="0.5"/>
+    <circle cx="850" cy="125" r="5" fill="#42A5F5" opacity="0.8"/>
   </g>
 
-  <!-- Stylized cube logo -->
-  <g transform="translate(100, 100)">
-    <polygon points="-30,-40 30,-40 40,-20 -20,-20" fill="#BF360C" opacity="0.8"/>
-    <polygon points="-30,-40 -20,-20 -20,30 -30,10" fill="#D84315"/>
-    <polygon points="30,-40 40,-20 40,30 30,10" fill="#E64A19"/>
-    <polygon points="-20,-20 40,-20 40,30 -20,30" fill="url(#orangeGrad)"/>
+  <!-- 3D Cube Logo -->
+  <g transform="translate(110, 115)">
+    <!-- Shadow -->
+    <ellipse cx="5" cy="55" rx="35" ry="8" fill="#000" opacity="0.3"/>
+    <!-- Back face -->
+    <polygon points="-35,-45 35,-45 45,-15 -25,-15" fill="#BF360C" opacity="0.85"/>
+    <!-- Left face -->
+    <polygon points="-35,-45 -25,-15 -25,35 -35,5" fill="#D84315"/>
+    <!-- Right face -->
+    <polygon points="35,-45 45,-15 45,35 35,5" fill="#E64A19"/>
+    <!-- Front face -->
+    <polygon points="-25,-15 45,-15 45,35 -25,35" fill="url(#orangeGrad)"/>
+    <!-- Top highlight line -->
+    <line x1="-25" y1="-15" x2="45" y2="-15" stroke="#FFB74D" stroke-width="1" opacity="0.6"/>
   </g>
 
   <!-- Title -->
-  <text x="200" y="90" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="url(#orangeGrad)">MCP</text>
-  <text x="310" y="90" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#E0E0E0">Blender</text>
+  <text x="210" y="100" font-family="'Segoe UI', Arial, sans-serif" font-size="56" font-weight="bold" fill="url(#accentGrad)" letter-spacing="-1">MCP</text>
+  <text x="338" y="100" font-family="'Segoe UI', Arial, sans-serif" font-size="56" font-weight="300" fill="#E8EAF6" letter-spacing="-1">Blender</text>
 
-  <!-- Subtitle -->
-  <text x="200" y="130" font-family="Arial, sans-serif" font-size="18" fill="#90A4AE">Control Blender via Model Context Protocol</text>
+  <!-- Tagline -->
+  <text x="212" y="132" font-family="'Segoe UI', Arial, sans-serif" font-size="16" fill="#78909C" letter-spacing="0.5">The most comprehensive MCP server for Blender</text>
 
-  <!-- Feature badges -->
-  <g transform="translate(200, 160)">
-    <rect x="0" y="0" width="80" height="24" rx="12" fill="url(#orangeGrad)" opacity="0.9"/>
-    <text x="40" y="16" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">86 Tools</text>
+  <!-- Feature badges row -->
+  <g transform="translate(212, 158)">
+    <!-- 218 Tools -->
+    <rect x="0" y="0" width="90" height="28" rx="14" fill="url(#orangeGrad)" opacity="0.95"/>
+    <text x="45" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">218 Tools</text>
 
-    <rect x="90" y="0" width="60" height="24" rx="12" fill="url(#blueGrad)" opacity="0.9"/>
-    <text x="120" y="16" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">MSFS</text>
+    <!-- 23 Categories -->
+    <rect x="100" y="0" width="110" height="28" rx="14" fill="url(#blueGrad)" opacity="0.9"/>
+    <text x="155" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">23 Categories</text>
 
-    <rect x="160" y="0" width="70" height="24" rx="12" fill="#4CAF50" opacity="0.9"/>
-    <text x="195" y="16" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">Liveries</text>
+    <!-- MSFS -->
+    <rect x="220" y="0" width="60" height="28" rx="14" fill="url(#greenGrad)" opacity="0.9"/>
+    <text x="250" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">MSFS</text>
 
-    <rect x="240" y="0" width="90" height="24" rx="12" fill="#9C27B0" opacity="0.9"/>
-    <text x="285" y="16" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">AI Generation</text>
+    <!-- AI Gen -->
+    <rect x="290" y="0" width="100" height="28" rx="14" fill="#7E57C2" opacity="0.9"/>
+    <text x="340" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">AI Generation</text>
+
+    <!-- Geo Nodes -->
+    <rect x="400" y="0" width="95" height="28" rx="14" fill="#00897B" opacity="0.9"/>
+    <text x="447" y="18" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">Geo Nodes</text>
   </g>
 
-  <!-- Blender version badge -->
-  <g transform="translate(650, 160)">
-    <rect x="0" y="0" width="100" height="24" rx="12" fill="#37474F"/>
-    <text x="50" y="16" font-family="Arial, sans-serif" font-size="11" fill="#B0BEC5" text-anchor="middle">Blender 4.2+</text>
+  <!-- Version + Blender badge -->
+  <g transform="translate(212, 198)">
+    <rect x="0" y="0" width="70" height="24" rx="12" fill="#263238"/>
+    <text x="35" y="16" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#90A4AE" text-anchor="middle">v0.3.0</text>
+
+    <rect x="80" y="0" width="100" height="24" rx="12" fill="#263238"/>
+    <text x="130" y="16" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#90A4AE" text-anchor="middle">Blender 4.2+</text>
+
+    <rect x="190" y="0" width="55" height="24" rx="12" fill="#263238"/>
+    <text x="217" y="16" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#90A4AE" text-anchor="middle">MIT</text>
+  </g>
+
+  <!-- AI sparkle accents -->
+  <g fill="#FFD54F" filter="url(#glow)" opacity="0.7">
+    <polygon points="780,45 783,55 793,58 783,61 780,71 777,61 767,58 777,55"/>
+    <polygon points="820,160 822,167 829,169 822,171 820,178 818,171 811,169 818,167" opacity="0.5"/>
+    <polygon points="750,185 752,190 757,192 752,194 750,199 748,194 743,192 748,190" opacity="0.4"/>
   </g>
 </svg>
