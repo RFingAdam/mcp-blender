@@ -1,18 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Gradient for the main shape -->
     <linearGradient id="blenderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#FF7043;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#E64A19;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#FF8A65"/>
+      <stop offset="100%" style="stop-color:#E64A19"/>
     </linearGradient>
-
-    <!-- Gradient for MCP connection lines -->
     <linearGradient id="mcpGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#42A5F5;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1976D2;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#64B5F6"/>
+      <stop offset="100%" style="stop-color:#1565C0"/>
     </linearGradient>
-
-    <!-- Glow effect -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0f1a"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
       <feMerge>
@@ -20,66 +19,67 @@
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-
-    <!-- Shadow -->
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.4"/>
     </filter>
   </defs>
 
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="240" fill="#1a1a2e" filter="url(#shadow)"/>
-  <circle cx="256" cy="256" r="230" fill="#16213e"/>
+  <!-- Background -->
+  <circle cx="256" cy="256" r="250" fill="url(#bgGrad)"/>
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#1e3a5f" stroke-width="1" opacity="0.3"/>
 
-  <!-- MCP Connection lines (orbiting) -->
-  <g filter="url(#glow)" opacity="0.8">
-    <!-- Outer orbit -->
-    <ellipse cx="256" cy="256" rx="200" ry="60" fill="none" stroke="url(#mcpGrad)" stroke-width="2" stroke-dasharray="10,5" transform="rotate(-20 256 256)"/>
-    <ellipse cx="256" cy="256" rx="200" ry="60" fill="none" stroke="url(#mcpGrad)" stroke-width="2" stroke-dasharray="10,5" transform="rotate(40 256 256)"/>
-    <ellipse cx="256" cy="256" rx="200" ry="60" fill="none" stroke="url(#mcpGrad)" stroke-width="2" stroke-dasharray="10,5" transform="rotate(100 256 256)"/>
+  <!-- Orbital rings -->
+  <g opacity="0.2" stroke="url(#mcpGrad)" stroke-width="1.5" fill="none">
+    <ellipse cx="256" cy="256" rx="210" ry="70" transform="rotate(-25 256 256)" stroke-dasharray="8,6"/>
+    <ellipse cx="256" cy="256" rx="210" ry="70" transform="rotate(35 256 256)" stroke-dasharray="8,6"/>
+    <ellipse cx="256" cy="256" rx="210" ry="70" transform="rotate(95 256 256)" stroke-dasharray="8,6"/>
   </g>
 
-  <!-- Connection nodes -->
+  <!-- Connection nodes on orbits -->
   <g filter="url(#glow)">
-    <circle cx="100" cy="180" r="12" fill="#42A5F5"/>
-    <circle cx="412" cy="200" r="12" fill="#42A5F5"/>
-    <circle cx="150" cy="380" r="12" fill="#42A5F5"/>
-    <circle cx="380" cy="350" r="12" fill="#42A5F5"/>
+    <circle cx="85" cy="195" r="10" fill="#42A5F5" opacity="0.8"/>
+    <circle cx="427" cy="195" r="10" fill="#42A5F5" opacity="0.8"/>
+    <circle cx="140" cy="390" r="10" fill="#42A5F5" opacity="0.7"/>
+    <circle cx="372" cy="370" r="10" fill="#42A5F5" opacity="0.7"/>
+    <circle cx="256" cy="72" r="8" fill="#42A5F5" opacity="0.6"/>
+    <circle cx="440" cy="310" r="8" fill="#42A5F5" opacity="0.6"/>
   </g>
 
-  <!-- Stylized Blender logo (simplified 3D cube) -->
-  <g transform="translate(256, 256)" filter="url(#shadow)">
-    <!-- Back face -->
-    <polygon points="-60,-80 60,-80 80,-40 -40,-40" fill="#BF360C" opacity="0.8"/>
-
+  <!-- 3D Cube - center piece -->
+  <g transform="translate(256, 240)" filter="url(#shadow)">
+    <!-- Back top edge -->
+    <polygon points="-70,-95 70,-95 90,-50 -50,-50" fill="#BF360C" opacity="0.8"/>
     <!-- Left face -->
-    <polygon points="-60,-80 -40,-40 -40,60 -60,20" fill="#D84315"/>
-
-    <!-- Top face -->
-    <polygon points="-60,-80 60,-80 40,-120 -80,-120" fill="url(#blenderGrad)"/>
-
+    <polygon points="-70,-95 -50,-50 -50,65 -70,20" fill="#D84315"/>
     <!-- Right face -->
-    <polygon points="60,-80 80,-40 80,60 60,20" fill="#E64A19"/>
-
-    <!-- Front face -->
-    <polygon points="-40,-40 80,-40 80,60 -40,60" fill="url(#blenderGrad)"/>
-
-    <!-- Bottom face hint -->
-    <polygon points="-40,60 80,60 60,100 -60,100" fill="#BF360C"/>
+    <polygon points="70,-95 90,-50 90,65 70,20" fill="#E64A19"/>
+    <!-- Front face (main) -->
+    <polygon points="-50,-50 90,-50 90,65 -50,65" fill="url(#blenderGrad)"/>
+    <!-- Top highlight -->
+    <line x1="-50" y1="-50" x2="90" y2="-50" stroke="#FFB74D" stroke-width="2" opacity="0.5"/>
+    <line x1="-50" y1="-50" x2="-70" y2="-95" stroke="#FFB74D" stroke-width="1" opacity="0.3"/>
+    <!-- Inner detail lines -->
+    <line x1="20" y1="-50" x2="20" y2="65" stroke="#FFAB91" stroke-width="0.5" opacity="0.2"/>
+    <line x1="-50" y1="10" x2="90" y2="10" stroke="#FFAB91" stroke-width="0.5" opacity="0.2"/>
   </g>
 
-  <!-- AI sparkle effect -->
-  <g fill="#FFD54F" filter="url(#glow)">
-    <polygon points="320,120 325,135 340,140 325,145 320,160 315,145 300,140 315,135" />
-    <polygon points="180,100 183,110 193,113 183,116 180,126 177,116 167,113 177,110" transform="scale(0.7) translate(80, 50)"/>
+  <!-- AI sparkle accents -->
+  <g fill="#FFD54F" filter="url(#glow)" opacity="0.8">
+    <polygon points="350,110 354,125 369,129 354,133 350,148 346,133 331,129 346,125"/>
+    <polygon points="160,120 163,130 173,133 163,136 160,146 157,136 147,133 157,130" opacity="0.5"/>
+    <polygon points="390,220 392,227 399,229 392,231 390,238 388,231 381,229 388,227" opacity="0.4"/>
   </g>
 
-  <!-- MCP text badge -->
-  <g transform="translate(256, 420)">
-    <rect x="-50" y="-15" width="100" height="30" rx="15" fill="#42A5F5"/>
-    <text x="0" y="6" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">MCP</text>
+  <!-- MCP badge -->
+  <g transform="translate(256, 395)">
+    <rect x="-55" y="-18" width="110" height="36" rx="18" fill="#1565C0"/>
+    <rect x="-53" y="-16" width="106" height="32" rx="16" fill="none" stroke="#64B5F6" stroke-width="1" opacity="0.4"/>
+    <text x="0" y="7" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="3">MCP</text>
   </g>
 
-  <!-- Blender text -->
-  <text x="256" y="480" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#E0E0E0" text-anchor="middle">BLENDER</text>
+  <!-- BLENDER text -->
+  <text x="256" y="460" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="bold" fill="#CFD8DC" text-anchor="middle" letter-spacing="6">BLENDER</text>
+
+  <!-- Tool count ring -->
+  <text x="256" y="490" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#546E7A" text-anchor="middle">218 Tools</text>
 </svg>
