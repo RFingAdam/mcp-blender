@@ -18,21 +18,26 @@
 
 ## Features
 
-- **100 tools** for comprehensive Blender control
+- **218 tools** for comprehensive Blender control
 - **Scene management** - Create, modify, and query scenes
 - **Object manipulation** - Create primitives, transform, duplicate, join/separate
-- **Materials & textures** - Create materials, set colors, configure Principled BSDF
+- **Materials & shaders** - 23 procedural presets, node graph inspection, custom shader building
 - **Modifiers** - Add and configure 28+ modifier types
 - **Animation** - Keyframes, actions, playback control
-- **Rendering** - Render images/animations, configure engines
-- **Import/Export** - glTF, FBX, OBJ, STL support
+- **Rendering** - Render images/animations, multi-angle views, configure engines
+- **Import/Export** - glTF, FBX, OBJ, STL, USD support
+- **Measurement & validation** - Surface area, volume, clearance, dimensional validation, mesh quality audit
+- **Baking** - Batch PBR bake (all channels at once), high-to-low poly, curvature maps
+- **Geometry Nodes** - Scatter instances, parametric arrays, curve deformation, node group management
+- **Sculpting** - Pipeline-focused mesh filters, sculpt-to-retopo, mask-by-topology
+- **Rigging & armature** - Auto-rig presets (BIPED, VEHICLE, PISTON), constraints, validation
+- **Physics simulation** - Rigid body, cloth (7 presets), soft body, fluid
+- **Collections & system** - Collection management, undo/redo, save
+- **Annotations** - 3D annotations, dimension lines, grease pencil markup
 - **MSFS 2020/2024 content creation** - LOD systems, collision meshes, MSFS materials, animation events
 - **MSFS aircraft livery tools** - Paint workflows, template support, AI-assisted livery transfer
-- **Poly Haven integration** - Search and download free HDRIs, textures, and models
-- **AI model generation** - Generate 3D models from text or images via multiple backends (Rodin, Meshy, Tripo AI, TripoSR, Hunyuan3D, and more)
-- **AI self-refinement loop** - Render, analyze with vision AI, fix, re-render until converged
-- **Script execution** - Run arbitrary Python/bmesh code in Blender
-- **Mesh processing** - Cleanup, optimize, decimate, remesh, and auto-UV generated models
+- **AI 3D generation** - Local pipeline via ComfyUI (SF3D, TripoSG), cloud backends (Rodin, Meshy, Tripo)
+- **Poly Haven integration** - Free assets, textures, and HDRIs
 
 ## Architecture
 
@@ -368,6 +373,114 @@ Tools for creating and transferring aircraft liveries for virtual airlines.
 - Aerosoft CRJ
 - Just Flight BAe 146
 - Generic template for custom aircraft
+
+### Material Inspection & Manipulation Tools (7)
+
+| Tool | Description |
+|------|-------------|
+| `blender_material_inspect_graph` | Return full shader node graph as structured JSON |
+| `blender_material_node_add` | Add any shader node to a material's node tree |
+| `blender_material_node_connect` | Connect two nodes via socket names |
+| `blender_material_node_group_create` | Create reusable shader node groups |
+| `blender_material_procedural_preset` | Create procedural material from 23 presets (CHROME, RUST, VEHICLE_PAINT, CARBON_FIBER, etc.) |
+| `blender_material_convert_to_pbr` | Convert material to clean Principled BSDF for GLTF/MSFS/UE5 |
+| `blender_material_preview_render` | Render material preview on standard shape |
+
+### Measurement & Validation Tools (7)
+
+| Tool | Description |
+|------|-------------|
+| `blender_measure_surface_area` | Calculate total and per-material surface area |
+| `blender_measure_volume` | Calculate mesh volume with manifold check |
+| `blender_measure_clearance` | Measure min/max/avg distance between objects |
+| `blender_validate_dimensions` | Check dimensions against spec with tolerance |
+| `blender_calibrate_from_reference` | Scale object to match known real-world dimension |
+| `blender_measure_edge_angle` | Measure dihedral angles at edges |
+| `blender_validate_mesh_quality` | Comprehensive 11-check mesh quality audit |
+
+### Baking Tools (6)
+
+| Tool | Description |
+|------|-------------|
+| `blender_bake_pbr_batch` | Bake all PBR channels in one call (diffuse, normal, roughness, metallic, AO, emission) |
+| `blender_bake_highpoly_to_lowpoly` | Transfer detail from high-poly to low-poly via baking |
+| `blender_bake_from_multires` | Bake displacement/normals from multires sculpt data |
+| `blender_bake_to_vertex_colors` | Bake lighting/AO to vertex color layer |
+| `blender_bake_curvature` | Generate curvature map for wear/edge effects |
+| `blender_bake_id_map` | Color ID map per material/object/face set |
+
+### Geometry Nodes Tools (7)
+
+| Tool | Description |
+|------|-------------|
+| `blender_geonode_create_group` | Create geometry node group with typed inputs/outputs |
+| `blender_geonode_apply` | Apply node group as modifier and set input values |
+| `blender_geonode_scatter_instances` | One-call scatter with density, Poisson, random scale/rotation |
+| `blender_geonode_array_grid` | Parametric arrays: linear, grid, radial, hexagonal |
+| `blender_geonode_deform_curve` | Deform mesh along curve |
+| `blender_geonode_extrude_profile` | Sweep 2D profile along curve path |
+| `blender_geonode_inspect` | Read current GN setup and input values |
+
+### Sculpting Tools (8)
+
+| Tool | Description |
+|------|-------------|
+| `blender_sculpt_setup` | Enter sculpt mode with multires/dyntopo configuration |
+| `blender_sculpt_mesh_filter` | Apply global mesh filters (SMOOTH, SHARPEN, INFLATE, etc.) |
+| `blender_sculpt_mask_by_topology` | Create masks by cavity, curvature, or vertex group |
+| `blender_sculpt_face_set_create` | Create face sets by linked/material/normal/UV criteria |
+| `blender_sculpt_multires_reshape` | Manage multires subdivision levels |
+| `blender_sculpt_to_retopo` | Full sculpt-to-retopo pipeline with displacement baking |
+| `blender_sculpt_extract_mask` | Extract masked region as separate mesh |
+| `blender_sculpt_remesh_voxel` | Voxel remesh with configurable resolution |
+
+### Rigging & Armature Tools (8)
+
+| Tool | Description |
+|------|-------------|
+| `blender_armature_create` | Create armature from bone chain definitions |
+| `blender_autorig_preset` | One-call auto-rig (BIPED, VEHICLE, MECHANICAL_ARM, WHEEL_ASSEMBLY, etc.) |
+| `blender_constraint_add` | Add bone/object constraints (IK, COPY_ROT, TRACK_TO, etc.) |
+| `blender_constraint_preset` | Apply preset constraint setups (IK_ARM, PISTON_PAIR, WHEEL_SPIN) |
+| `blender_bone_shape_assign` | Assign custom control shapes to bones |
+| `blender_pose_library_save` | Save current pose to library |
+| `blender_pose_library_apply` | Apply saved pose with blend factor |
+| `blender_rig_validate` | Validate rig for MIXAMO/UE5/MSFS export compatibility |
+
+### Physics Simulation Tools (6)
+
+| Tool | Description |
+|------|-------------|
+| `blender_physics_rigid_body_add` | Add rigid body with collision shape configuration |
+| `blender_physics_rigid_body_batch` | Batch add rigid bodies to multiple objects |
+| `blender_physics_simulate` | Run simulation with optional apply-to-mesh |
+| `blender_physics_cloth_add` | Add cloth with 7 material presets and wind |
+| `blender_physics_soft_body_add` | Add soft body for deformable objects |
+| `blender_physics_fluid_quick` | Quick Mantaflow fluid setup |
+
+### Collections & System Tools (8)
+
+| Tool | Description |
+|------|-------------|
+| `blender_collection_create` | Create new collection |
+| `blender_collection_list` | List all collections with hierarchy |
+| `blender_collection_move` | Move objects between collections |
+| `blender_collection_visibility` | Toggle visibility, renderability, selectability |
+| `blender_undo` | Undo last operation |
+| `blender_redo` | Redo last undone operation |
+| `blender_save` | Save current file |
+| `blender_save_as` | Save to new path |
+
+### Annotation & Grease Pencil Tools (6)
+
+| Tool | Description |
+|------|-------------|
+| `blender_annotation_add` | Add 3D annotation strokes |
+| `blender_annotation_text` | Add text labels at 3D points |
+| `blender_annotation_dimension` | Add dimension lines with measurement display |
+| `blender_annotation_clear` | Clear annotation layers |
+| `blender_grease_pencil_create` | Create grease pencil objects with strokes |
+| `blender_grease_pencil_markup` | Overlay markup annotations on rendered images |
 
 ## Self-Refinement Loop
 
