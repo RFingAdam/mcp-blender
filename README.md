@@ -4,7 +4,7 @@
 
 <br/>
 
-[![License](https://img.shields.io/badge/License-MIT-1E40AF.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-1E40AF.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg)](https://www.python.org/downloads/)
 [![Blender 4.2+](https://img.shields.io/badge/blender-4.2%20%7C%205.0-F5792A.svg)](https://www.blender.org/)
 [![MCP](https://img.shields.io/badge/MCP-server-A78BFA.svg)](https://modelcontextprotocol.io)
@@ -437,7 +437,10 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE).
+[AGPL-3.0-or-later](LICENSE). Relicensed from MIT in v0.4.0 to align
+with the eng-mcp-suite toolkit-wide AGPL move. The underlying Blender
+application remains GPL-3.0+ and is invoked at runtime, not redistributed
+by this wrapper.
 
 ## Acknowledgments
 
