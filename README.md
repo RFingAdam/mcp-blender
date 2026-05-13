@@ -1,82 +1,77 @@
-<p align="center">
-  <img src="assets/banner.svg" alt="MCP Blender Banner" width="800">
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://badge.fury.io/py/mcp-blender"><img src="https://badge.fury.io/py/mcp-blender.svg" alt="PyPI version"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
-  <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/blender-4.2+-orange.svg" alt="Blender 4.2+"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-</p>
+<img src="assets/logo-banner.svg" alt="mcp-blender — 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline" width="100%"/>
 
-<p align="center">
-  <strong>Control Blender via the Model Context Protocol (MCP)</strong><br>
-  Enable AI assistants like Claude to directly manipulate Blender scenes, create objects, apply materials, render images, and much more.
-</p>
+<br/>
 
-**Supports Blender 4.2 LTS and Blender 5.0**
+[![License](https://img.shields.io/badge/License-MIT-1E40AF.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg)](https://www.python.org/downloads/)
+[![Blender 4.2+](https://img.shields.io/badge/blender-4.2%20%7C%205.0-F5792A.svg)](https://www.blender.org/)
+[![MCP](https://img.shields.io/badge/MCP-server-A78BFA.svg)](https://modelcontextprotocol.io)
+[![eng-mcp-suite](https://img.shields.io/badge/eng--mcp--suite-member-22D3EE.svg)](https://github.com/RFingAdam/eng-mcp-suite)
 
-## Features
+**Control Blender from any MCP client — 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
+**Drive it from your IDE, terminal, or AI agent and run an iterative render-analyze-refine loop without leaving Blender.**
 
-- **218 tools** for comprehensive Blender control
-- **Scene management** - Create, modify, and query scenes
-- **Object manipulation** - Create primitives, transform, duplicate, join/separate
-- **Materials & shaders** - 23 procedural presets, node graph inspection, custom shader building
-- **Modifiers** - Add and configure 28+ modifier types
-- **Animation** - Keyframes, actions, playback control
-- **Rendering** - Render images/animations, multi-angle views, configure engines
-- **Import/Export** - glTF, FBX, OBJ, STL, USD support
-- **Measurement & validation** - Surface area, volume, clearance, dimensional validation, mesh quality audit
-- **Baking** - Batch PBR bake (all channels at once), high-to-low poly, curvature maps
-- **Geometry Nodes** - Scatter instances, parametric arrays, curve deformation, node group management
-- **Sculpting** - Pipeline-focused mesh filters, sculpt-to-retopo, mask-by-topology
-- **Rigging & armature** - Auto-rig presets (BIPED, VEHICLE, PISTON), constraints, validation
-- **Physics simulation** - Rigid body, cloth (7 presets), soft body, fluid
-- **Collections & system** - Collection management, undo/redo, save
-- **Annotations** - 3D annotations, dimension lines, grease pencil markup
-- **MSFS 2020/2024 content creation** - LOD systems, collision meshes, MSFS materials, animation events
-- **MSFS aircraft livery tools** - Paint workflows, template support, AI-assisted livery transfer
-- **AI 3D generation** - Local pipeline via ComfyUI (SF3D, TripoSG), cloud backends (Rodin, Meshy, Tripo)
-- **Poly Haven integration** - Free assets, textures, and HDRIs
+[Quick start](#quick-start) ·
+[Tools](#tools) ·
+[Self-refinement loop](#self-refinement-loop) ·
+[Workflows](#workflows) ·
+[Documentation](#documentation)
 
-## Architecture
+</div>
+
+> Supports **Blender 4.2 LTS** and **Blender 5.0**.
+
+---
+
+## What is mcp-blender?
+
+`mcp-blender` is an MCP server that exposes 218 Blender tools to any
+MCP-compatible AI client (Claude Desktop, Claude Code, Codex CLI, …).
+The MCP server speaks the Model Context Protocol over stdio; a Blender
+addon listens on a local TCP socket and dispatches into Blender's
+`bpy` API on the main thread via `bpy.app.timers`.
 
 ```
-┌─────────────────┐     stdio      ┌─────────────────┐     TCP/JSON-RPC     ┌─────────────────┐
-│   Claude Code   │ ◄────────────► │   MCP Server    │ ◄─────────────────► │  Blender Addon  │
-│   (AI Client)   │                │  (Python proc)  │      port 9876       │ (socket server) │
-└─────────────────┘                └─────────────────┘                      └─────────────────┘
+┌─────────────────┐    stdio     ┌─────────────────┐   TCP/JSON-RPC   ┌─────────────────┐
+│  MCP client     │ ◄──────────► │   MCP Server    │ ◄──────────────► │  Blender Addon  │
+│  (Claude / …)   │              │  (Python proc)  │   port 9876      │  (bpy.app.timers)│
+└─────────────────┘              └─────────────────┘                  └─────────────────┘
 ```
 
-The MCP server communicates with Claude Code via stdio and connects to a Blender addon via TCP sockets. The addon runs a non-blocking server inside Blender using `bpy.app.timers`.
+**What it does well:**
 
-### Self-Refinement Loop
+- 🤖 **AI-native via MCP.** First-class [Model Context Protocol](https://modelcontextprotocol.io)
+  server with **218 tools** across every Blender pipeline stage.
+- 🎨 **End-to-end coverage.** Scene, object, mesh, material, modifier,
+  animation, render, export, baking, geometry nodes, sculpting, rigging,
+  physics, annotations.
+- ✈️ **MSFS-ready.** Full **Microsoft Flight Simulator 2020 / 2024**
+  content pipeline: LOD hierarchies, collision meshes, MSFS materials,
+  animation tags, livery painting + transfer for FBW / Fenix / PMDG /
+  iniBuilds / Aerosoft.
+- 🧠 **AI 3D generation.** Multi-backend (Hyper3D Rodin, Meshy, Tripo,
+  TripoSR, Stable Fast 3D, Hunyuan3D, ComfyUI) text/image-to-3D with
+  auto mesh cleanup and decimation.
+- 🔁 **Self-refinement loop.** `render_multi_angle` → `analyze_viewport`
+  → `refine_iteration` against an Ollama vision model converges geometry
+  toward a target prompt.
+- 🪨 **Poly Haven built-in.** Free HDRIs, textures, and models with no
+  API key.
+- 🔒 **MIT licensed.**
 
-```
-┌───────────┐  execute_script  ┌─────────┐  render_multi_angle  ┌──────────────┐
-│   Claude   │ ──────────────► │ Blender  │ ───────────────────► │  PNG Images  │
-│  (AI LLM)  │                 │  (bpy)   │                      └──────┬───────┘
-└─────┬──────┘                 └─────────┘                             │
-      │                                                  analyze_viewport
-      │  fix script                                                    │
-      │  (loop)                                                        ▼
-      │                                                     ┌──────────────────┐
-      └─────────────────────────────────────────────────────│  Ollama Vision   │
-                              feedback + score              │  (llama3.2-11b)  │
-                                                            └──────────────────┘
-```
+---
 
-The refinement loop lets Claude iteratively improve 3D models: generate mesh with `execute_script`, render from multiple angles, analyze with a vision model, then apply fixes — repeating until the quality score converges.
+## Quick start
 
-## Installation
-
-### 1. Install the MCP Server
+### 1. Install the MCP server
 
 ```bash
 pip install mcp-blender
 ```
 
-Or install from source:
+Or from source:
 
 ```bash
 git clone https://github.com/RFingAdam/mcp-blender
@@ -84,35 +79,33 @@ cd mcp-blender
 pip install -e .
 ```
 
-### 2. Install the Blender Addon
+### 2. Install the Blender addon
 
-**Option A: From ZIP (recommended)**
+**Option A — from ZIP (recommended):**
 
-1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/RFingAdam/mcp-blender/releases)
-2. In Blender: **Edit → Preferences → Add-ons → Install...**
-3. Select the ZIP file and click "Install Add-on"
-4. Enable "MCP Server Addon" by checking the box
+1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/RFingAdam/mcp-blender/releases).
+2. In Blender: **Edit → Preferences → Add-ons → Install…**
+3. Select the ZIP, enable "MCP Server Addon".
 
-**Option B: From source (for development)**
-
-Copy or symlink the addon folder to your Blender addons directory:
+**Option B — from source:**
 
 ```bash
 # Linux
-ln -s /path/to/mcp-blender/addon/blender_mcp_addon ~/.config/blender/4.2/scripts/addons/
+ln -s /path/to/mcp-blender/addon/blender_mcp_addon \
+      ~/.config/blender/4.2/scripts/addons/
 
 # macOS
-ln -s /path/to/mcp-blender/addon/blender_mcp_addon ~/Library/Application\ Support/Blender/4.2/scripts/addons/
+ln -s /path/to/mcp-blender/addon/blender_mcp_addon \
+      ~/Library/Application\ Support/Blender/4.2/scripts/addons/
 
-# Windows (run as administrator)
-mklink /D "%APPDATA%\Blender Foundation\Blender\4.2\scripts\addons\blender_mcp_addon" "C:\path\to\mcp-blender\addon\blender_mcp_addon"
+# Windows (admin)
+mklink /D "%APPDATA%\Blender Foundation\Blender\4.2\scripts\addons\blender_mcp_addon" ^
+       "C:\path\to\mcp-blender\addon\blender_mcp_addon"
 ```
 
 Then enable the addon in Blender preferences.
 
-### 3. Configure Claude Code
-
-Add to your Claude Code MCP settings (`~/.claude.json` or `~/.claude/settings.json`):
+### 3. Configure your MCP client
 
 ```json
 {
@@ -125,638 +118,336 @@ Add to your Claude Code MCP settings (`~/.claude.json` or `~/.claude/settings.js
 }
 ```
 
-## Quick Start
-
-1. **Start Blender** and open any project
-2. In the 3D Viewport sidebar (press `N`), find the **"MCP Server"** panel
-3. Click **"Start Server"** - you should see "Server running on port 9876"
-4. **Start Claude Code** - the Blender tools should now be available
-
-### Example Commands
-
-Ask Claude to:
-
-- *"Create a red cube at position (2, 0, 0)"*
-- *"Add a subdivision surface modifier to the cube with 2 levels"*
-- *"Set up a three-point lighting setup"*
-- *"Render the scene to /tmp/render.png"*
-- *"Search Poly Haven for brick textures and apply one to the cube"*
-- *"Create a low-poly tree with bmesh, then refine it until it looks good"*
-
-## Tools Reference
-
-### Scene Tools (5)
-
-| Tool | Description |
-|------|-------------|
-| `blender_scene_info` | Get scene name, frame range, object count, render settings |
-| `blender_scene_new` | Create a new scene |
-| `blender_scene_clear` | Remove all objects from the scene |
-| `blender_scene_set_frame_range` | Set animation start/end frames |
-| `blender_get_version` | Get Blender version and API info |
-
-### Object Tools (10)
-
-| Tool | Description |
-|------|-------------|
-| `blender_object_create` | Create primitives: cube, sphere, cylinder, plane, cone, torus, monkey, empty, camera, light |
-| `blender_object_delete` | Delete object by name |
-| `blender_object_list` | List all objects with types and visibility |
-| `blender_object_get` | Get detailed object properties |
-| `blender_object_transform` | Set location, rotation, and scale |
-| `blender_object_duplicate` | Duplicate an object |
-| `blender_object_join` | Join multiple objects into one |
-| `blender_object_separate` | Separate object by loose parts, materials, or selection |
-| `blender_object_parent` | Set parent-child relationships |
-| `blender_object_select` | Select objects by name or pattern |
-
-### Material Tools (6)
-
-| Tool | Description |
-|------|-------------|
-| `blender_material_create` | Create a new material |
-| `blender_material_assign` | Assign material to object |
-| `blender_material_set_color` | Set base color (RGBA) |
-| `blender_material_set_principled` | Configure Principled BSDF (metallic, roughness, etc.) |
-| `blender_material_add_texture` | Add image texture to material |
-| `blender_material_list` | List all materials |
-
-### Modifier Tools (5)
-
-| Tool | Description |
-|------|-------------|
-| `blender_modifier_add` | Add modifier (28+ types supported) |
-| `blender_modifier_remove` | Remove modifier by name |
-| `blender_modifier_apply` | Apply modifier to mesh |
-| `blender_modifier_configure` | Set modifier parameters |
-| `blender_modifier_list` | List modifiers on an object |
-
-**Supported modifiers:** SUBSURF, BEVEL, SOLIDIFY, ARRAY, MIRROR, BOOLEAN, DECIMATE, REMESH, SMOOTH, LAPLACIANSMOOTH, TRIANGULATE, WIREFRAME, SKIN, ARMATURE, LATTICE, CURVE, SHRINKWRAP, SIMPLE_DEFORM, WAVE, DISPLACE, CAST, HOOK, MESH_DEFORM, SURFACE_DEFORM, WARP, LAPLACIANDEFORM, CORRECTIVE_SMOOTH, DATA_TRANSFER
-
-### Animation Tools (7)
-
-| Tool | Description |
-|------|-------------|
-| `blender_keyframe_insert` | Insert keyframe for property |
-| `blender_keyframe_delete` | Delete keyframe |
-| `blender_keyframe_list` | List keyframes on an object |
-| `blender_action_create` | Create a new action |
-| `blender_action_list` | List all actions |
-| `blender_animation_play` | Play or pause animation |
-| `blender_animation_goto_frame` | Jump to specific frame |
-
-### Render Tools (5)
-
-| Tool | Description |
-|------|-------------|
-| `blender_render_image` | Render current frame to file |
-| `blender_render_animation` | Render animation sequence |
-| `blender_render_set_engine` | Set render engine (CYCLES, BLENDER_EEVEE_NEXT, BLENDER_WORKBENCH) |
-| `blender_render_set_resolution` | Set output resolution |
-| `blender_render_screenshot` | Capture viewport screenshot |
-
-### Export/Import Tools (6)
-
-| Tool | Description |
-|------|-------------|
-| `blender_export_gltf` | Export to glTF/GLB format |
-| `blender_export_fbx` | Export to FBX format |
-| `blender_export_obj` | Export to OBJ format |
-| `blender_export_stl` | Export to STL format |
-| `blender_export_usd` | Export to USD format |
-| `blender_import_file` | Import file (auto-detects format) |
-
-### External Integration Tools (2)
-
-| Tool | Description |
-|------|-------------|
-| `blender_polyhaven_search` | Search Poly Haven for HDRIs, textures, or models |
-| `blender_polyhaven_download` | Download and apply Poly Haven asset |
-
-### AI Texture Generation Tools (5)
-
-Generate PBR textures, reference images, and inpaint textures using ComfyUI/SDXL.
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_generate_texture` | Generate PBR texture set from text prompt (async, returns job_id) |
-| `blender_ai_generate_texture_sync` | Generate PBR texture and wait for completion (synchronous) |
-| `blender_ai_generate_reference_image` | Generate concept art / reference image from text |
-| `blender_ai_inpaint_texture` | Inpaint a masked region of an existing texture |
-| `blender_ai_texture_from_render` | Generate texture from depth/normal render via ControlNet |
-
-### AI Evaluation & Refinement Tools (2)
-
-Evaluate and iteratively improve 3D content using Ollama vision.
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_evaluate` | Evaluate any render with category-specific scoring (model/texture/animation) |
-| `blender_ai_refine` | Run one refinement iteration: render, evaluate, return scores and suggestions |
-
-### AI 3D Generation Tools (21)
-
-Multi-backend AI model generation with local and cloud options.
-
-**Backend Management (4)**
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_list_backends` | List available AI backends with status |
-| `blender_ai_set_backend` | Set preferred backend (or "auto") |
-| `blender_ai_get_backend_info` | Get backend capabilities and requirements |
-| `blender_ai_configure_backend` | Configure backend-specific settings |
-
-**Generation (5)**
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_generate_model` | Generate 3D model from text or image (multi-backend) |
-| `blender_ai_model_status` | Check generation status (with auto-import option) |
-| `blender_ai_generate_variations` | Generate multiple variations of a prompt |
-| `blender_ai_redo_generation` | Redo last generation with modifications |
-| `blender_ai_cancel_generation` | Cancel in-progress generation |
-
-**Mesh Processing (7)**
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_mesh_cleanup` | Clean up mesh (remove doubles, fix normals) |
-| `blender_ai_mesh_decimate` | Reduce polygon count intelligently |
-| `blender_ai_mesh_remesh` | Retopologize mesh for better geometry |
-| `blender_ai_mesh_optimize` | Full optimization pipeline |
-| `blender_ai_auto_uv` | Generate UV maps for texturing |
-| `blender_ai_fix_mesh_issues` | Auto-fix common mesh problems |
-| `blender_ai_mesh_stats` | Get mesh statistics and analysis |
-
-**Queue Management (3)**
-
-| Tool | Description |
-|------|-------------|
-| `blender_ai_queue_list` | List all generation jobs |
-| `blender_ai_queue_clear` | Clear completed/failed jobs |
-| `blender_ai_get_history` | Get generation history |
-
-### AI Self-Refinement Tools (7)
-
-Iterative render-analyze-fix loop using vision AI for quality convergence.
-
-| Tool | Description |
-|------|-------------|
-| `blender_execute_script` | Execute arbitrary Python/bmesh script in Blender's context |
-| `blender_render_multi_angle` | Render object from multiple angles (front, right, top, perspective) |
-| `blender_analyze_viewport` | Render and analyze with Ollama vision model for structured feedback |
-| `blender_refine_iteration` | Run one refinement iteration: render, analyze, check convergence |
-| `blender_refine_create_session` | Create a new refinement session to track iterative improvement |
-| `blender_refine_get_session` | Get details and iteration history of a refinement session |
-| `blender_refine_list_sessions` | List all refinement sessions with status and iteration counts |
-
-### MSFS 2020/2024 Content Creation Tools (20)
-
-Tools for creating Microsoft Flight Simulator compatible content.
-
-| Tool | Description |
-|------|-------------|
-| `blender_msfs_create_lod_hierarchy` | Create LOD hierarchy from base mesh |
-| `blender_msfs_decimate_for_lod` | Decimate mesh to target ratio |
-| `blender_msfs_setup_lod_distances` | Configure LOD switch distances |
-| `blender_msfs_get_lod_info` | Get LOD hierarchy information |
-| `blender_msfs_setup_material` | Set up MSFS-specific material |
-| `blender_msfs_create_glass_material` | Create glass/windshield material |
-| `blender_msfs_create_emissive_material` | Create emissive/light material |
-| `blender_msfs_get_material_presets` | List available material presets |
-| `blender_msfs_create_collision_mesh` | Create simplified collision mesh |
-| `blender_msfs_create_collision_box` | Create box collision primitive |
-| `blender_msfs_create_collision_convex` | Create convex hull collision |
-| `blender_msfs_tag_collision_type` | Tag mesh as collision object |
-| `blender_msfs_add_animation_tag` | Add animation event marker |
-| `blender_msfs_setup_visibility_animation` | Configure show/hide animation |
-| `blender_msfs_configure_animation_loop` | Set loop behavior |
-| `blender_msfs_list_animation_tags` | List all animation tags |
-| `blender_msfs_export_model` | Export with LODs, collision, animations |
-| `blender_msfs_validate_for_export` | Validate for MSFS compatibility |
-| `blender_msfs_get_export_settings` | Get export settings |
-| `blender_msfs_batch_export_lods` | Batch export LOD hierarchy |
-
-See [MSFS_ROADMAP.md](docs/MSFS_ROADMAP.md) for detailed MSFS workflow documentation.
-
-### MSFS Aircraft Livery Tools (18)
-
-Tools for creating and transferring aircraft liveries for virtual airlines.
-
-| Tool | Description |
-|------|-------------|
-| `blender_msfs_livery_setup_paint_mode` | Set up object for texture painting |
-| `blender_msfs_livery_create_paint_layers` | Create paint layers (primer, base, cheatline, etc.) |
-| `blender_msfs_livery_load_template_overlay` | Load reference template as overlay |
-| `blender_msfs_livery_export_uv_layout` | Export UV layout for external painting |
-| `blender_msfs_livery_set_paint_brush` | Configure brush presets (airbrush, hard edge, etc.) |
-| `blender_msfs_livery_sample_color` | Sample color from reference image |
-| `blender_msfs_livery_get_paint_presets` | Get available paint layer and brush presets |
-| `blender_msfs_livery_get_aircraft_templates` | List supported aircraft (FBW, Fenix, PMDG, etc.) |
-| `blender_msfs_livery_get_template_info` | Get detailed template info for aircraft |
-| `blender_msfs_livery_download_template` | Download/generate aircraft templates |
-| `blender_msfs_livery_analyze` | Analyze livery image for colors and elements |
-| `blender_msfs_livery_transfer` | Transfer livery between aircraft types |
-| `blender_msfs_livery_extract_colors` | Extract color palette from livery |
-| `blender_msfs_livery_map_elements` | Map design elements between templates |
-| `blender_msfs_livery_export_textures` | Export livery textures (PNG, TGA) |
-| `blender_msfs_livery_create_package` | Create MSFS livery package structure |
-| `blender_msfs_livery_convert_to_dds` | Convert textures to DDS format |
-| `blender_msfs_livery_validate_package` | Validate livery package for MSFS |
-
-**Supported Aircraft:**
-- FlyByWire A32NX (freeware)
-- Fenix A320/A319/A321
-- PMDG 737/777
-- iniBuilds A310/A320neo
-- Aerosoft CRJ
-- Just Flight BAe 146
-- Generic template for custom aircraft
-
-### Material Inspection & Manipulation Tools (7)
-
-| Tool | Description |
-|------|-------------|
-| `blender_material_inspect_graph` | Return full shader node graph as structured JSON |
-| `blender_material_node_add` | Add any shader node to a material's node tree |
-| `blender_material_node_connect` | Connect two nodes via socket names |
-| `blender_material_node_group_create` | Create reusable shader node groups |
-| `blender_material_procedural_preset` | Create procedural material from 23 presets (CHROME, RUST, VEHICLE_PAINT, CARBON_FIBER, etc.) |
-| `blender_material_convert_to_pbr` | Convert material to clean Principled BSDF for GLTF/MSFS/UE5 |
-| `blender_material_preview_render` | Render material preview on standard shape |
-
-### Measurement & Validation Tools (7)
-
-| Tool | Description |
-|------|-------------|
-| `blender_measure_surface_area` | Calculate total and per-material surface area |
-| `blender_measure_volume` | Calculate mesh volume with manifold check |
-| `blender_measure_clearance` | Measure min/max/avg distance between objects |
-| `blender_validate_dimensions` | Check dimensions against spec with tolerance |
-| `blender_calibrate_from_reference` | Scale object to match known real-world dimension |
-| `blender_measure_edge_angle` | Measure dihedral angles at edges |
-| `blender_validate_mesh_quality` | Comprehensive 11-check mesh quality audit |
-
-### Baking Tools (6)
-
-| Tool | Description |
-|------|-------------|
-| `blender_bake_pbr_batch` | Bake all PBR channels in one call (diffuse, normal, roughness, metallic, AO, emission) |
-| `blender_bake_highpoly_to_lowpoly` | Transfer detail from high-poly to low-poly via baking |
-| `blender_bake_from_multires` | Bake displacement/normals from multires sculpt data |
-| `blender_bake_to_vertex_colors` | Bake lighting/AO to vertex color layer |
-| `blender_bake_curvature` | Generate curvature map for wear/edge effects |
-| `blender_bake_id_map` | Color ID map per material/object/face set |
-
-### Geometry Nodes Tools (7)
-
-| Tool | Description |
-|------|-------------|
-| `blender_geonode_create_group` | Create geometry node group with typed inputs/outputs |
-| `blender_geonode_apply` | Apply node group as modifier and set input values |
-| `blender_geonode_scatter_instances` | One-call scatter with density, Poisson, random scale/rotation |
-| `blender_geonode_array_grid` | Parametric arrays: linear, grid, radial, hexagonal |
-| `blender_geonode_deform_curve` | Deform mesh along curve |
-| `blender_geonode_extrude_profile` | Sweep 2D profile along curve path |
-| `blender_geonode_inspect` | Read current GN setup and input values |
-
-### Sculpting Tools (8)
-
-| Tool | Description |
-|------|-------------|
-| `blender_sculpt_setup` | Enter sculpt mode with multires/dyntopo configuration |
-| `blender_sculpt_mesh_filter` | Apply global mesh filters (SMOOTH, SHARPEN, INFLATE, etc.) |
-| `blender_sculpt_mask_by_topology` | Create masks by cavity, curvature, or vertex group |
-| `blender_sculpt_face_set_create` | Create face sets by linked/material/normal/UV criteria |
-| `blender_sculpt_multires_reshape` | Manage multires subdivision levels |
-| `blender_sculpt_to_retopo` | Full sculpt-to-retopo pipeline with displacement baking |
-| `blender_sculpt_extract_mask` | Extract masked region as separate mesh |
-| `blender_sculpt_remesh_voxel` | Voxel remesh with configurable resolution |
-
-### Rigging & Armature Tools (8)
-
-| Tool | Description |
-|------|-------------|
-| `blender_armature_create` | Create armature from bone chain definitions |
-| `blender_autorig_preset` | One-call auto-rig (BIPED, VEHICLE, MECHANICAL_ARM, WHEEL_ASSEMBLY, etc.) |
-| `blender_constraint_add` | Add bone/object constraints (IK, COPY_ROT, TRACK_TO, etc.) |
-| `blender_constraint_preset` | Apply preset constraint setups (IK_ARM, PISTON_PAIR, WHEEL_SPIN) |
-| `blender_bone_shape_assign` | Assign custom control shapes to bones |
-| `blender_pose_library_save` | Save current pose to library |
-| `blender_pose_library_apply` | Apply saved pose with blend factor |
-| `blender_rig_validate` | Validate rig for MIXAMO/UE5/MSFS export compatibility |
-
-### Physics Simulation Tools (6)
-
-| Tool | Description |
-|------|-------------|
-| `blender_physics_rigid_body_add` | Add rigid body with collision shape configuration |
-| `blender_physics_rigid_body_batch` | Batch add rigid bodies to multiple objects |
-| `blender_physics_simulate` | Run simulation with optional apply-to-mesh |
-| `blender_physics_cloth_add` | Add cloth with 7 material presets and wind |
-| `blender_physics_soft_body_add` | Add soft body for deformable objects |
-| `blender_physics_fluid_quick` | Quick Mantaflow fluid setup |
-
-### Collections & System Tools (8)
-
-| Tool | Description |
-|------|-------------|
-| `blender_collection_create` | Create new collection |
-| `blender_collection_list` | List all collections with hierarchy |
-| `blender_collection_move` | Move objects between collections |
-| `blender_collection_visibility` | Toggle visibility, renderability, selectability |
-| `blender_undo` | Undo last operation |
-| `blender_redo` | Redo last undone operation |
-| `blender_save` | Save current file |
-| `blender_save_as` | Save to new path |
-
-### Annotation & Grease Pencil Tools (6)
-
-| Tool | Description |
-|------|-------------|
-| `blender_annotation_add` | Add 3D annotation strokes |
-| `blender_annotation_text` | Add text labels at 3D points |
-| `blender_annotation_dimension` | Add dimension lines with measurement display |
-| `blender_annotation_clear` | Clear annotation layers |
-| `blender_grease_pencil_create` | Create grease pencil objects with strokes |
-| `blender_grease_pencil_markup` | Overlay markup annotations on rendered images |
-
-## Self-Refinement Loop
-
-The refinement loop enables AI-driven iterative improvement of 3D models. Claude generates mesh code, renders it from multiple angles, analyzes with a vision model, and applies fixes until quality converges.
+### 4. Three surfaces, same loop
+
+<table>
+<tr>
+<td valign="top" width="50%">
+
+**Blender side**
+
+1. Open Blender.
+2. Press `N` in the 3D viewport.
+3. Open the "MCP Server" panel.
+4. Click "Start Server" — confirm "Server running on port 9876".
+
+</td>
+<td valign="top" width="50%">
+
+**Client side**
+
+Restart Claude / Codex. The Blender tools appear in the tool list.
+Try:
+
+> *"Create a red cube at (2, 0, 0), add a subdivision surface modifier
+> with 2 levels, render it to /tmp/render.png."*
+
+</td>
+</tr>
+</table>
+
+---
+
+## Tools
+
+218 MCP tools, grouped by Blender pipeline stage. Full grouped
+reference (with source links) in [`docs/tools.md`](docs/tools.md).
+
+| Category                | Tools | Examples                                                              |
+| ----------------------- | ----: | --------------------------------------------------------------------- |
+| Scene                   |     5 | `scene_info`, `scene_new`, `scene_clear`, `scene_set_frame_range`     |
+| Object                  |    10 | `object_create`, `object_transform`, `object_duplicate`, `object_join`|
+| Mesh editing            |    24 | `mesh_extrude`, `mesh_bevel`, `mesh_loop_cut`, `mesh_bridge`          |
+| Materials + nodes       |    13 | `material_create`, `material_inspect_graph`, `material_node_add`, `material_procedural_preset` |
+| Modifiers (28+ types)   |     5 | `modifier_add`, `modifier_configure`, `modifier_apply`                |
+| Animation + keyframes   |     7 | `keyframe_insert`, `animation_play`, `action_create`                  |
+| Render                  |     5 | `render_image`, `render_animation`, `render_multi_angle`, `render_screenshot` |
+| Export / import         |     6 | `export_gltf`, `export_fbx`, `export_obj`, `export_stl`, `export_usd` |
+| Measurement + validation|     7 | `measure_volume`, `validate_dimensions`, `validate_mesh_quality`      |
+| Baking                  |     6 | `bake_pbr_batch`, `bake_highpoly_to_lowpoly`, `bake_curvature`        |
+| Geometry nodes          |     7 | `geonode_scatter_instances`, `geonode_array_grid`, `geonode_extrude_profile` |
+| Sculpting               |     8 | `sculpt_setup`, `sculpt_mesh_filter`, `sculpt_to_retopo`              |
+| Rigging + armature      |     8 | `armature_create`, `autorig_preset`, `constraint_preset`, `rig_validate` |
+| Physics                 |     6 | `physics_rigid_body_add`, `physics_cloth_add`, `physics_fluid_quick`  |
+| Collections + system    |     8 | `collection_create`, `undo`, `redo`, `save`, `save_as`                |
+| Annotations + grease pencil | 6 | `annotation_dimension`, `grease_pencil_markup`                       |
+| **MSFS content**        |    20 | LOD hierarchy, collision, MSFS materials, animation tags, export      |
+| **MSFS livery**         |    18 | Paint mode, layers, brushes, template overlay, transfer, packaging    |
+| **AI 3D generation**    |    21 | Multi-backend text/image-to-3D + mesh cleanup pipeline                |
+| AI texture generation   |     5 | PBR sets from prompt, reference images, inpainting, ControlNet        |
+| AI evaluation           |     2 | `ai_evaluate`, `ai_refine` (Ollama vision)                            |
+| AI self-refinement      |     7 | `execute_script`, `analyze_viewport`, `refine_iteration`, sessions   |
+| Poly Haven              |     2 | `polyhaven_search`, `polyhaven_download`                              |
+
+Full per-tool argument tables: [`docs/tools.md`](docs/tools.md). All
+tool source lives under
+[`src/mcp_blender/`](https://github.com/RFingAdam/mcp-blender/tree/main/src/mcp_blender)
+(server side) and
+[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon)
+(Blender side).
+
+---
+
+## Self-refinement loop
+
+`mcp-blender` ships an iterative render-analyze-fix loop. The agent
+generates mesh code, renders from multiple angles, an Ollama vision
+model scores the result, and the agent applies fixes until the score
+converges.
 
 ```
-# 1. Create a refinement session
+┌───────────┐  execute_script  ┌─────────┐  render_multi_angle  ┌──────────────┐
+│  agent    │ ──────────────► │ Blender  │ ───────────────────► │  PNG images  │
+│  (LLM)    │                 │  (bpy)   │                      └──────┬───────┘
+└─────┬─────┘                 └─────────┘                              │
+      │                                                  analyze_viewport
+      │  apply fix                                                     │
+      │  (loop)                                                        ▼
+      │                                                     ┌──────────────────┐
+      └─────────────────────────────────────────────────────│  Ollama Vision   │
+                              feedback + score              │  (llama3.2-11b)  │
+                                                            └──────────────────┘
+```
+
+Skeleton call sequence:
+
+```python
+# 1. Open a refinement session
 blender_refine_create_session(object_name="Tree", prompt="A realistic low-poly pine tree")
 
-# 2. Generate initial mesh with bmesh script
+# 2. Generate initial mesh
 blender_execute_script(script="import bmesh; ...")
 
-# 3. Run refinement iteration (render + analyze + convergence check)
+# 3. Iterate
 blender_refine_iteration(object_name="Tree", iteration=0, max_iterations=5)
 
-# 4. Apply fixes based on feedback, then iterate
+# 4. Apply fixes from feedback, iterate again
 blender_execute_script(script="# fix issues from analysis ...")
 blender_refine_iteration(object_name="Tree", iteration=1, previous_score=0.6)
 
-# 5. Check session history
+# 5. Inspect session
 blender_refine_get_session(session_id="...")
 ```
 
-## External Integrations
+See [`docs/usage.md`](docs/usage.md) for a full walkthrough.
+
+---
+
+## External integrations
 
 ### Poly Haven
 
-[Poly Haven](https://polyhaven.com) provides free HDRIs, textures, and 3D models. No API key required.
+[Poly Haven](https://polyhaven.com) provides free HDRIs, textures, and
+3D models. No API key required.
 
 ```
-# Search for assets
 blender_polyhaven_search(query="brick", asset_type="textures")
-
-# Download and apply
 blender_polyhaven_download(asset_id="brick_wall_001", resolution="2k")
 ```
 
-Assets are cached locally to avoid re-downloading.
+Assets are cached locally.
 
-### AI 3D Model Generation
+### AI 3D model generation
 
-Generate 3D models from text prompts or images using multiple backends - both cloud APIs and local models.
+Multi-backend text/image-to-3D — cloud APIs and local models.
 
-**Available Backends:**
+| Backend         | Type   | Requirements    | Capabilities                          |
+| --------------- | ------ | --------------- | ------------------------------------- |
+| Hyper3D Rodin   | Cloud  | API key         | Text-to-3D, Image-to-3D, high quality |
+| Meshy.ai        | Cloud  | API key         | Text-to-3D, Image-to-3D, texturing    |
+| Tripo AI        | Cloud  | API key         | Text-to-3D, Image-to-3D, fast         |
+| TripoSR         | Local  | 4 GB VRAM       | Image-to-3D, very fast (< 1 s)        |
+| Stable Fast 3D  | Local  | 6 GB VRAM       | Image-to-3D, fast, stable             |
+| Hunyuan3D       | Local  | 16 GB VRAM      | Text-to-3D, Image-to-3D, high quality |
+| Ollama Vision   | Local  | 8 GB VRAM       | Image understanding (helper)          |
+| ComfyUI         | Local  | varies          | Custom workflows                      |
 
-| Backend | Type | Requirements | Capabilities |
-|---------|------|--------------|--------------|
-| Hyper3D Rodin | Cloud | API key | Text-to-3D, Image-to-3D, High quality |
-| Meshy.ai | Cloud | API key | Text-to-3D, Image-to-3D, Texturing |
-| Tripo AI | Cloud | API key | Text-to-3D, Image-to-3D, Fast |
-| TripoSR | Local | 4GB VRAM | Image-to-3D, Very fast (<1s) |
-| Stable Fast 3D | Local | 6GB VRAM | Image-to-3D, Fast, Stable results |
-| Hunyuan3D | Local | 16GB VRAM | Text-to-3D, Image-to-3D, High quality |
-| Ollama Vision | Local | 8GB VRAM | Image understanding (helper) |
-| ComfyUI | Local | Varies | Custom workflows |
-
-**Setup (Cloud backends):** Set API keys as environment variables:
+Cloud setup:
 
 ```bash
-export RODIN_API_KEY="your-rodin-key"      # Hyper3D Rodin
-export MESHY_API_KEY="your-meshy-key"      # Meshy.ai
-export TRIPO_API_KEY="your-tripo-key"      # Tripo AI
+export RODIN_API_KEY="your-rodin-key"
+export MESHY_API_KEY="your-meshy-key"
+export TRIPO_API_KEY="your-tripo-key"
 ```
 
-**Setup (Local backends):** Install the required models:
+Local setup:
 
 ```bash
-# TripoSR (fast image-to-3D)
-pip install triposr
-
-# Ollama with vision model
-ollama pull llava
+pip install triposr     # fast image-to-3D
+ollama pull llava       # vision model
 ```
 
-**Usage:**
+Usage:
 
 ```
-# Auto-select best available backend
 blender_ai_generate_model(prompt="a wooden chair", style="realistic")
-
-# Use specific backend
-blender_ai_generate_model(prompt="a robot", backend="triposr")
-
-# Image-to-3D with local model
 blender_ai_generate_model(image_path="/path/to/image.png", backend="triposr")
-
-# Check status and import with optimization
 blender_ai_model_status(job_id="abc123", auto_import=true, optimize_mesh=true)
-
-# Generate variations
-blender_ai_generate_variations(prompt="a coffee mug", count=3)
-
-# Process imported mesh
-blender_ai_mesh_optimize(object_name="imported_model", cleanup=true, decimate=true)
 ```
 
-**Supported styles:** realistic, cartoon, low_poly, sculpture, anime
+Supported styles: `realistic`, `cartoon`, `low_poly`, `sculpture`, `anime`.
+Formats: `glb` (default), `gltf`, `fbx`, `obj`, `usdz`.
 
-**Supported formats:** glb (default), gltf, fbx, obj, usdz
+---
 
-## Version Compatibility
+## Workflows
 
-This addon includes a compatibility layer for Blender API differences:
+`mcp-blender` is a creative-tooling tangent in
+[eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite) — it doesn't
+fit the engineering compliance loop directly, but it shares brand,
+docs, and MCP wiring with the rest of the family.
 
-| Feature | Blender 4.2 | Blender 5.0 |
-|---------|-------------|-------------|
-| Action FCurves | `action.fcurves` | `action.slots[].layers[].strips[].channels` |
-| mathutils precision | float64 | float32 |
-| Render engine | `BLENDER_EEVEE` (< 4.2) | `BLENDER_EEVEE_NEXT` (4.2+) |
+Part of [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite).
 
-The compatibility layer handles these differences automatically.
+---
 
-## Configuration Options
+## Documentation
 
-### MCP Server
+- 📘 **[Quick Start](docs/index.md)** — install through first call.
+- 🛠️ **[Tool reference](docs/tools.md)** — all 218 tools grouped by stage.
+- 📐 **[Usage examples](docs/usage.md)** — end-to-end walkthroughs (self-refine, MSFS, livery).
+- 🏗️ **[Architecture](docs/architecture.md)** — how this MCP fits in eng-mcp-suite.
+- ✈️ **[MSFS roadmap](docs/MSFS_ROADMAP.md)** — MSFS content workflow.
+
+---
+
+## Part of eng-mcp-suite
+
+<sub>This MCP server is part of</sub>
+
+[![eng-mcp-suite](https://img.shields.io/badge/eng--mcp--suite-engineering%20MCP%20catalog-22D3EE?style=for-the-badge)](https://github.com/RFingAdam/eng-mcp-suite)
+
+<sub>An open umbrella for engineering MCP servers across RF, EMC, PCB,
+signal integrity, EM simulation, and lab test. Same brand, same docs
+structure, designed to compose. See the
+[full catalog](https://github.com/RFingAdam/eng-mcp-suite#whats-included)
+or jump to a sibling:</sub>
+
+| Domain                      | Sibling MCPs                                                                 |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| **RF / Transmission lines** | [lineforge](https://github.com/RFingAdam/lineforge)                          |
+| **EMC regulatory**          | [mcp-emc-regulations](https://github.com/RFingAdam/mcp-emc-regulations)      |
+| **PCB / SI**                | mcp-pcb-emcopilot *(private — public soon)*                                  |
+| **EM simulation**           | mcp-openems, mcp-nec2-antenna *(private — public soon)*                      |
+| **Diagrams**                | [drawio-engineering-mcp](https://github.com/RFingAdam/drawio-engineering-mcp) |
+| **3D / rendering**          | **mcp-blender** *(this repo)*                                                |
+| **Remote access**           | [mcp-remote-access](https://github.com/RFingAdam/mcp-remote-access)          |
+| **Lab gear**                | [copper-mountain-vna-mcp](https://github.com/RFingAdam/copper-mountain-vna-mcp), mcp-rs-spectrum-analyzer, mcp-rs-siggen, mcp-rs-cmw500 |
+
+---
+
+## Configuration
+
+### MCP server
 
 ```bash
 mcp-blender --help
 
 Options:
-  --host TEXT   Blender addon host [default: localhost]
-  --port INT    Blender addon port [default: 9876]
+  --host TEXT   Blender addon host  [default: localhost]
+  --port INT    Blender addon port  [default: 9876]
 ```
 
-### Blender Addon
+### Blender addon panel
 
-The addon panel in the 3D Viewport sidebar offers:
+In the 3D viewport sidebar:
 
-- **Port:** TCP port for the socket server (default: 9876)
-- **Start/Stop Server:** Toggle the MCP socket server
+- **Port** — TCP port for the socket server (default 9876).
+- **Start / Stop Server** — toggle the MCP socket server.
+
+---
+
+## Version compatibility
+
+The addon ships a compatibility layer for Blender API differences:
+
+| Feature           | Blender 4.2                | Blender 5.0                                            |
+| ----------------- | -------------------------- | ------------------------------------------------------ |
+| Action FCurves    | `action.fcurves`           | `action.slots[].layers[].strips[].channels`            |
+| mathutils         | float64                    | float32                                                |
+| Render engine     | `BLENDER_EEVEE` (< 4.2)    | `BLENDER_EEVEE_NEXT` (4.2+)                            |
+
+The layer handles these differences automatically.
+
+---
 
 ## Troubleshooting
 
-### "Connection refused" errors
+**"Connection refused"** — make sure Blender is running, the MCP Server
+panel shows "Server running", the port matches, and the firewall allows
+local TCP on `9876`.
 
-1. Make sure Blender is running
-2. Check the MCP Server panel shows "Server running"
-3. Verify the port matches (default: 9876)
-4. Check firewall settings if running on different machines
+**"Tool not found"** — restart Claude / Codex after editing the MCP
+config; verify `mcp-blender --help` runs; check the client's MCP server
+log.
 
-### "Tool not found" errors
+**Addon not appearing in Blender** — check Blender's system console for
+errors; verify Python version (Blender 4.2+ uses Python 3.11+); try
+reinstalling.
 
-1. Restart Claude Code after adding the MCP server config
-2. Verify `mcp-blender` is installed: `mcp-blender --help`
-3. Check Claude Code's MCP server logs
+**Poly Haven downloads fail** — check connectivity; verify the asset
+ID exists on polyhaven.com; check disk space.
 
-### Addon not appearing in Blender
+**AI generation not working** — `blender_ai_list_backends` shows status;
+verify API keys (`RODIN_API_KEY`, `MESHY_API_KEY`, `TRIPO_API_KEY`) for
+cloud; verify models / VRAM for local; monitor with
+`blender_ai_model_status`; check history with `blender_ai_get_history`.
 
-1. Check Blender's console for errors (Window → Toggle System Console on Windows)
-2. Verify Python version compatibility (Blender 4.2+ uses Python 3.11+)
-3. Try reinstalling the addon
-
-### Poly Haven downloads fail
-
-1. Check internet connectivity
-2. Verify the asset ID exists on polyhaven.com
-3. Check disk space for cache directory
-
-### AI generation not working
-
-1. Check available backends with `blender_ai_list_backends`
-2. For cloud backends, verify API keys are set (RODIN_API_KEY, MESHY_API_KEY, TRIPO_API_KEY)
-3. For local backends, verify models are installed and have sufficient VRAM
-4. Monitor job status with `blender_ai_model_status`
-5. Check generation history with `blender_ai_get_history`
+---
 
 ## Development
 
-### Setup
-
 ```bash
-# Clone repository
 git clone https://github.com/RFingAdam/mcp-blender
 cd mcp-blender
-
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-
-# Install with dev dependencies
+source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 ```
 
-### Running Tests
+Tests:
 
 ```bash
-# Run unit tests (no Blender required)
 pytest tests/ --ignore=tests/blender_integration_test.py
-
-# Run Blender integration tests
 blender --background --python tests/blender_integration_test.py
 ```
 
-### Linting
+Lint:
 
 ```bash
 ruff check .
 ruff format .
 ```
 
-### Building the Addon ZIP
+Build the addon ZIP:
 
 ```bash
 python scripts/package_addon.py
-# Creates dist/blender_mcp_addon-<version>.zip
+# → dist/blender_mcp_addon-<version>.zip
 ```
 
-### Project Structure
-
-```
-mcp-blender/
-├── src/mcp_blender/           # MCP server package
-│   ├── server.py              # Tool definitions and MCP handlers
-│   ├── blender_client.py      # TCP client for Blender communication
-│   └── types.py               # Shared type definitions
-├── addon/blender_mcp_addon/   # Blender addon
-│   ├── __init__.py            # Addon registration and UI
-│   ├── socket_server.py       # TCP server using bpy.app.timers
-│   ├── handlers.py            # Command handlers
-│   ├── compat.py              # Version compatibility layer
-│   ├── validation.py          # Parameter validation
-│   ├── utils.py               # Shared utility functions
-│   ├── external/              # External integrations
-│   │   ├── cache.py           # Asset caching system
-│   │   ├── polyhaven.py       # Poly Haven API client
-│   │   ├── refinement.py      # Refinement session state management
-│   │   ├── ai_models.py       # AI generation orchestration
-│   │   ├── mesh_processing.py # Mesh cleanup and optimization
-│   │   ├── job_queue.py       # Persistent job tracking
-│   │   └── ai_backends/       # AI backend implementations
-│   │       ├── base.py        # Abstract base class
-│   │       ├── rodin.py       # Hyper3D Rodin (cloud)
-│   │       ├── meshy.py       # Meshy.ai (cloud)
-│   │       ├── tripo_ai.py    # Tripo AI (cloud)
-│   │       ├── triposr.py     # TripoSR (local)
-│   │       ├── hunyuan3d.py   # Hunyuan3D (local)
-│   │       ├── ollama_vision.py # Ollama Vision (local)
-│   │       ├── stable_fast_3d.py # Stable Fast 3D (local)
-│   │       └── comfyui.py     # ComfyUI integration
-│   └── msfs/                  # MSFS content creation tools
-│       ├── lod.py             # LOD hierarchy management
-│       ├── materials.py       # MSFS material extensions
-│       ├── collision.py       # Collision mesh tools
-│       ├── animation.py       # Animation tags and events
-│       ├── export.py          # MSFS export utilities
-│       └── livery/            # Aircraft livery tools
-│           ├── painting.py    # Texture painting workflow
-│           ├── templates.py   # Aircraft template definitions
-│           ├── transfer.py    # AI-assisted livery transfer
-│           └── export.py      # Livery package creation
-├── assets/                    # Static and generated assets
-│   ├── generated/             # AI-generated models & textures (gitignored)
-│   │   └── mototok/           # Mototok Spacer 8600 project
-│   ├── banner.svg             # Project banner
-│   └── logo.svg               # Project logo
-├── tests/                     # Test suite
-├── scripts/                   # Build scripts
-└── docs/                      # Documentation
-```
+---
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions are welcome. Fork, branch, add tests, open a PR.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Submit a pull request
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+[MIT](LICENSE).
 
 ## Acknowledgments
 
-- [Model Context Protocol](https://modelcontextprotocol.io/) by Anthropic
-- [Blender](https://www.blender.org/) by the Blender Foundation
-- [Poly Haven](https://polyhaven.com/) for free 3D assets
-- [Hyper3D Rodin](https://hyperhuman.deemos.com/) for AI model generation
+- **[Blender Foundation](https://www.blender.org/)** — for Blender itself.
+- **[Poly Haven](https://polyhaven.com/)** — for free 3D assets.
+- **[Hyper3D Rodin](https://hyperhuman.deemos.com/)**, **[Meshy.ai](https://www.meshy.ai/)**, **[Tripo](https://www.tripo3d.ai/)**, **TripoSR**, **Stable Fast 3D**, **Hunyuan3D**, **ComfyUI** — AI 3D backends.
+- **The MCP working group** — for the [Model Context Protocol](https://modelcontextprotocol.io) specification.
+
+<div align="center">
+
+<sub>Part of <a href="https://github.com/RFingAdam/eng-mcp-suite">eng-mcp-suite</a> — built for RF engineers, PCB designers, EMC labs, and AI agents.</sub>
+
+</div>
