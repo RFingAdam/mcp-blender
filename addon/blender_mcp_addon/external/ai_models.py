@@ -694,7 +694,7 @@ def evaluate_output(
     category: str = "model",
     reference_image: str | None = None,
     prompt: str = "",
-    ollama_host: str = "http://10.27.27.10:11434",
+    ollama_host: str = "http://127.0.0.1:11434",
     ollama_model: str = "llama3.2-vision:11b",
 ) -> dict[str, Any]:
     """Evaluate a render/output using Ollama vision with category-specific criteria.
@@ -734,7 +734,7 @@ def refine_with_feedback(
     max_iterations: int = 5,
     quality_threshold: float = 0.85,
     materials: list[str] | None = None,
-    ollama_host: str = "http://10.27.27.10:11434",
+    ollama_host: str = "http://127.0.0.1:11434",
     ollama_model: str = "llama3.2-vision:11b",
 ) -> dict[str, Any]:
     """Orchestrate an iterative self-refinement loop.

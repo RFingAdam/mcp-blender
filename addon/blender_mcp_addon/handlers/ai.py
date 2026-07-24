@@ -493,7 +493,7 @@ class AIHandlersMixin:
         check_nodes = params.get("check_nodes") or default_nodes
 
         # Get ComfyUI host from backend manager
-        comfyui_host = "http://10.27.27.10:8188"
+        comfyui_host = "http://127.0.0.1:8188"
         try:
             from ..external.ai_backends import get_backend_manager
             manager = get_backend_manager()
@@ -722,7 +722,7 @@ class AIHandlersMixin:
             config = BackendConfig(
                 enabled=True,
                 extra={
-                    "host": params.get("ollama_host", "http://10.27.27.10:11434"),
+                    "host": params.get("ollama_host", "http://127.0.0.1:11434"),
                     "model": params.get("ollama_model", "llama3.2-vision:11b"),
                 },
             )
@@ -766,7 +766,7 @@ class AIHandlersMixin:
             category=category,
             reference_image=reference_image,
             prompt=prompt,
-            ollama_host=params.get("ollama_host", "http://10.27.27.10:11434"),
+            ollama_host=params.get("ollama_host", "http://127.0.0.1:11434"),
             ollama_model=params.get("ollama_model", "llama3.2-vision:11b"),
         )
 
@@ -794,7 +794,7 @@ class AIHandlersMixin:
             max_iterations=max_iterations,
             quality_threshold=quality_threshold,
             materials=materials,
-            ollama_host=params.get("ollama_host", "http://10.27.27.10:11434"),
+            ollama_host=params.get("ollama_host", "http://127.0.0.1:11434"),
             ollama_model=params.get("ollama_model", "llama3.2-vision:11b"),
         )
 

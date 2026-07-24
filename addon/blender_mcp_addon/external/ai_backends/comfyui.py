@@ -147,7 +147,7 @@ class ComfyUIBackend(BaseBackend):
     requires_local_install = True
     min_vram_gb = 8.0
 
-    DEFAULT_HOST = "http://10.27.27.10:8188"
+    DEFAULT_HOST = "http://127.0.0.1:8188"
     SUPPORTED_FORMATS = ["glb", "obj"]
 
     def __init__(self, config: BackendConfig | None = None):
