@@ -1920,7 +1920,7 @@ TOOLS: list[Tool] = [
                 },
                 "ollama_host": {
                     "type": "string",
-                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                    "description": "Ollama server URL (default: http://127.0.0.1:11434)",
                 },
                 "ollama_model": {
                     "type": "string",
@@ -2038,7 +2038,7 @@ TOOLS: list[Tool] = [
                 },
                 "ollama_host": {
                     "type": "string",
-                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                    "description": "Ollama server URL (default: http://127.0.0.1:11434)",
                 },
                 "ollama_model": {
                     "type": "string",
@@ -2087,7 +2087,7 @@ TOOLS: list[Tool] = [
                 },
                 "ollama_host": {
                     "type": "string",
-                    "description": "Ollama server URL (default: http://10.27.27.10:11434)",
+                    "description": "Ollama server URL (default: http://127.0.0.1:11434)",
                 },
                 "ollama_model": {
                     "type": "string",
