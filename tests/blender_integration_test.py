@@ -589,6 +589,169 @@ def test_text_set_properties(runner: TestRunner):
         raise AssertionError("text_set_properties accepted a non-text object")
 
 
+def test_text_add_relief(runner: TestRunner):
+    """Test the full create/fit/convert/separate/union-per-glyph recipe."""
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=20)
+    target = bpy.context.active_object
+    target.name = "ReliefTarget"
+    target_verts_before = len(target.data.vertices)
+
+    # The cube spans z [-10, 10] - z_bottom must sit at/near its top surface
+    # so the extruded glyphs poke out above it. A z_bottom buried inside the
+    # solid (e.g. mid-cube) makes the union a legitimate no-op: unioning a
+    # solid fully contained within another adds nothing, which is correct
+    # behavior, not the corruption this tool guards against.
+    result = runner.handlers.handle("text_add_relief", {
+        "content": "AB",
+        "target_object": "ReliefTarget",
+        "fit_box": {"x_min": -8.0, "x_max": 8.0, "y_min": -3.0, "y_max": 3.0},
+        "z_bottom": 9.5,
+        "extrude": 1.0,
+        "bevel_depth": 0.1,
+        "letter_spacing": 1.3,
+    })
+    assert result["success"], f"text_add_relief failed: {result}"
+    assert result["glyph_count"] == 2, "AB should separate into 2 glyph pieces"
+    assert len(result["union_log"]) == 2
+
+    target = bpy.data.objects["ReliefTarget"]
+    assert len(target.data.vertices) > target_verts_before, "union should have added geometry"
+    assert len(target.data.vertices) == result["final_vertices"]
+
+    # The glyph pieces must be fitted to fill fit_box, not left at their
+    # natural (mismatched) font aspect ratio.
+    bm = bmesh.new()
+    bm.from_mesh(target.data)
+    xs = [v.co.x for v in bm.verts if v.co.z > 10.5]  # verts above the cube's flat top (z=10)
+    bm.free()
+    if xs:
+        assert (max(xs) - min(xs)) <= 16.5, "relief text should not overflow fit_box width"
+
+    # target_object must be a mesh.
+    from blender_mcp_addon.validation import ValidationError
+
+    bpy.ops.object.text_add()
+    bpy.context.active_object.name = "NotAMesh"
+    try:
+        runner.handlers.handle("text_add_relief", {
+            "content": "X", "target_object": "NotAMesh",
+            "fit_box": {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1}, "z_bottom": 0,
+        })
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("text_add_relief accepted a non-mesh target_object")
+
+
+def test_object_rename(runner: TestRunner):
+    """Test object_rename handler."""
+    runner.reset_scene()
+    runner.handlers.handle("object_create", {"type": "cube", "name": "OldName"})
+
+    result = runner.handlers.handle("object_rename", {"name": "OldName", "new_name": "NewName"})
+    assert result["success"], "object_rename failed"
+    assert result["name"] == "NewName", "returned name mismatch"
+    assert bpy.data.objects.get("OldName") is None, "old name still present"
+    assert bpy.data.objects.get("NewName") is not None, "new name not present"
+
+    # Blender auto-suffixes on collision (e.g. "NewName.001") rather than erroring -
+    # the handler must surface whatever name Blender actually assigned.
+    runner.handlers.handle("object_create", {"type": "cube", "name": "Other"})
+    collide_result = runner.handlers.handle("object_rename", {"name": "Other", "new_name": "NewName"})
+    assert collide_result["name"] != "NewName", "collision should have been auto-suffixed"
+    assert bpy.data.objects.get(collide_result["name"]) is not None
+
+
+def test_object_get_bounds(runner: TestRunner):
+    """Test object_get_bounds handler on a mesh and on a FONT object."""
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(5, 0, 0))
+    cube = bpy.context.active_object
+    cube.name = "BoundsCube"
+
+    result = runner.handlers.handle("object_get_bounds", {"name": "BoundsCube"})
+    assert result["min"] == [4.0, -1.0, -1.0] or all(
+        abs(a - b) < 1e-5 for a, b in zip(result["min"], [4.0, -1.0, -1.0])
+    ), f"unexpected min {result['min']}"
+    assert all(abs(a - b) < 1e-5 for a, b in zip(result["max"], [6.0, 1.0, 1.0]))
+    assert all(abs(a - b) < 1e-5 for a, b in zip(result["dimensions"], [2.0, 2.0, 2.0]))
+    assert all(abs(a - b) < 1e-5 for a, b in zip(result["center"], [5.0, 0.0, 0.0]))
+
+    # Must also work on a FONT object before it is converted to a mesh -
+    # this is the motivating use case (size/position text pre-text_to_mesh).
+    runner.handlers.handle("text_create", {"name": "BoundsText", "content": "A", "size": 3})
+    text_bounds = runner.handlers.handle("object_get_bounds", {"name": "BoundsText"})
+    assert text_bounds["dimensions"][0] > 0, "FONT object bounds should have nonzero width"
+    assert text_bounds["dimensions"][1] > 0, "FONT object bounds should have nonzero height"
+
+
+def test_mesh_triangulate(runner: TestRunner):
+    """Test mesh_triangulate handler."""
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=2)
+    cube = bpy.context.active_object
+    cube.name = "TriCube"
+    assert len(cube.data.polygons) == 6, "cube should start as 6 quads"
+
+    result = runner.handlers.handle("mesh_triangulate", {"object_name": "TriCube"})
+    assert result["success"], "mesh_triangulate failed"
+    assert result["faces_before"] == 6
+    assert result["faces_after"] == 12, "6 quads should become 12 triangles"
+
+    obj = bpy.data.objects["TriCube"]
+    assert all(len(f.vertices) == 3 for f in obj.data.polygons), "non-triangle face remains"
+
+
+def test_mesh_check_watertight(runner: TestRunner):
+    """Test mesh_check_watertight handler: closed mesh, holed mesh, and multi-shell mesh."""
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=2)
+    cube = bpy.context.active_object
+    cube.name = "WatertightCube"
+
+    result = runner.handlers.handle("mesh_check_watertight", {"object_name": "WatertightCube"})
+    assert result["watertight"], "closed cube should be watertight"
+    assert result["non_manifold_edge_count"] == 0
+    assert result["boundary_edge_count"] == 0
+    assert result["shell_count"] == 1
+    assert result["signed_volume"] > 0, "signed volume should be positive for outward normals"
+    assert abs(result["signed_volume"] - 8.0) < 1e-4, "2x2x2 cube should have volume 8"
+
+    # A cube missing one face has an open boundary - must be reported, not silently ignored.
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(10, 0, 0))
+    holed = bpy.context.active_object
+    holed.name = "HoledCube"
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    holed.data.polygons[0].select = True
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.delete(type="FACE")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    holed_result = runner.handlers.handle("mesh_check_watertight", {"object_name": "HoledCube"})
+    assert not holed_result["watertight"], "cube with a missing face must not be watertight"
+    assert holed_result["boundary_edge_count"] > 0, "missing face should leave boundary edges"
+
+    # Two disjoint cubes joined into one object is 2 shells - must not be reported as 1.
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(20, 0, 0))
+    part_a = bpy.context.active_object
+    part_a.name = "MultiShellA"
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(25, 0, 0))
+    part_b = bpy.context.active_object
+    part_b.name = "MultiShellB"
+    bpy.ops.object.select_all(action="DESELECT")
+    part_a.select_set(True)
+    part_b.select_set(True)
+    bpy.context.view_layer.objects.active = part_a
+    bpy.ops.object.join()
+
+    shell_result = runner.handlers.handle("mesh_check_watertight", {"object_name": "MultiShellA"})
+    assert shell_result["shell_count"] == 2, f"expected 2 shells, got {shell_result['shell_count']}"
+    assert not shell_result["watertight"], "multi-shell mesh should not report watertight"
+
+
 def test_compat_version_detection(runner: TestRunner):
     """Test version compatibility detection."""
     info = compat.get_version_info()
@@ -644,6 +807,8 @@ def main():
     runner.run_test("object_delete", lambda: test_object_delete(runner))
     runner.run_test("object_duplicate", lambda: test_object_duplicate(runner))
     runner.run_test("object_select", lambda: test_object_select(runner))
+    runner.run_test("object_rename", lambda: test_object_rename(runner))
+    runner.run_test("object_get_bounds", lambda: test_object_get_bounds(runner))
 
     # Material tests
     print("\nMaterial Tests:")
@@ -678,11 +843,14 @@ def main():
     # Mesh editing tests
     print("\nMesh Editing Tests:")
     runner.run_test("mesh_fill_enum_values", lambda: test_mesh_fill_enum_values(runner))
+    runner.run_test("mesh_triangulate", lambda: test_mesh_triangulate(runner))
+    runner.run_test("mesh_check_watertight", lambda: test_mesh_check_watertight(runner))
 
     # Text object tests
     print("\nText Object Tests:")
     runner.run_test("text_create_and_to_mesh", lambda: test_text_create_and_to_mesh(runner))
     runner.run_test("text_set_properties", lambda: test_text_set_properties(runner))
+    runner.run_test("text_add_relief", lambda: test_text_add_relief(runner))
 
     # Compatibility tests
     print("\nCompatibility Tests:")

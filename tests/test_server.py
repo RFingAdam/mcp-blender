@@ -46,7 +46,11 @@ class TestToolDefinitions:
         # 155 base + 63 new tools:
         # 7 materials + 7 measurement + 8 collections/system + 6 baking
         # + 7 geonode + 8 sculpting + 8 rigging + 6 physics + 6 annotation
-        assert len(TOOLS) == 218, f"Expected 218 tools, got {len(TOOLS)}"
+        # + 3 text objects (text_create, text_set_properties, text_to_mesh)
+        # + 4 object/mesh utilities (object_rename, object_get_bounds,
+        #   mesh_triangulate, mesh_check_watertight)
+        # + 2 workflow/server utilities (text_add_relief, server_restart)
+        assert len(TOOLS) == 227, f"Expected 227 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:

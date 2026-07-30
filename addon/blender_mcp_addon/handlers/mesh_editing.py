@@ -1652,6 +1652,57 @@ class MeshEditingHandlersMixin:
             "quads_created": before_faces - after_faces,
         }
 
+
+    def _handle_mesh_triangulate(self, params: dict) -> dict:
+        """Triangulate a mesh's faces.
+
+        Quads and n-gons (e.g. the bevel caps ``bpy.ops.object.convert``
+        leaves on a converted text object) can be non-planar and are a
+        common cause of the EXACT boolean solver silently producing broken
+        geometry. Triangulating a tool mesh before ``boolean_op`` is cheap
+        insurance against that.
+        """
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        quad_method = validate_enum(
+            params.get("quad_method", "BEAUTY"),
+            "quad_method",
+            ["BEAUTY", "FIXED", "FIXED_ALTERNATE", "SHORTEST_DIAGONAL"],
+        )
+        ngon_method = validate_enum(
+            params.get("ngon_method", "BEAUTY"),
+            "ngon_method",
+            ["BEAUTY", "CLIP"],
+        )
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        before_faces = len(bm.faces)
+
+        bmesh.ops.triangulate(
+            bm,
+            faces=bm.faces,
+            quad_method=quad_method,
+            ngon_method=ngon_method,
+        )
+
+        bm.to_mesh(obj.data)
+        after_faces = len(bm.faces)
+        bm.free()
+        obj.data.update()
+
+        return {
+            "success": True,
+            "object": object_name,
+            "faces_before": before_faces,
+            "faces_after": after_faces,
+        }
+
     # ========== Cutting & Separation Tools ==========
 
 

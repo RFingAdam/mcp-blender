@@ -84,6 +84,15 @@ TOOLS: list[Tool] = [
             "required": [],
         },
     ),
+    Tool(
+        name="blender_server_restart",
+        description="Cycle the MCP socket server (stop, then start a fresh listener) to recover a stale/unresponsive connection. Does NOT reload addon source code from disk - only Blender's own 'Reload Scripts' or a full restart picks up code changes, and neither can safely be triggered remotely. Stopping the server closes the very connection this request arrived on, so the response typically will not reach the caller - that is expected; reconnect and call ping to confirm the new server is up.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
     # Object Tools
     Tool(
         name="blender_object_create",
@@ -1831,6 +1840,38 @@ TOOLS: list[Tool] = [
             "required": ["object_name"],
         },
     ),
+    Tool(
+        name="blender_text_add_relief",
+        description="Create text, fit it to an XY box, and boolean-union it onto a target mesh - the full 'engraved/relief lettering' recipe in one call. Scales X and Y independently so the text exactly fills fit_box (font aspect ratio rarely matches the target footprint), positions its bottom at z_bottom, converts to a mesh, triangulates, separates into one piece per glyph, and unions each piece onto target_object individually and in order. The per-glyph, one-at-a-time union is load-bearing: unioning a tool object with several disjoint glyph islands in a single modifier can silently corrupt the result on Blender 5.2's EXACT solver (target collapses to a handful of vertices, no error raised) - confirmed by direct experiment. If a glyph's union leaves the target's vertex count unchanged, this stops immediately (that is the signature of the same corruption) and reports success=false with which glyph failed, instead of silently continuing over a broken target.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "The text to emboss"},
+                "target_object": {"type": "string", "description": "Name of the mesh object to union the letters onto"},
+                "fit_box": {
+                    "type": "object",
+                    "properties": {
+                        "x_min": {"type": "number"},
+                        "x_max": {"type": "number"},
+                        "y_min": {"type": "number"},
+                        "y_max": {"type": "number"},
+                    },
+                    "required": ["x_min", "x_max", "y_min", "y_max"],
+                    "description": "XY footprint (in target_object's local space) the text is scaled and centered to fill exactly",
+                },
+                "z_bottom": {"type": "number", "description": "Z position (local space) for the bottom of the extruded text"},
+                "size": {"type": "number", "default": 10.0, "description": "Reference font size before fit_box scaling (rarely needs changing)"},
+                "extrude": {"type": "number", "default": 1.0, "description": "Depth to extrude the flat glyph outline"},
+                "bevel_depth": {"type": "number", "default": 0.0, "description": "Bevel/round the extruded edges by this radius"},
+                "bevel_resolution": {"type": "integer", "default": 4, "description": "Bevel smoothness (segments)"},
+                "letter_spacing": {"type": "number", "default": 1.0, "description": "Extra spacing between characters - raise this if glyphs overlap at the target size (overlapping glyphs are a common trigger for the EXACT-solver corruption this tool guards against)"},
+                "font_path": {"type": "string", "description": "Path to a .ttf/.otf font file (default: Blender's built-in font)"},
+                "solver": {"type": "string", "enum": ["FAST", "EXACT"], "default": "EXACT", "description": "Boolean solver for the per-glyph unions"},
+                "triangulate": {"type": "boolean", "default": True, "description": "Triangulate each glyph piece before unioning (recommended - non-planar n-gons from the bevel are another common cause of solver corruption)"},
+            },
+            "required": ["content", "target_object", "fit_box", "z_bottom"],
+        },
+    ),
     # ==================== Boolean Operations ====================
     Tool(
         name="blender_boolean_op",
@@ -1931,6 +1972,29 @@ TOOLS: list[Tool] = [
                 "scale": {"type": "boolean", "description": "Apply scale (default: true)"},
             },
             "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_object_rename",
+        description="Rename an object. Blender auto-suffixes (.001) on collision, so check the returned name against the requested new_name when uniqueness matters.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Current name of the object"},
+                "new_name": {"type": "string", "description": "New name for the object"},
+            },
+            "required": ["name", "new_name"],
+        },
+    ),
+    Tool(
+        name="blender_object_get_bounds",
+        description="Get an object's world-space axis-aligned bounding box (min, max, dimensions, center). Works for any object type with a bounding box, including a FONT text object before it's converted to a mesh.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the object"},
+            },
+            "required": ["name"],
         },
     ),
     # ==================== Script Execution ====================
@@ -3048,6 +3112,29 @@ TOOLS: list[Tool] = [
                     "type": "boolean",
                     "default": False,
                     "description": "Only join triangles with matching UV edges",
+                },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_triangulate",
+        description="Triangulate a mesh's faces. Quads/n-gons can be non-planar (e.g. bevel caps left by converting a text object to a mesh) and are a common cause of the EXACT boolean solver silently producing broken geometry — triangulating a tool mesh before boolean_op is cheap insurance against that.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object"},
+                "quad_method": {
+                    "type": "string",
+                    "enum": ["BEAUTY", "FIXED", "FIXED_ALTERNATE", "SHORTEST_DIAGONAL"],
+                    "default": "BEAUTY",
+                    "description": "How to split quads into triangles",
+                },
+                "ngon_method": {
+                    "type": "string",
+                    "enum": ["BEAUTY", "CLIP"],
+                    "default": "BEAUTY",
+                    "description": "How to split n-gons into triangles",
                 },
             },
             "required": ["object_name"],
@@ -4963,6 +5050,17 @@ TOOLS: list[Tool] = [
                         "are executed."
                     ),
                 },
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_check_watertight",
+        description="3D-print-focused watertightness check: 0 boundary (open) edges, 0 non-manifold edges, exactly 1 connected shell, and positive signed volume. Narrower than validate_mesh_quality (which also checks UVs/materials/n-gons) - use this for the 'will this hold water / slice cleanly' question in a CNC/3D-printing pipeline.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object to check"},
             },
             "required": ["object_name"],
         },

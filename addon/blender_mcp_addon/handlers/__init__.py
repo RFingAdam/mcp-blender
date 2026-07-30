@@ -64,6 +64,7 @@ class CommandHandlers(
         self._handlers["scene_clear"] = self._handle_scene_clear
         self._handlers["scene_set_frame_range"] = self._handle_scene_set_frame_range
         self._handlers["get_version"] = self._handle_get_version
+        self._handlers["server_restart"] = self._handle_server_restart
 
         # Object handlers
         self._handlers["object_create"] = self._handle_object_create
@@ -79,6 +80,8 @@ class CommandHandlers(
         self._handlers["mesh_from_data"] = self._handle_mesh_from_data
         self._handlers["object_set_origin"] = self._handle_object_set_origin
         self._handlers["object_apply_transforms"] = self._handle_object_apply_transforms
+        self._handlers["object_rename"] = self._handle_object_rename
+        self._handlers["object_get_bounds"] = self._handle_object_get_bounds
 
         # Material handlers
         self._handlers["material_create"] = self._handle_material_create
@@ -217,6 +220,7 @@ class CommandHandlers(
         self._handlers["text_create"] = self._handle_text_create
         self._handlers["text_set_properties"] = self._handle_text_set_properties
         self._handlers["text_to_mesh"] = self._handle_text_to_mesh
+        self._handlers["text_add_relief"] = self._handle_text_add_relief
 
         # Edit mode mesh operations
         self._handlers["mesh_extrude"] = self._handle_mesh_extrude
@@ -246,6 +250,7 @@ class CommandHandlers(
         self._handlers["mesh_subdivide"] = self._handle_mesh_subdivide
         self._handlers["mesh_edge_slide"] = self._handle_mesh_edge_slide
         self._handlers["mesh_tris_to_quads"] = self._handle_mesh_tris_to_quads
+        self._handlers["mesh_triangulate"] = self._handle_mesh_triangulate
 
         # Cutting & separation tools
         self._handlers["mesh_knife_project"] = self._handle_mesh_knife_project
@@ -346,6 +351,7 @@ class CommandHandlers(
         self._handlers["calibrate_from_reference"] = self._handle_calibrate_from_reference
         self._handlers["measure_edge_angle"] = self._handle_measure_edge_angle
         self._handlers["validate_mesh_quality"] = self._handle_validate_mesh_quality
+        self._handlers["mesh_check_watertight"] = self._handle_mesh_check_watertight
 
         # Collection handlers
         self._handlers["collection_create"] = self._handle_collection_create

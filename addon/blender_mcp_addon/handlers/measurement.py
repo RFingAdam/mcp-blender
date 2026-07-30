@@ -962,5 +962,81 @@ class MeasurementHandlersMixin:
             bm.free()
 
 
+    def _handle_mesh_check_watertight(self, params: dict) -> dict:
+        """3D-print-focused watertightness check: manifold, single shell, positive volume.
+
+        ``validate_mesh_quality`` covers export-readiness broadly (UVs,
+        materials, n-gons, ...); this is the narrower "will this hold water /
+        slice cleanly" check - the same three criteria (0 open edges, 0
+        non-manifold edges, exactly 1 shell) used throughout this project's
+        CNC/3D-printing workflow, in one call instead of hand-rolled bmesh
+        connected-component scripts.
+        """
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(obj.data)
+            bm.transform(obj.matrix_world)
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            non_manifold = [e.index for e in bm.edges if not e.is_manifold]
+            boundary = [e.index for e in bm.edges if len(e.link_faces) == 1]
+
+            # Connected-component count via BFS over vertex adjacency.
+            visited: set[int] = set()
+            shell_sizes: list[int] = []
+            for start in bm.verts:
+                if start.index in visited:
+                    continue
+                stack = [start]
+                visited.add(start.index)
+                count = 0
+                while stack:
+                    v = stack.pop()
+                    count += 1
+                    for e in v.link_edges:
+                        other = e.other_vert(v)
+                        if other.index not in visited:
+                            visited.add(other.index)
+                            stack.append(other)
+                shell_sizes.append(count)
+            shell_sizes.sort(reverse=True)
+
+            bmesh.ops.triangulate(bm, faces=bm.faces[:])
+            volume = 0.0
+            for face in bm.faces:
+                v0, v1, v2 = (v.co for v in face.verts)
+                volume += v0.dot(v1.cross(v2)) / 6.0
+
+            watertight = (
+                len(non_manifold) == 0
+                and len(boundary) == 0
+                and len(shell_sizes) == 1
+                and volume > 0
+            )
+
+            return {
+                "success": True,
+                "object": object_name,
+                "watertight": watertight,
+                "non_manifold_edge_count": len(non_manifold),
+                "non_manifold_edge_indices": non_manifold[:50],
+                "boundary_edge_count": len(boundary),
+                "boundary_edge_indices": boundary[:50],
+                "shell_count": len(shell_sizes),
+                "shell_vertex_counts": shell_sizes[:10],
+                "signed_volume": round(volume, 6),
+            }
+        finally:
+            bm.free()
+
     # ========== Collection & System Handlers ==========
 

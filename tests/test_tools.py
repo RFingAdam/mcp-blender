@@ -224,6 +224,63 @@ class TestToolSchemas:
         assert "keep_original" in schema["properties"]
         assert schema["required"] == ["object_name"]
 
+    def test_object_rename_schema(self):
+        """Test object_rename tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_object_rename")
+        schema = tool.inputSchema
+
+        assert "name" in schema["properties"]
+        assert "new_name" in schema["properties"]
+        assert schema["required"] == ["name", "new_name"]
+
+    def test_object_get_bounds_schema(self):
+        """Test object_get_bounds tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_object_get_bounds")
+        schema = tool.inputSchema
+
+        assert "name" in schema["properties"]
+        assert schema["required"] == ["name"]
+
+    def test_mesh_triangulate_schema(self):
+        """Test mesh_triangulate tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_mesh_triangulate")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert "quad_method" in schema["properties"]
+        assert "BEAUTY" in schema["properties"]["quad_method"]["enum"]
+        assert "ngon_method" in schema["properties"]
+        assert schema["required"] == ["object_name"]
+
+    def test_mesh_check_watertight_schema(self):
+        """Test mesh_check_watertight tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_mesh_check_watertight")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert schema["required"] == ["object_name"]
+
+    def test_text_add_relief_schema(self):
+        """Test text_add_relief tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_text_add_relief")
+        schema = tool.inputSchema
+
+        assert "content" in schema["properties"]
+        assert "target_object" in schema["properties"]
+        assert "fit_box" in schema["properties"]
+        assert "x_min" in schema["properties"]["fit_box"]["properties"]
+        assert "z_bottom" in schema["properties"]
+        assert "solver" in schema["properties"]
+        assert "EXACT" in schema["properties"]["solver"]["enum"]
+        assert set(schema["required"]) == {"content", "target_object", "fit_box", "z_bottom"}
+
+    def test_server_restart_schema(self):
+        """Test server_restart tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_server_restart")
+        schema = tool.inputSchema
+
+        assert schema["required"] == []
+
 
 class TestToolDescriptions:
     """Test that tool descriptions are helpful."""

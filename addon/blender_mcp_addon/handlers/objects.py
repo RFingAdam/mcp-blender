@@ -273,5 +273,45 @@ class ObjectHandlersMixin:
 
         return serialize_object(obj)
 
+
+    def _handle_object_rename(self, params: dict) -> dict:
+        """Rename an object.
+
+        Blender auto-suffixes (``.001``) if ``new_name`` collides with an
+        existing object, so the returned ``name`` should be checked against
+        the requested ``new_name`` when uniqueness matters.
+        """
+        obj = get_object_or_error(require_param(params, "name", str))
+        new_name = require_param(params, "new_name", str)
+        obj.name = new_name
+        return {"success": True, "old_name": params["name"], "name": obj.name}
+
+
+    def _handle_object_get_bounds(self, params: dict) -> dict:
+        """Get an object's world-space axis-aligned bounding box.
+
+        Works for any object type with a bounding box (mesh, curve/font,
+        etc.) via the evaluated ``bound_box``, so it can size/position a
+        FONT object before ``text_to_mesh`` bakes it - no need to convert
+        to a mesh just to measure it.
+        """
+        from mathutils import Vector
+
+        obj = get_object_or_error(require_param(params, "name", str))
+        corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+        xs = [c.x for c in corners]
+        ys = [c.y for c in corners]
+        zs = [c.z for c in corners]
+        bbox_min = [min(xs), min(ys), min(zs)]
+        bbox_max = [max(xs), max(ys), max(zs)]
+
+        return {
+            "name": obj.name,
+            "min": bbox_min,
+            "max": bbox_max,
+            "dimensions": [bbox_max[i] - bbox_min[i] for i in range(3)],
+            "center": [(bbox_min[i] + bbox_max[i]) / 2 for i in range(3)],
+        }
+
     # ========== Material Handlers ==========
 

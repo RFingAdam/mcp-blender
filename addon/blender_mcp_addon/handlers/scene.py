@@ -55,5 +55,29 @@ class SceneHandlersMixin:
         """Get Blender version information."""
         return compat.get_version_info()
 
+
+    def _handle_server_restart(self, params: dict) -> dict:
+        """Cycle the MCP socket server: stop, then start a fresh listener.
+
+        This recovers a connection that has gone stale/unresponsive without
+        needing the user to click anything in the addon panel. It does
+        **not** reload addon source code - if handler code on disk changed,
+        this restart will keep serving the old code, exactly like it did
+        before the restart. Only Blender's own "Reload Scripts" (or a full
+        Blender restart) picks up new code, and neither of those can safely
+        be triggered from in here: reloading the very module that is
+        handling this request tears down the server without restarting it,
+        so it requires a manual restart anyway - there is no advantage to
+        attempting it remotely.
+
+        Because stopping the server closes the socket this very request
+        arrived on, the response below will typically fail to reach the
+        caller (connection reset). That is expected, not an error: reconnect
+        and call ``ping`` to confirm the new server is up.
+        """
+        bpy.ops.mcp.stop_server()
+        bpy.ops.mcp.start_server()
+        return {"success": True, "note": "Server cycled; reconnect and ping to confirm."}
+
     # ========== Object Handlers ==========
 
