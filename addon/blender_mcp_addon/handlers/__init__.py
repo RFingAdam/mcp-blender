@@ -25,6 +25,7 @@ from .physics import PhysicsHandlersMixin
 from .render import RenderHandlersMixin
 from .scene import SceneHandlersMixin
 from .sculpt import SculptHandlersMixin
+from .text_objects import TextObjectHandlersMixin
 
 
 class CommandHandlers(
@@ -46,6 +47,7 @@ class CommandHandlers(
     MSFSHandlersMixin,
     BakingHandlersMixin,
     GeoNodesHandlersMixin,
+    TextObjectHandlersMixin,
 ):
     """Handles all MCP commands from the socket server."""
 
@@ -210,6 +212,11 @@ class CommandHandlers(
         self._handlers["curve_create"] = self._handle_curve_create
         self._handlers["curve_to_mesh"] = self._handle_curve_to_mesh
         self._handlers["curve_from_mesh_edge"] = self._handle_curve_from_mesh_edge
+
+        # Text object tools (native vector/curve-based text, not raster reconstruction)
+        self._handlers["text_create"] = self._handle_text_create
+        self._handlers["text_set_properties"] = self._handle_text_set_properties
+        self._handlers["text_to_mesh"] = self._handle_text_to_mesh
 
         # Edit mode mesh operations
         self._handlers["mesh_extrude"] = self._handle_mesh_extrude

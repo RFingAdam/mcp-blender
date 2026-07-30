@@ -1744,6 +1744,93 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "edge_indices"],
         },
     ),
+    # ==================== Text Objects ====================
+    Tool(
+        name="blender_text_create",
+        description="Create a 3D text object from Blender's native FONT/TextCurve data. Unlike reconstructing glyphs from a raster/height-map, letterforms stay smooth vector curves at any extrude/bevel_depth, so corners round correctly instead of stair-stepping. Use this for engraved or relief text (signage, badges, embossed logos) instead of voxel/pixel-based letter reconstruction.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "default": "Text", "description": "Name for the text object"},
+                "content": {"type": "string", "description": "The text to display"},
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Object location [x, y, z]",
+                },
+                "rotation": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Object rotation in radians [x, y, z]",
+                },
+                "size": {"type": "number", "default": 1.0, "description": "Font size"},
+                "extrude": {"type": "number", "default": 0.0, "description": "Depth to extrude the flat glyph outline (0 = flat text)"},
+                "bevel_depth": {"type": "number", "default": 0.0, "description": "Bevel/round the extruded edges by this radius"},
+                "bevel_resolution": {"type": "integer", "default": 4, "description": "Bevel smoothness (segments)"},
+                "letter_spacing": {"type": "number", "default": 1.0, "description": "Extra spacing between characters"},
+                "word_spacing": {"type": "number", "default": 1.0, "description": "Extra spacing between words"},
+                "line_spacing": {"type": "number", "default": 1.0, "description": "Spacing between lines"},
+                "align_x": {
+                    "type": "string",
+                    "enum": ["LEFT", "CENTER", "RIGHT", "JUSTIFY", "FLUSH"],
+                    "default": "LEFT",
+                    "description": "Horizontal alignment",
+                },
+                "align_y": {
+                    "type": "string",
+                    "enum": ["TOP_BASELINE", "TOP", "CENTER", "BOTTOM", "BOTTOM_BASELINE"],
+                    "default": "BOTTOM_BASELINE",
+                    "description": "Vertical alignment",
+                },
+                "fill_type": {
+                    "type": "string",
+                    "enum": ["NONE", "BACK", "FRONT", "BOTH"],
+                    "default": "BOTH",
+                    "description": "Which caps to fill on the extruded solid (BOTH = solid front+back)",
+                },
+                "font_path": {"type": "string", "description": "Path to a .ttf/.otf font file (default: Blender's built-in font)"},
+            },
+            "required": ["content"],
+        },
+    ),
+    Tool(
+        name="blender_text_set_properties",
+        description="Set a text object's content, font, extrude, bevel, spacing, or alignment. Only the parameters passed are changed, so you can iterate quickly (e.g. dialing in depth and corner roundness to match an existing relief) without recreating the object from scratch.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the text object"},
+                "content": {"type": "string", "description": "New text content"},
+                "size": {"type": "number", "description": "Font size"},
+                "extrude": {"type": "number", "description": "Extrude depth"},
+                "bevel_depth": {"type": "number", "description": "Bevel radius"},
+                "bevel_resolution": {"type": "integer", "description": "Bevel smoothness (segments)"},
+                "letter_spacing": {"type": "number", "description": "Extra spacing between characters"},
+                "word_spacing": {"type": "number", "description": "Extra spacing between words"},
+                "line_spacing": {"type": "number", "description": "Spacing between lines"},
+                "align_x": {"type": "string", "enum": ["LEFT", "CENTER", "RIGHT", "JUSTIFY", "FLUSH"], "description": "Horizontal alignment"},
+                "align_y": {"type": "string", "enum": ["TOP_BASELINE", "TOP", "CENTER", "BOTTOM", "BOTTOM_BASELINE"], "description": "Vertical alignment"},
+                "fill_type": {"type": "string", "enum": ["NONE", "BACK", "FRONT", "BOTH"], "description": "Which caps to fill on the extruded solid"},
+                "font_path": {"type": "string", "description": "Path to a .ttf/.otf font file"},
+                "location": {"type": "array", "items": {"type": "number"}, "description": "Object location [x, y, z]"},
+                "rotation": {"type": "array", "items": {"type": "number"}, "description": "Object rotation in radians [x, y, z]"},
+            },
+            "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_text_to_mesh",
+        description="Convert a text object to a real mesh, baking the vector letterforms into geometry usable with boolean_op, export_stl, modifiers, etc. Automatically welds the duplicate coincident vertices Blender's convert operator leaves at each glyph's spline seam, so the result is manifold instead of reading as non-manifold at every letter.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the text object to convert"},
+                "keep_original": {"type": "boolean", "default": False, "description": "Keep the original text object and convert a duplicate instead"},
+                "new_name": {"type": "string", "description": "Name for the converted duplicate (only used if keep_original is true)"},
+            },
+            "required": ["object_name"],
+        },
+    ),
     # ==================== Boolean Operations ====================
     Tool(
         name="blender_boolean_op",

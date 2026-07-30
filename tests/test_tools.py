@@ -201,6 +201,29 @@ class TestToolSchemas:
         assert "object_name" in schema["required"]
         assert "prompt" in schema["required"]
 
+    def test_text_create_schema(self):
+        """Test text_create tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_text_create")
+        schema = tool.inputSchema
+
+        assert "content" in schema["properties"]
+        assert "extrude" in schema["properties"]
+        assert "bevel_depth" in schema["properties"]
+        assert "align_x" in schema["properties"]
+        assert "LEFT" in schema["properties"]["align_x"]["enum"]
+        assert "fill_type" in schema["properties"]
+        assert "BOTH" in schema["properties"]["fill_type"]["enum"]
+        assert schema["required"] == ["content"]
+
+    def test_text_to_mesh_schema(self):
+        """Test text_to_mesh tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_text_to_mesh")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert "keep_original" in schema["properties"]
+        assert schema["required"] == ["object_name"]
+
 
 class TestToolDescriptions:
     """Test that tool descriptions are helpful."""
@@ -261,6 +284,13 @@ class TestToolNaming:
         export_tools = [t for t in TOOLS if ("export" in t.name or "import" in t.name) and "msfs" not in t.name]
         for tool in export_tools:
             assert tool.name.startswith("blender_export_") or tool.name.startswith("blender_import_")
+
+    def test_text_tools_naming(self):
+        """Text object tools should follow naming convention."""
+        text_tools = [t for t in TOOLS if t.name.startswith("blender_text_")]
+        assert len(text_tools) >= 3, f"Expected at least 3 text tools, found {len(text_tools)}"
+        for tool in text_tools:
+            assert tool.name.startswith("blender_text_")
 
     def test_msfs_tools_naming(self):
         """MSFS tools should follow naming convention."""

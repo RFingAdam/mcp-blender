@@ -18,6 +18,7 @@ if addon_path not in sys.path:
     sys.path.insert(0, addon_path)
 
 try:
+    import bmesh
     import bpy
 except ImportError:
     print("ERROR: This script must be run inside Blender")
@@ -514,6 +515,80 @@ def test_mesh_fill_enum_values(runner: TestRunner):
         raise AssertionError("mesh_fill accepted an invalid fill_type")
 
 
+def test_text_create_and_to_mesh(runner: TestRunner):
+    """Test creating a native vector text object and baking it to a mesh."""
+    runner.reset_scene()
+    result = runner.handlers.handle("text_create", {
+        "name": "SignText",
+        "content": "AB",
+        "size": 5,
+        "extrude": 1.0,
+        "bevel_depth": 0.2,
+        "bevel_resolution": 4,
+    })
+    assert result["success"], "text_create failed"
+
+    obj = bpy.data.objects.get("SignText")
+    assert obj is not None, "text object not created"
+    assert obj.type == "FONT", f"expected FONT object, got {obj.type}"
+
+    mesh_result = runner.handlers.handle("text_to_mesh", {"object_name": "SignText"})
+    assert mesh_result["success"], "text_to_mesh failed"
+    assert mesh_result["vertices"] > 0, "converted mesh has no vertices"
+    assert mesh_result["faces"] > 0, "converted mesh has no faces"
+
+    mesh_obj = bpy.data.objects.get("SignText")
+    assert mesh_obj.type == "MESH", "object was not converted to MESH"
+
+    # text_to_mesh must weld the duplicate seam vertices bpy.ops.object.convert
+    # leaves behind - otherwise every glyph reads as non-manifold.
+    bm = bmesh.new()
+    bm.from_mesh(mesh_obj.data)
+    non_manifold = sum(1 for e in bm.edges if not e.is_manifold)
+    bm.free()
+    assert non_manifold == 0, f"{non_manifold} non-manifold edges after text_to_mesh"
+
+
+def test_text_set_properties(runner: TestRunner):
+    """Test updating an existing text object's font/extrude/bevel/spacing."""
+    from blender_mcp_addon.validation import ValidationError
+
+    runner.reset_scene()
+    runner.handlers.handle("text_create", {"name": "SignText2", "content": "Hi"})
+
+    result = runner.handlers.handle("text_set_properties", {
+        "object_name": "SignText2",
+        "extrude": 0.5,
+        "bevel_depth": 0.1,
+        "align_x": "CENTER",
+    })
+    assert result["success"], "text_set_properties failed"
+    assert set(result["changed"]) == {"extrude", "bevel_depth", "align_x"}
+
+    obj = bpy.data.objects["SignText2"]
+    assert abs(obj.data.extrude - 0.5) < 1e-6, "extrude not applied"
+    assert obj.data.align_x == "CENTER", "align_x not applied"
+
+    # An invalid enum value must be rejected without changing the object.
+    try:
+        runner.handlers.handle("text_set_properties", {
+            "object_name": "SignText2", "align_x": "NOT_A_VALUE",
+        })
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("text_set_properties accepted an invalid align_x")
+
+    # Must reject non-text objects.
+    bpy.ops.mesh.primitive_cube_add()
+    try:
+        runner.handlers.handle("text_set_properties", {"object_name": "Cube", "size": 2})
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("text_set_properties accepted a non-text object")
+
+
 def test_compat_version_detection(runner: TestRunner):
     """Test version compatibility detection."""
     info = compat.get_version_info()
@@ -603,6 +678,11 @@ def main():
     # Mesh editing tests
     print("\nMesh Editing Tests:")
     runner.run_test("mesh_fill_enum_values", lambda: test_mesh_fill_enum_values(runner))
+
+    # Text object tests
+    print("\nText Object Tests:")
+    runner.run_test("text_create_and_to_mesh", lambda: test_text_create_and_to_mesh(runner))
+    runner.run_test("text_set_properties", lambda: test_text_set_properties(runner))
 
     # Compatibility tests
     print("\nCompatibility Tests:")

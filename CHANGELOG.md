@@ -26,11 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Native text object handlers** (3 new tools) — `text_create`,
+  `text_set_properties`, `text_to_mesh`. These wrap Blender's built-in
+  `FONT`/`TextCurve` object instead of reconstructing glyphs from a
+  raster/height-map: letterforms stay smooth vector curves at any
+  `extrude`/`bevel_depth`, so corners round correctly instead of stair-stepping
+  at whatever pixel resolution a reconstruction happened to sample at.
+  `text_to_mesh` also welds the duplicate coincident vertices
+  `bpy.ops.object.convert` leaves at each glyph's spline seam — without that,
+  every converted letter reads as non-manifold.
 - `tests/test_handler_signatures.py` — Blender-free static checks that guard
   against `validate_enum` argument-order regressions and against calling
   Blender operators removed in 4.x.
-- Integration tests for the STL export/import round-trip and for `mesh_fill`
-  enum handling.
+- Integration tests for the STL export/import round-trip, for `mesh_fill`
+  enum handling, and for the new text object handlers.
 
 ## [0.4.0] — 2026-05-13
 
