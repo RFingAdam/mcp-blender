@@ -49,6 +49,132 @@ def _get_text_object_or_error(name: str):
     return obj
 
 
+def _object_world_bounds(obj):
+    """World-space (x_min, x_max), (y_min, y_max), (z_min, z_max) from bound_box."""
+    from mathutils import Vector
+
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    xs = [c.x for c in corners]
+    ys = [c.y for c in corners]
+    zs = [c.z for c in corners]
+    return (min(xs), max(xs)), (min(ys), max(ys)), (min(zs), max(zs))
+
+
+def _fit_and_position(obj, fit_box, z_bottom, keep_aspect=False):
+    """Scale obj's XY footprint to exactly fill fit_box and sit on z_bottom.
+
+    Scale/location are applied as deltas on top of whatever the object
+    already has, so this works whether obj was just created at the origin
+    (scale/location still identity) or is an existing/imported object with
+    its own transform.
+    """
+    (x0, x1), (y0, y1), _ = _object_world_bounds(obj)
+    natural_w = x1 - x0
+    natural_h = y1 - y0
+    if natural_w <= 0 or natural_h <= 0:
+        raise ValidationError(
+            f"Object '{obj.name}' has zero-size XY bounds - nothing to fit"
+        )
+
+    target_w = fit_box["x_max"] - fit_box["x_min"]
+    target_h = fit_box["y_max"] - fit_box["y_min"]
+    if keep_aspect:
+        s = min(target_w / natural_w, target_h / natural_h)
+        sx = sy = s
+    else:
+        sx = target_w / natural_w
+        sy = target_h / natural_h
+    obj.scale = (obj.scale[0] * sx, obj.scale[1] * sy, obj.scale[2])
+
+    (x0, x1), (y0, y1), (z0, z1) = _object_world_bounds(obj)
+    target_cx = (fit_box["x_min"] + fit_box["x_max"]) / 2
+    target_cy = (fit_box["y_min"] + fit_box["y_max"]) / 2
+    cur_cx = (x0 + x1) / 2
+    cur_cy = (y0 + y1) / 2
+    obj.location = (
+        obj.location[0] + (target_cx - cur_cx),
+        obj.location[1] + (target_cy - cur_cy),
+        obj.location[2] + (z_bottom - z0),
+    )
+
+
+def _convert_weld_triangulate(obj, triangulate=True):
+    """Bake obj to a mesh (if it isn't one already), weld seam duplicates, triangulate."""
+    import bmesh
+
+    ensure_object_selected(obj)
+    if obj.type != "MESH":
+        bpy.ops.object.convert(target="MESH")
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
+    if triangulate:
+        bmesh.ops.triangulate(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def _separate_into_pieces(obj):
+    """Split obj by loose parts (e.g. one piece per glyph) and return the piece objects."""
+    ensure_object_selected(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.separate(type="LOOSE")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return [o for o in bpy.context.selected_objects if o.type == "MESH"]
+
+
+def _union_pieces_onto_target(pieces, target_obj, solver):
+    """Boolean-UNION each piece onto target_obj one at a time, detecting silent solver corruption.
+
+    See _handle_text_add_relief's docstring for why one-at-a-time is required.
+    """
+    union_log = []
+    verts_before = len(target_obj.data.vertices)
+    for piece in pieces:
+        mod = target_obj.modifiers.new(name="Boolean_UNION", type="BOOLEAN")
+        mod.operation = "UNION"
+        mod.solver = solver
+        mod.object = piece
+
+        ctx = bpy.context.copy()
+        ctx["object"] = target_obj
+        with bpy.context.temp_override(**ctx):
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+
+        verts_after = len(target_obj.data.vertices)
+        piece.hide_set(True)
+        piece.hide_render = True
+        union_log.append({
+            "piece": piece.name,
+            "verts_before": verts_before,
+            "verts_after": verts_after,
+        })
+        if verts_after == verts_before:
+            return {
+                "success": False,
+                "error": (
+                    f"Union with piece '{piece.name}' left the target's vertex "
+                    f"count unchanged ({verts_after}) - this is the signature of the "
+                    "EXACT solver silently corrupting a multi-island/complex union. "
+                    "Stopped here instead of continuing over a corrupted target."
+                ),
+                "union_log": union_log,
+                "remaining_pieces": [p.name for p in pieces if p.name not in
+                                     {u["piece"] for u in union_log}],
+            }
+        verts_before = verts_after
+
+    return {
+        "success": True,
+        "union_log": union_log,
+        "final_vertices": len(target_obj.data.vertices),
+        "final_faces": len(target_obj.data.polygons),
+    }
+
+
 class TextObjectHandlersMixin:
     """Mixin for native (vector/curve-based) text object handlers."""
 
@@ -234,9 +360,6 @@ class TextObjectHandlersMixin:
         than silently continuing - as the same corrupted-collapse failure mode
         can otherwise slip through unnoticed.
         """
-        import bmesh
-        from mathutils import Vector
-
         content = require_param(params, "content", str)
         target_name = require_param(params, "target_object", str)
         fit_box = require_param(params, "fit_box", dict)
@@ -274,97 +397,102 @@ class TextObjectHandlersMixin:
         text_obj = bpy.data.objects.new(f"{content}_relief", text_data)
         bpy.context.collection.objects.link(text_obj)
 
-        def bounds():
-            corners = [text_obj.matrix_world @ Vector(c) for c in text_obj.bound_box]
-            xs = [c.x for c in corners]
-            ys = [c.y for c in corners]
-            zs = [c.z for c in corners]
-            return (min(xs), max(xs)), (min(ys), max(ys)), (min(zs), max(zs))
-
-        (x0, x1), (y0, y1), _ = bounds()
-        natural_w = x1 - x0
-        natural_h = y1 - y0
-        if natural_w <= 0 or natural_h <= 0:
+        (x0, x1), (y0, y1), _ = _object_world_bounds(text_obj)
+        if (x1 - x0) <= 0 or (y1 - y0) <= 0:
             bpy.data.objects.remove(text_obj, do_unlink=True)
             raise ValidationError(f"Text '{content}' produced zero-size bounds - check font_path/content")
 
-        target_w = fit_box["x_max"] - fit_box["x_min"]
-        target_h = fit_box["y_max"] - fit_box["y_min"]
-        text_obj.scale = (target_w / natural_w, target_h / natural_h, 1.0)
+        _fit_and_position(text_obj, fit_box, z_bottom)
+        _convert_weld_triangulate(text_obj, triangulate)
+        glyph_pieces = _separate_into_pieces(text_obj)
+        result = _union_pieces_onto_target(glyph_pieces, target_obj, solver)
 
-        (x0, x1), (y0, y1), (z0, z1) = bounds()
-        target_cx = (fit_box["x_min"] + fit_box["x_max"]) / 2
-        target_cy = (fit_box["y_min"] + fit_box["y_max"]) / 2
-        cur_cx = (x0 + x1) / 2
-        cur_cy = (y0 + y1) / 2
-        text_obj.location = (
-            target_cx - cur_cx,
-            target_cy - cur_cy,
-            z_bottom - z0,
-        )
-
-        ensure_object_selected(text_obj)
-        bpy.ops.object.convert(target="MESH")
-
-        bm = bmesh.new()
-        bm.from_mesh(text_obj.data)
-        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.0001)
-        if triangulate:
-            bmesh.ops.triangulate(bm, faces=bm.faces)
-        bm.to_mesh(text_obj.data)
-        bm.free()
-        text_obj.data.update()
-
-        ensure_object_selected(text_obj)
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.select_all(action="SELECT")
-        bpy.ops.mesh.separate(type="LOOSE")
-        bpy.ops.object.mode_set(mode="OBJECT")
-        glyph_pieces = [o for o in bpy.context.selected_objects if o.type == "MESH"]
-
-        union_log = []
-        verts_before = len(target_obj.data.vertices)
-        for piece in glyph_pieces:
-            mod = target_obj.modifiers.new(name="Boolean_UNION", type="BOOLEAN")
-            mod.operation = "UNION"
-            mod.solver = solver
-            mod.object = piece
-
-            ctx = bpy.context.copy()
-            ctx["object"] = target_obj
-            with bpy.context.temp_override(**ctx):
-                bpy.ops.object.modifier_apply(modifier=mod.name)
-
-            verts_after = len(target_obj.data.vertices)
-            piece.hide_set(True)
-            piece.hide_render = True
-            union_log.append({
-                "piece": piece.name,
-                "verts_before": verts_before,
-                "verts_after": verts_after,
-            })
-            if verts_after == verts_before:
-                return {
-                    "success": False,
-                    "error": (
-                        f"Union with glyph piece '{piece.name}' left the target's vertex "
-                        f"count unchanged ({verts_after}) - this is the signature of the "
-                        "EXACT solver silently corrupting a multi-island/complex union. "
-                        "Stopped here instead of continuing over a corrupted target."
-                    ),
-                    "target": target_name,
-                    "union_log": union_log,
-                    "remaining_pieces": [p.name for p in glyph_pieces if p.name not in
-                                         {u["piece"] for u in union_log}],
-                }
-            verts_before = verts_after
+        if not result["success"]:
+            result["target"] = target_name
+            return result
 
         return {
             "success": True,
             "target": target_name,
             "content": content,
             "glyph_count": len(glyph_pieces),
-            "union_log": union_log,
-            "final_vertices": len(target_obj.data.vertices),
-            "final_faces": len(target_obj.data.polygons),
+            "union_log": result["union_log"],
+            "final_vertices": result["final_vertices"],
+            "final_faces": result["final_faces"],
+        }
+
+    def _handle_mesh_add_relief(self, params: dict) -> dict:
+        """Fit one or more existing objects to an XY box and boolean-union them onto a target mesh.
+
+        This is the same "fit into a box, convert to mesh, separate into
+        pieces, union one piece at a time onto the target" recipe as
+        ``text_add_relief``, generalized to work on any already-existing
+        source object(s) - imported SVG curves, an imported logo mesh,
+        anything - instead of only Blender's native FONT text. Use this when
+        the lettering/artwork isn't (or can't be) built as native text, e.g.
+        importing font glyphs as SVG paths to route around a solver bug that
+        only reproduces on native TextCurve conversion for a particular
+        target mesh.
+
+        If more than one ``source_objects`` name is given, they are joined
+        into a single object first (SVG import typically creates one object
+        per path/glyph), then that combined object's bounding box drives the
+        fit-to-box scale/position, preserving the glyphs' relative
+        positions and sizes to each other.
+
+        See ``text_add_relief`` for why the per-piece, one-at-a-time union
+        order matters (silent EXACT-solver corruption otherwise) - this tool
+        applies the same corruption check and stops immediately on the first
+        piece whose union doesn't change the target's vertex count.
+        """
+        source_names = require_param(params, "source_objects", list)
+        if not source_names:
+            raise ValidationError("source_objects must contain at least one object name")
+        target_name = require_param(params, "target_object", str)
+        fit_box = require_param(params, "fit_box", dict)
+        for key in ("x_min", "x_max", "y_min", "y_max"):
+            if key not in fit_box:
+                raise ValidationError(f"fit_box missing '{key}'")
+        z_bottom = float(require_param(params, "z_bottom", (int, float)))
+
+        keep_aspect = bool(params.get("keep_aspect", False))
+        solver = validate_enum(params.get("solver", "EXACT"), "solver", ["FAST", "EXACT"])
+        triangulate = params.get("triangulate", True)
+        separate_loose = params.get("separate_loose", True)
+
+        target_obj = get_object_or_error(target_name)
+        if target_obj.type != "MESH":
+            raise ValidationError(f"target_object '{target_name}' is not a mesh")
+
+        source_objs = [get_object_or_error(n) for n in source_names]
+        for obj in source_objs:
+            if obj.name == target_obj.name:
+                raise ValidationError("source_objects cannot include target_object")
+
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in source_objs:
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = source_objs[0]
+        if len(source_objs) > 1:
+            bpy.ops.object.join()
+        source_obj = bpy.context.view_layer.objects.active
+
+        _fit_and_position(source_obj, fit_box, z_bottom, keep_aspect=keep_aspect)
+        _convert_weld_triangulate(source_obj, triangulate)
+        pieces = _separate_into_pieces(source_obj) if separate_loose else [source_obj]
+        result = _union_pieces_onto_target(pieces, target_obj, solver)
+
+        if not result["success"]:
+            result["target"] = target_name
+            result["source_objects"] = source_names
+            return result
+
+        return {
+            "success": True,
+            "target": target_name,
+            "source_objects": source_names,
+            "piece_count": len(pieces),
+            "union_log": result["union_log"],
+            "final_vertices": result["final_vertices"],
+            "final_faces": result["final_faces"],
         }

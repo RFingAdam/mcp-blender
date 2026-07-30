@@ -644,6 +644,121 @@ def test_text_add_relief(runner: TestRunner):
         raise AssertionError("text_add_relief accepted a non-mesh target_object")
 
 
+def test_mesh_add_relief(runner: TestRunner):
+    """Test the source-object generalization of text_add_relief: fit/join/union arbitrary meshes."""
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=20)
+    target = bpy.context.active_object
+    target.name = "MeshReliefTarget"
+    target_verts_before = len(target.data.vertices)
+
+    # Two disjoint source pieces, standing in for e.g. two SVG-imported
+    # glyphs that arrive as separate objects and must be joined before the
+    # box-fit (so their relative offset/size to each other is preserved).
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(-3, 0, 0))
+    piece_a = bpy.context.active_object
+    piece_a.name = "ReliefPieceA"
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(3, 0, 0))
+    piece_b = bpy.context.active_object
+    piece_b.name = "ReliefPieceB"
+
+    result = runner.handlers.handle("mesh_add_relief", {
+        "source_objects": ["ReliefPieceA", "ReliefPieceB"],
+        "target_object": "MeshReliefTarget",
+        "fit_box": {"x_min": -8.0, "x_max": 8.0, "y_min": -3.0, "y_max": 3.0},
+        "z_bottom": 9.5,
+    })
+    assert result["success"], f"mesh_add_relief failed: {result}"
+    assert result["piece_count"] == 2, "two disjoint source cubes should separate into 2 pieces"
+    assert len(result["union_log"]) == 2
+
+    target = bpy.data.objects["MeshReliefTarget"]
+    assert len(target.data.vertices) > target_verts_before, "union should have added geometry"
+    assert len(target.data.vertices) == result["final_vertices"]
+
+    # keep_aspect=True must scale uniformly rather than stretching independently.
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=20)
+    target2 = bpy.context.active_object
+    target2.name = "AspectTarget"
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0))  # 2x2 square footprint
+    square = bpy.context.active_object
+    square.name = "SquareSource"
+
+    aspect_result = runner.handlers.handle("mesh_add_relief", {
+        "source_objects": ["SquareSource"],
+        "target_object": "AspectTarget",
+        "fit_box": {"x_min": -8.0, "x_max": 8.0, "y_min": -1.0, "y_max": 1.0},
+        "z_bottom": 9.5,
+        "keep_aspect": True,
+        "separate_loose": False,
+    })
+    assert aspect_result["success"], f"mesh_add_relief (keep_aspect) failed: {aspect_result}"
+    assert aspect_result["piece_count"] == 1
+
+    # source_objects cannot include target_object.
+    from blender_mcp_addon.validation import ValidationError
+
+    try:
+        runner.handlers.handle("mesh_add_relief", {
+            "source_objects": ["AspectTarget"], "target_object": "AspectTarget",
+            "fit_box": {"x_min": 0, "x_max": 1, "y_min": 0, "y_max": 1}, "z_bottom": 0,
+        })
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("mesh_add_relief accepted target_object as its own source")
+
+
+def test_mesh_bake_heightmap(runner: TestRunner):
+    """Test mesh_bake_heightmap: hits over the mesh, misses outside it."""
+    import numpy as np
+
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_cube_add(size=2)  # spans x/y/z in [-1, 1]
+    cube = bpy.context.active_object
+    cube.name = "HeightmapCube"
+
+    with tempfile.NamedTemporaryFile(suffix=".npy", delete=False) as f:
+        output_path = f.name
+
+    try:
+        result = runner.handlers.handle("mesh_bake_heightmap", {
+            "object_name": "HeightmapCube",
+            "bb_min": [-0.9, -0.9, -5.0],
+            "bb_max": [0.9, 0.9, 5.0],
+            "output_path": output_path,
+            "resolution": 5,
+        })
+        assert result["success"], f"mesh_bake_heightmap failed: {result}"
+        assert result["shape"] == [5, 5]
+        assert result["hit_ratio"] == 1.0, "box fully inside the cube's XY footprint should hit on every ray"
+        assert abs(result["height_min"] - 1.0) < 1e-4, "ray from above should stop at the cube's top face (z=1)"
+        assert abs(result["height_max"] - 1.0) < 1e-4
+
+        grid = np.load(result["output_path"])
+        assert grid.shape == (5, 5)
+        assert np.allclose(grid, 1.0, atol=1e-4)
+
+        # A box that doesn't overlap the mesh at all should miss every ray.
+        miss_result = runner.handlers.handle("mesh_bake_heightmap", {
+            "object_name": "HeightmapCube",
+            "bb_min": [10.0, 10.0, -5.0],
+            "bb_max": [11.0, 11.0, 5.0],
+            "output_path": output_path,
+            "resolution": 3,
+            "miss_value": -1.0,
+        })
+        assert miss_result["hit_ratio"] == 0.0
+        assert miss_result["height_min"] is None
+        assert miss_result["height_max"] is None
+        miss_grid = np.load(miss_result["output_path"])
+        assert np.allclose(miss_grid, -1.0)
+    finally:
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+
+
 def test_object_rename(runner: TestRunner):
     """Test object_rename handler."""
     runner.reset_scene()
@@ -845,12 +960,14 @@ def main():
     runner.run_test("mesh_fill_enum_values", lambda: test_mesh_fill_enum_values(runner))
     runner.run_test("mesh_triangulate", lambda: test_mesh_triangulate(runner))
     runner.run_test("mesh_check_watertight", lambda: test_mesh_check_watertight(runner))
+    runner.run_test("mesh_bake_heightmap", lambda: test_mesh_bake_heightmap(runner))
 
     # Text object tests
     print("\nText Object Tests:")
     runner.run_test("text_create_and_to_mesh", lambda: test_text_create_and_to_mesh(runner))
     runner.run_test("text_set_properties", lambda: test_text_set_properties(runner))
     runner.run_test("text_add_relief", lambda: test_text_add_relief(runner))
+    runner.run_test("mesh_add_relief", lambda: test_mesh_add_relief(runner))
 
     # Compatibility tests
     print("\nCompatibility Tests:")

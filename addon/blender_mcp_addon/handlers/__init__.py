@@ -221,6 +221,7 @@ class CommandHandlers(
         self._handlers["text_set_properties"] = self._handle_text_set_properties
         self._handlers["text_to_mesh"] = self._handle_text_to_mesh
         self._handlers["text_add_relief"] = self._handle_text_add_relief
+        self._handlers["mesh_add_relief"] = self._handle_mesh_add_relief
 
         # Edit mode mesh operations
         self._handlers["mesh_extrude"] = self._handle_mesh_extrude
@@ -352,6 +353,7 @@ class CommandHandlers(
         self._handlers["measure_edge_angle"] = self._handle_measure_edge_angle
         self._handlers["validate_mesh_quality"] = self._handle_validate_mesh_quality
         self._handlers["mesh_check_watertight"] = self._handle_mesh_check_watertight
+        self._handlers["mesh_bake_heightmap"] = self._handle_mesh_bake_heightmap
 
         # Collection handlers
         self._handlers["collection_create"] = self._handle_collection_create

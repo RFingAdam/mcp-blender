@@ -281,6 +281,36 @@ class TestToolSchemas:
 
         assert schema["required"] == []
 
+    def test_mesh_add_relief_schema(self):
+        """Test mesh_add_relief tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_mesh_add_relief")
+        schema = tool.inputSchema
+
+        assert "source_objects" in schema["properties"]
+        assert schema["properties"]["source_objects"]["type"] == "array"
+        assert "target_object" in schema["properties"]
+        assert "fit_box" in schema["properties"]
+        assert "x_min" in schema["properties"]["fit_box"]["properties"]
+        assert "z_bottom" in schema["properties"]
+        assert "keep_aspect" in schema["properties"]
+        assert "solver" in schema["properties"]
+        assert "EXACT" in schema["properties"]["solver"]["enum"]
+        assert "separate_loose" in schema["properties"]
+        assert set(schema["required"]) == {"source_objects", "target_object", "fit_box", "z_bottom"}
+
+    def test_mesh_bake_heightmap_schema(self):
+        """Test mesh_bake_heightmap tool schema."""
+        tool = next(t for t in TOOLS if t.name == "blender_mesh_bake_heightmap")
+        schema = tool.inputSchema
+
+        assert "object_name" in schema["properties"]
+        assert "bb_min" in schema["properties"]
+        assert "bb_max" in schema["properties"]
+        assert "output_path" in schema["properties"]
+        assert "resolution" in schema["properties"]
+        assert schema["properties"]["resolution"]["default"] == 512
+        assert set(schema["required"]) == {"object_name", "bb_min", "bb_max", "output_path"}
+
 
 class TestToolDescriptions:
     """Test that tool descriptions are helpful."""

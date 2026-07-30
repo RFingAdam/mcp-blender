@@ -50,7 +50,9 @@ class TestToolDefinitions:
         # + 4 object/mesh utilities (object_rename, object_get_bounds,
         #   mesh_triangulate, mesh_check_watertight)
         # + 2 workflow/server utilities (text_add_relief, server_restart)
-        assert len(TOOLS) == 227, f"Expected 227 tools, got {len(TOOLS)}"
+        # + 2 relief-workflow generalization tools (mesh_add_relief,
+        #   mesh_bake_heightmap) added for the ERMENEK SVG-import relief task
+        assert len(TOOLS) == 229, f"Expected 229 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:

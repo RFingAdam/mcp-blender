@@ -13,6 +13,8 @@ from ..validation import (
     ValidationError,
     require_param,
     validate_enum,
+    validate_filepath,
+    validate_vector3,
 )
 
 
@@ -1037,6 +1039,97 @@ class MeasurementHandlersMixin:
             }
         finally:
             bm.free()
+
+    def _handle_mesh_bake_heightmap(self, params: dict) -> dict:
+        """Rasterize an object's top surface into a 2D height grid via raycasting.
+
+        Casts one ray straight down per grid cell across an XY box, recording
+        the world-Z of the first hit (or ``miss_value`` if the ray misses
+        entirely). This is the standard first step for isolating or replacing
+        one specific inscribed region (text, a logo, ...) on a complex organic
+        relief that has no per-region objects to select directly: bake once,
+        then threshold/connected-component the array in ordinary numpy/scipy
+        code outside Blender to find the region's pixel mask and bounding box.
+
+        The grid is written to ``output_path`` as a ``.npy`` file rather than
+        returned inline - at any usable resolution (a few hundred px upward)
+        the array is megabytes, too large to round-trip as JSON over the
+        socket, and .npy is the natural format for the numpy analysis this
+        feeds into.
+        """
+        import numpy as np
+        from mathutils import Vector
+        from mathutils.bvhtree import BVHTree
+        import bmesh
+
+        object_name = require_param(params, "object_name", str)
+        bb_min = validate_vector3(require_param(params, "bb_min", list), "bb_min")
+        bb_max = validate_vector3(require_param(params, "bb_max", list), "bb_max")
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
+        resolution_x = int(params.get("resolution_x", params.get("resolution", 512)))
+        resolution_y = int(params.get("resolution_y", params.get("resolution", 512)))
+        miss_value = float(params.get("miss_value", 0.0))
+        ray_start_z = params.get("ray_start_z")
+
+        if resolution_x < 1 or resolution_y < 1:
+            raise ValidationError("resolution_x/resolution_y must be >= 1")
+        if resolution_x > 4096 or resolution_y > 4096:
+            raise ValidationError(
+                "resolution_x/resolution_y capped at 4096 (Python-loop raycasting - "
+                "bake a smaller region or lower resolution and upsample downstream if you need more)"
+            )
+        if bb_max[0] <= bb_min[0] or bb_max[1] <= bb_min[1]:
+            raise ValidationError("bb_max must be greater than bb_min in x and y")
+
+        obj = get_object_or_error(object_name)
+        if obj.type != "MESH":
+            raise ValidationError(f"Object '{object_name}' is not a mesh")
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        eval_obj = obj.evaluated_get(depsgraph)
+        mesh = eval_obj.to_mesh()
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(mesh)
+            bm.transform(obj.matrix_world)
+            bvh = BVHTree.FromBMesh(bm)
+        finally:
+            bm.free()
+            eval_obj.to_mesh_clear()
+
+        start_z = float(ray_start_z) if ray_start_z is not None else bb_max[2] + 5.0
+        ray_len = start_z - (bb_min[2] - 5.0)
+        direction = Vector((0.0, 0.0, -1.0))
+
+        heights = np.full((resolution_y, resolution_x), miss_value, dtype=np.float64)
+        dx = (bb_max[0] - bb_min[0]) / max(resolution_x - 1, 1)
+        dy = (bb_max[1] - bb_min[1]) / max(resolution_y - 1, 1)
+        hit_count = 0
+        for j in range(resolution_y):
+            y = bb_min[1] + j * dy
+            for i in range(resolution_x):
+                x = bb_min[0] + i * dx
+                origin = Vector((x, y, start_z))
+                location, _normal, _index, _dist = bvh.ray_cast(origin, direction, ray_len)
+                if location is not None:
+                    heights[j, i] = location.z
+                    hit_count += 1
+
+        actual_path = output_path if output_path.endswith(".npy") else output_path + ".npy"
+        np.save(output_path, heights)
+
+        hit_mask = heights != miss_value
+        return {
+            "success": True,
+            "output_path": actual_path,
+            "object": object_name,
+            "shape": [resolution_y, resolution_x],
+            "bb_min": list(bb_min),
+            "bb_max": list(bb_max),
+            "hit_ratio": round(hit_count / (resolution_x * resolution_y), 4),
+            "height_min": float(heights[hit_mask].min()) if hit_count else None,
+            "height_max": float(heights[hit_mask].max()) if hit_count else None,
+        }
 
     # ========== Collection & System Handlers ==========
 

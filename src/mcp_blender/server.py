@@ -1872,6 +1872,39 @@ TOOLS: list[Tool] = [
             "required": ["content", "target_object", "fit_box", "z_bottom"],
         },
     ),
+    Tool(
+        name="blender_mesh_add_relief",
+        description="Fit one or more existing objects to an XY box and boolean-union them onto a target mesh - the text_add_relief recipe generalized to any source object(s), not just native FONT text. Use this for imported SVG curves, an imported logo mesh, or anything else that needs to be scaled/centered into fit_box, converted to a mesh, separated into pieces, and unioned onto target_object one piece at a time (same silent-corruption guard as text_add_relief: stops immediately if a piece's union doesn't change the target's vertex count). If source_objects has more than one name, they're joined into a single object first (e.g. SVG import creates one object per glyph/path) so their relative positions and sizes are preserved by the box-fit.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source_objects": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "description": "Name(s) of existing object(s) to fit and union. Multiple names are joined into one object first.",
+                },
+                "target_object": {"type": "string", "description": "Name of the mesh object to union the source onto"},
+                "fit_box": {
+                    "type": "object",
+                    "properties": {
+                        "x_min": {"type": "number"},
+                        "x_max": {"type": "number"},
+                        "y_min": {"type": "number"},
+                        "y_max": {"type": "number"},
+                    },
+                    "required": ["x_min", "x_max", "y_min", "y_max"],
+                    "description": "XY footprint (in target_object's local space) the source is scaled and centered to fill exactly",
+                },
+                "z_bottom": {"type": "number", "description": "Z position (local space) for the bottom of the fitted source"},
+                "keep_aspect": {"type": "boolean", "default": False, "description": "Scale uniformly (preserve aspect ratio) instead of independently fitting X and Y - use for logos/artwork where distortion would be wrong; leave false to exactly fill fit_box like text_add_relief does"},
+                "solver": {"type": "string", "enum": ["FAST", "EXACT"], "default": "EXACT", "description": "Boolean solver for the per-piece unions"},
+                "triangulate": {"type": "boolean", "default": True, "description": "Triangulate each piece before unioning (recommended - non-planar n-gons are a common cause of solver corruption)"},
+                "separate_loose": {"type": "boolean", "default": True, "description": "Split the fitted source into loose (disjoint) pieces and union each individually, as text_add_relief does for glyphs. Set false only if you already know the source is a single connected piece."},
+            },
+            "required": ["source_objects", "target_object", "fit_box", "z_bottom"],
+        },
+    ),
     # ==================== Boolean Operations ====================
     Tool(
         name="blender_boolean_op",
@@ -5063,6 +5096,31 @@ TOOLS: list[Tool] = [
                 "object_name": {"type": "string", "description": "Name of the mesh object to check"},
             },
             "required": ["object_name"],
+        },
+    ),
+    Tool(
+        name="blender_mesh_bake_heightmap",
+        description="Rasterize a mesh's top surface into a 2D height grid by raycasting straight down over an XY box, one ray per grid cell, recording world-Z of the first hit (or miss_value on a miss). Writes the grid to output_path as a .npy file (too large to return as JSON at any useful resolution) plus summary stats. This is the standard first step for isolating or replacing one specific inscribed region (text, a logo, ...) on a complex organic relief that has no separate object per region: bake once, then threshold/connected-component the array with numpy/scipy outside Blender to find the region's mask and bounding box.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Name of the mesh object to bake"},
+                "bb_min": {
+                    "type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3,
+                    "description": "[x, y, z] world-space min corner of the XY box to sample (z used only as a fallback ray-start reference)",
+                },
+                "bb_max": {
+                    "type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3,
+                    "description": "[x, y, z] world-space max corner of the XY box to sample",
+                },
+                "output_path": {"type": "string", "description": "Where to write the height grid (.npy appended automatically if missing)"},
+                "resolution": {"type": "integer", "default": 512, "description": "Grid resolution used for both axes when resolution_x/resolution_y aren't given (capped at 4096 - this is a per-pixel Python raycast loop)"},
+                "resolution_x": {"type": "integer", "description": "Grid columns (overrides resolution for X)"},
+                "resolution_y": {"type": "integer", "description": "Grid rows (overrides resolution for Y)"},
+                "miss_value": {"type": "number", "default": 0.0, "description": "Height recorded for grid cells whose ray doesn't hit the mesh"},
+                "ray_start_z": {"type": "number", "description": "Z to cast rays from (default: bb_max[2] + 5)"},
+            },
+            "required": ["object_name", "bb_min", "bb_max", "output_path"],
         },
     ),
 
