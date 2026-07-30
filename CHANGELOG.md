@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`validate_enum()` called with swapped arguments in 20 handlers.** Every
+  affected handler rejected all of its documented enum values, because the
+  `allowed` list landed in the `name` slot and the parameter-name string landed
+  in `allowed` — iterating a `str` made the check compare against its individual
+  characters. `mesh_fill`, `curve_create`, `curve_to_mesh`, `mesh_extrude`,
+  `mesh_select`, `mesh_select_shortest_path` and others were unusable as a
+  result, and the error messages they raised named the wrong parameter.
+- **`import_file` could not import `.stl`.** It called `bpy.ops.import_mesh.stl`,
+  which Blender 4.x removed; now uses `bpy.ops.wm.stl_import`, matching the
+  `wm.stl_export` already used on the export side.
+- **`render_set_engine` failed on Blender 5.x.** `compat.get_eevee_engine_name()`
+  hard-coded `BLENDER_EEVEE_NEXT` for 4.2+, but 5.0 renamed the engine back to
+  `BLENDER_EEVEE`. It now queries the `engine` enum instead of mapping from the
+  version number.
+
+### Added
+
+- `tests/test_handler_signatures.py` — Blender-free static checks that guard
+  against `validate_enum` argument-order regressions and against calling
+  Blender operators removed in 4.x.
+- Integration tests for the STL export/import round-trip and for `mesh_fill`
+  enum handling.
+
 ## [0.4.0] — 2026-05-13
 
 ### Changed

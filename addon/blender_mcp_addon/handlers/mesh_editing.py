@@ -85,8 +85,8 @@ class MeshEditingHandlersMixin:
         name = params.get("name", "Curve")
         curve_type = validate_enum(
             params.get("type", "BEZIER"),
-            ["BEZIER", "NURBS", "POLY"],
             "type",
+            ["BEZIER", "NURBS", "POLY"],
         )
         points = require_param(params, "points", list)
         cyclic = params.get("cyclic", False)
@@ -165,8 +165,8 @@ class MeshEditingHandlersMixin:
         extrude = params.get("extrude", 0)
         fill_type = validate_enum(
             params.get("fill_type", "FULL"),
-            ["FULL", "BACK", "FRONT", "HALF", "NONE"],
             "fill_type",
+            ["FULL", "BACK", "FRONT", "HALF", "NONE"],
         )
         twist_method = params.get("twist_method", "MINIMUM")
         apply_as_mesh = params.get("apply_as_mesh", True)
@@ -207,8 +207,8 @@ class MeshEditingHandlersMixin:
         edge_indices = require_param(params, "edge_indices", list)
         curve_type = validate_enum(
             params.get("curve_type", "POLY"),
-            ["BEZIER", "NURBS", "POLY"],
             "curve_type",
+            ["BEZIER", "NURBS", "POLY"],
         )
 
         obj = get_object_or_error(object_name)
@@ -311,8 +311,8 @@ class MeshEditingHandlersMixin:
         object_name = require_param(params, "object_name", str)
         mode = validate_enum(
             params.get("mode", "FACES"),
-            ["FACES", "EDGES", "VERTICES", "REGION"],
             "mode",
+            ["FACES", "EDGES", "VERTICES", "REGION"],
         )
         indices = require_param(params, "indices", list)
         offset = validate_vector3(require_param(params, "offset", list), "offset")
@@ -563,11 +563,11 @@ class MeshEditingHandlersMixin:
         from mathutils import Vector
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "FACE"), ["VERT", "EDGE", "FACE"], "mode")
+        mode = validate_enum(params.get("mode", "FACE"), "mode", ["VERT", "EDGE", "FACE"])
         action = validate_enum(
             params.get("action", "SET"),
-            ["SET", "ADD", "SUBTRACT", "INVERT", "SELECT_ALL", "DESELECT_ALL"],
             "action",
+            ["SET", "ADD", "SUBTRACT", "INVERT", "SELECT_ALL", "DESELECT_ALL"],
         )
 
         obj = get_object_or_error(object_name)
@@ -939,7 +939,7 @@ class MeshEditingHandlersMixin:
     def _handle_mesh_select_shortest_path(self, params: dict) -> dict:
         """Select shortest path between two mesh elements."""
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "EDGE"), ["VERT", "EDGE"], "mode")
+        mode = validate_enum(params.get("mode", "EDGE"), "mode", ["VERT", "EDGE"])
         index_a = int(require_param(params, "index_a", (int, float)))
         index_b = int(require_param(params, "index_b", (int, float)))
 
@@ -1000,7 +1000,7 @@ class MeshEditingHandlersMixin:
         import bmesh
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "FACE"), ["VERT", "EDGE", "FACE"], "mode")
+        mode = validate_enum(params.get("mode", "FACE"), "mode", ["VERT", "EDGE", "FACE"])
 
         obj = get_object_or_error(object_name)
         if obj.type != "MESH":
@@ -1291,7 +1291,7 @@ class MeshEditingHandlersMixin:
         import bmesh
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(require_param(params, "mode", str), ["VERTS", "EDGES", "FACES"], "mode")
+        mode = validate_enum(require_param(params, "mode", str), "mode", ["VERTS", "EDGES", "FACES"])
         indices = require_param(params, "indices", list)
         use_face_split = params.get("use_face_split", False)
 
@@ -1345,7 +1345,7 @@ class MeshEditingHandlersMixin:
 
         object_name = require_param(params, "object_name", str)
         vertex_indices = params.get("vertex_indices")
-        merge_type = validate_enum(params.get("merge_type", "CENTER"), ["CENTER", "FIRST", "LAST", "BY_DISTANCE"], "merge_type")
+        merge_type = validate_enum(params.get("merge_type", "CENTER"), "merge_type", ["CENTER", "FIRST", "LAST", "BY_DISTANCE"])
         distance = params.get("distance", 0.0001)
 
         obj = get_object_or_error(object_name)
@@ -1447,7 +1447,7 @@ class MeshEditingHandlersMixin:
 
         object_name = require_param(params, "object_name", str)
         edge_indices = require_param(params, "edge_indices", list)
-        fill_type = validate_enum(params.get("fill_type", "NGON"), ["NGON", "TRIANGLE_FAN", "GRID"], "fill_type")
+        fill_type = validate_enum(params.get("fill_type", "NGON"), "fill_type", ["NGON", "TRIANGLE_FAN", "GRID"])
         use_beauty = params.get("use_beauty", True)
 
         obj = get_object_or_error(object_name)
@@ -1830,7 +1830,7 @@ class MeshEditingHandlersMixin:
         import bmesh
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "EDGES"), ["EDGES", "FACES"], "mode")
+        mode = validate_enum(params.get("mode", "EDGES"), "mode", ["EDGES", "FACES"])
         indices = require_param(params, "indices", list)
 
         obj = get_object_or_error(object_name)
@@ -1888,8 +1888,8 @@ class MeshEditingHandlersMixin:
         reference_image = require_param(params, "reference_image", str)
         camera_angle = validate_enum(
             params.get("camera_angle", "FRONT"),
-            ["FRONT", "RIGHT", "TOP", "PERSPECTIVE"],
             "camera_angle",
+            ["FRONT", "RIGHT", "TOP", "PERSPECTIVE"],
         )
         resolution = int(params.get("resolution", 512))
 
@@ -2043,7 +2043,7 @@ class MeshEditingHandlersMixin:
         from mathutils import Vector
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "BBOX"), ["BBOX", "DISTANCE", "EDGE_LENGTH", "VERTEX_DISTANCE"], "mode")
+        mode = validate_enum(params.get("mode", "BBOX"), "mode", ["BBOX", "DISTANCE", "EDGE_LENGTH", "VERTEX_DISTANCE"])
 
         obj = get_object_or_error(object_name)
 
@@ -2147,7 +2147,7 @@ class MeshEditingHandlersMixin:
         from mathutils import Vector
 
         image_path = require_param(params, "image_path", str)
-        axis = validate_enum(params.get("axis", "FRONT"), ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "BOTTOM"], "axis")
+        axis = validate_enum(params.get("axis", "FRONT"), "axis", ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "BOTTOM"])
         offset = params.get("offset", -5.0)
         opacity = params.get("opacity", 0.5)
         size = params.get("size", 5.0)
@@ -2197,7 +2197,7 @@ class MeshEditingHandlersMixin:
         source_name = require_param(params, "source_object", str)
         curve_name = require_param(params, "curve_name", str)
         count = int(params.get("count", 10))
-        fit_type = validate_enum(params.get("fit_type", "FIT_CURVE"), ["FIXED_COUNT", "FIT_LENGTH", "FIT_CURVE"], "fit_type")
+        fit_type = validate_enum(params.get("fit_type", "FIT_CURVE"), "fit_type", ["FIXED_COUNT", "FIT_LENGTH", "FIT_CURVE"])
         apply = params.get("apply", False)
 
         source = get_object_or_error(source_name)
@@ -2334,14 +2334,14 @@ class MeshEditingHandlersMixin:
         vertex_indices = require_param(params, "vertex_indices", list)
         transform_type = validate_enum(
             params.get("transform_type", "TRANSLATE"),
-            ["TRANSLATE", "ROTATE", "SCALE"],
             "transform_type",
+            ["TRANSLATE", "ROTATE", "SCALE"],
         )
         value = require_param(params, "value", list)
         falloff = validate_enum(
             params.get("falloff", "SMOOTH"),
-            ["SMOOTH", "SPHERE", "ROOT", "LINEAR", "SHARP", "CONSTANT"],
             "falloff",
+            ["SMOOTH", "SPHERE", "ROOT", "LINEAR", "SHARP", "CONSTANT"],
         )
         radius = params.get("radius", 1.0)
 
@@ -2446,7 +2446,7 @@ class MeshEditingHandlersMixin:
         object_name = require_param(params, "object_name", str)
         target_name = require_param(params, "target_object", str)
         vertex_indices = params.get("vertex_indices")
-        mode = validate_enum(params.get("mode", "NEAREST_SURFACE"), ["NEAREST_SURFACE", "PROJECT", "NEAREST_VERTEX"], "mode")
+        mode = validate_enum(params.get("mode", "NEAREST_SURFACE"), "mode", ["NEAREST_SURFACE", "PROJECT", "NEAREST_VERTEX"])
         offset = params.get("offset", 0.0)
 
         obj = get_object_or_error(object_name)
@@ -2545,7 +2545,7 @@ class MeshEditingHandlersMixin:
 
         object_name = require_param(params, "object_name", str)
         vertex_indices = require_param(params, "vertex_indices", list)
-        plane = validate_enum(params.get("plane", "BEST_FIT"), ["XY", "XZ", "YZ", "NORMAL", "BEST_FIT"], "plane")
+        plane = validate_enum(params.get("plane", "BEST_FIT"), "plane", ["XY", "XZ", "YZ", "NORMAL", "BEST_FIT"])
 
         obj = get_object_or_error(object_name)
         if obj.type != "MESH":
