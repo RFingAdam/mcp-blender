@@ -4,11 +4,20 @@ import argparse
 import asyncio
 import json
 import logging
-from typing import Any
 
-from mcp.server import Server
+from mcp.server import (
+    Server,
+    ServerRequestContext,
+)
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsRequest,
+    ListToolsResult,
+    TextContent,
+    Tool,
+)
 
 from .blender_client import BlenderClient
 
@@ -37,7 +46,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_scene_info",
         description="Get current scene information including name, frame range, render settings, and object count",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -46,7 +55,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_scene_new",
         description="Create a new scene",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name for the new scene"},
@@ -57,7 +66,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_scene_clear",
         description="Remove all objects from the current scene",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -66,7 +75,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_scene_set_frame_range",
         description="Set the animation frame range",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "start": {"type": "integer", "description": "Start frame"},
@@ -78,7 +87,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_get_version",
         description="Get Blender version information",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -88,7 +97,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_create",
         description="Create a primitive object (cube, sphere, cylinder, plane, cone, torus, monkey, circle, grid, empty, camera, light)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "type": {
@@ -119,7 +128,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_delete",
         description="Delete an object by name",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object to delete"},
@@ -130,7 +139,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_list",
         description="List all objects in the scene",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "type_filter": {
@@ -145,7 +154,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_get",
         description="Get detailed properties of an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object"},
@@ -156,7 +165,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_transform",
         description="Set the location, rotation, and/or scale of an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object"},
@@ -170,7 +179,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_duplicate",
         description="Duplicate an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object to duplicate"},
@@ -183,7 +192,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_join",
         description="Join multiple objects into one",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "names": {
@@ -198,7 +207,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_separate",
         description="Separate an object by loose parts, materials, or selection",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object"},
@@ -214,7 +223,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_parent",
         description="Set parent-child relationship between objects",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "child": {"type": "string", "description": "Name of the child object"},
@@ -226,7 +235,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_select",
         description="Select objects by name or pattern",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "names": {"type": "array", "items": {"type": "string"}, "description": "Object names to select"},
@@ -240,7 +249,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_create",
         description="Create a new material",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Material name"},
@@ -252,7 +261,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_assign",
         description="Assign a material to an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -265,7 +274,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_set_color",
         description="Set the base color of a material",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material"},
@@ -281,7 +290,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_set_principled",
         description="Configure Principled BSDF shader parameters",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material"},
@@ -299,7 +308,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_add_texture",
         description="Add an image texture to a material",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material"},
@@ -312,7 +321,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_material_list",
         description="List all materials in the file",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -322,7 +331,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_modifier_add",
         description="Add a modifier to an object with optional preset configuration",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -346,7 +355,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_modifier_remove",
         description="Remove a modifier from an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -358,7 +367,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_modifier_apply",
         description="Apply a modifier permanently to the mesh geometry",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -370,7 +379,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_modifier_configure",
         description="Configure modifier parameters",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -386,7 +395,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_modifier_list",
         description="List modifiers on an object, or list all available modifier types",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -401,7 +410,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_keyframe_insert",
         description="Insert a keyframe for an object property, optionally setting its value",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -424,7 +433,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_keyframe_delete",
         description="Delete a keyframe from an object property",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -438,7 +447,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_keyframe_list",
         description="List all keyframes for an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -449,7 +458,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_action_create",
         description="Create a new action (animation data container) and optionally assign to object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Action name"},
@@ -461,7 +470,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_action_list",
         description="List all actions in the Blender file",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -470,7 +479,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_animation_play",
         description="Play or pause the animation playback",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "play": {"type": "boolean", "description": "True to play, false to pause"},
@@ -481,7 +490,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_animation_goto_frame",
         description="Jump to a specific frame in the timeline",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "frame": {"type": "integer", "description": "Frame number to jump to"},
@@ -493,7 +502,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_image",
         description="Render the current frame to a file",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "output_path": {"type": "string", "description": "Output file path"},
@@ -509,7 +518,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_animation",
         description="Render the animation to files",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "output_path": {"type": "string", "description": "Output path (with frame placeholder)"},
@@ -523,7 +532,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_set_engine",
         description="Set the render engine",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "engine": {
@@ -538,7 +547,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_set_resolution",
         description="Set the render resolution",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "width": {"type": "integer", "description": "Width in pixels"},
@@ -551,7 +560,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_screenshot",
         description="Capture the current viewport as an image",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "output_path": {"type": "string", "description": "Output file path"},
@@ -563,7 +572,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_export_gltf",
         description="Export scene or selected objects to glTF/GLB format",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
@@ -578,7 +587,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_export_fbx",
         description="Export scene or selected objects to FBX format",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
@@ -591,7 +600,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_export_obj",
         description="Export scene or selected objects to OBJ format",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
@@ -604,7 +613,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_export_stl",
         description="Export scene or selected objects to STL format (for 3D printing)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
@@ -619,7 +628,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_export_usd",
         description="Export to Universal Scene Description (USD) format",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path (.usd, .usda, .usdc)"},
@@ -633,7 +642,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_import_file",
         description="Import a 3D file (auto-detects format: glTF, FBX, OBJ, STL, USD, PLY, DAE, ABC, SVG)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Path to the file to import"},
@@ -645,7 +654,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_polyhaven_search",
         description="Search Poly Haven for free HDRIs, textures, or 3D models",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
@@ -658,7 +667,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_polyhaven_download",
         description="Download and apply a Poly Haven asset",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "asset_id": {"type": "string", "description": "Poly Haven asset ID"},
@@ -671,7 +680,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_generate_model",
         description="Generate a 3D model using Hyper3D Rodin AI. Supports text-to-3D and image-to-3D. Requires RODIN_API_KEY environment variable.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -706,7 +715,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_model_status",
         description="Check the status of an AI model generation job and optionally import the completed model",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "job_id": {
@@ -726,7 +735,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_list_backends",
         description="List available AI model generation backends with status (installed, available, capabilities)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "available_only": {
@@ -741,7 +750,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_set_backend",
         description="Set the preferred AI backend for model generation (e.g., 'comfyui', 'rodin', 'triposr')",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "backend": {
@@ -759,7 +768,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_configure_backend",
         description="Configure settings for a specific AI backend (API keys, URLs, model paths, device, timeout)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "backend": {
@@ -777,7 +786,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_generate_model_sync",
         description="Generate a 3D model and wait for completion (synchronous). Combines generate + poll + optional import in one call. Returns the final model when done.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -823,7 +832,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_generate_texture",
         description="Generate a PBR texture set (diffuse, roughness, normal, metallic) from a text prompt using SDXL and apply it to a Blender object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -860,7 +869,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_generate_texture_sync",
         description="Generate PBR texture and wait for completion (synchronous). Returns texture file paths when done.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -902,7 +911,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_generate_reference_image",
         description="Generate a concept art / reference image from a text prompt using SDXL (useful for image-to-3D workflows)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -930,7 +939,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_inpaint_texture",
         description="Generate inpainted content for a masked region of an existing texture using SDXL",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {
@@ -967,7 +976,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_texture_from_render",
         description="Generate a texture from a depth or normal render of a Blender object using ControlNet guidance",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -1012,7 +1021,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_lod_hierarchy",
         description="Create LOD (Level of Detail) hierarchy from a base object for flight simulator content optimization",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "base_object_name": {"type": "string", "description": "Name of the base (LOD0) object"},
@@ -1029,7 +1038,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_decimate_for_lod",
         description="Decimate a mesh to a target ratio for LOD creation",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to decimate"},
@@ -1043,7 +1052,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_setup_lod_distances",
         description="Configure LOD switching distances for flight simulator",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
@@ -1058,7 +1067,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_get_lod_info",
         description="Get information about an LOD hierarchy including vertex counts and distances",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
@@ -1070,7 +1079,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_setup_material",
         description="Set up a material with flight simulator-specific PBR properties and extensions",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material to configure"},
@@ -1093,7 +1102,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_glass_material",
         description="Create a glass material optimized for flight simulator (cockpit glass, windows)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name for the new material"},
@@ -1108,7 +1117,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_emissive_material",
         description="Create an emissive/light material for flight simulator (gauges, displays, lights)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name for the material"},
@@ -1123,7 +1132,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_get_material_presets",
         description="Get list of available flight simulator material presets (vehicle_paint, chrome, glass, etc.)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -1133,7 +1142,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_collision_mesh",
         description="Create a simplified collision mesh from a source object for physics interactions",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "source_object_name": {"type": "string", "description": "Name of the source object"},
@@ -1151,7 +1160,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_collision_box",
         description="Create a box collision primitive for an object (most efficient for physics)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to create collision for"},
@@ -1164,7 +1173,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_create_collision_convex",
         description="Create a convex hull collision mesh (balance between accuracy and performance)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the source object"},
@@ -1176,7 +1185,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_tag_collision_type",
         description="Tag an existing mesh as a collision object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1189,7 +1198,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_add_animation_tag",
         description="Add an animation tag/event marker for flight simulator animation events",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the animated object"},
@@ -1207,7 +1216,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_setup_visibility_animation",
         description="Set up visibility animation for an object (show/hide during frame ranges)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1228,7 +1237,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_configure_animation_loop",
         description="Configure animation looping behavior for flight simulator",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the animated object"},
@@ -1247,7 +1256,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_list_animation_tags",
         description="List all animation tags in the scene",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Filter by object name (optional)"},
@@ -1259,7 +1268,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_export_model",
         description="Export model(s) in flight simulator-compatible glTF format with LODs, collision, and animations",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path (.glb or .gltf)"},
@@ -1279,7 +1288,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_validate_for_export",
         description="Validate model(s) for flight simulator compatibility and report issues",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Specific object to validate (omit for all selected/all)"},
@@ -1290,7 +1299,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_get_export_settings",
         description="Get available flight simulator export settings and recommendations",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -1299,7 +1308,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_batch_export_lods",
         description="Export LOD hierarchy with proper structure (single file or separate files per LOD)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
@@ -1313,7 +1322,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_setup_paint_mode",
         description="Set up an object for texture painting with UV map and paint texture",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to paint"},
@@ -1330,7 +1339,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_create_paint_layers",
         description="Create paint layer images for livery workflow (primer, base_color, cheatline, belly, details, decals, weathering, clearcoat)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1351,7 +1360,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_load_template_overlay",
         description="Load a reference template image as overlay for painting",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to template image"},
@@ -1364,7 +1373,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_export_uv_layout",
         description="Export UV layout as an image for painting reference in external editors",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1383,7 +1392,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_set_paint_brush",
         description="Configure paint brush settings with presets (soft_airbrush, hard_edge, detail_brush, smudge, clone, fill)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "preset": {"type": "string", "description": "Brush preset name"},
@@ -1401,7 +1410,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_sample_color",
         description="Sample a color from an image at specific coordinates for matching reference livery colors",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to image file"},
@@ -1414,7 +1423,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_get_paint_presets",
         description="Get available paint presets for livery painting (layers and brushes)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -1423,7 +1432,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_get_aircraft_templates",
         description="Get list of supported aircraft templates (FBW A32NX, Fenix, PMDG, iniBuilds, etc.)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -1432,7 +1441,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_get_template_info",
         description="Get detailed template information for an aircraft including texture sizes and UV regions",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "aircraft_id": {
@@ -1446,7 +1455,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_download_template",
         description="Download or generate template files for an aircraft at correct resolution",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "aircraft_id": {"type": "string", "description": "Aircraft identifier"},
@@ -1458,7 +1467,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_analyze",
         description="Analyze a livery image for colors, patterns, and design elements",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to livery image"},
@@ -1470,7 +1479,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_transfer",
         description="Transfer livery design between different aircraft types with UV remapping",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "source_image": {"type": "string", "description": "Path to source livery image"},
@@ -1486,7 +1495,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_extract_colors",
         description="Extract color palette from livery image for recreating designs",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to livery image"},
@@ -1499,7 +1508,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_map_elements",
         description="Map design elements (cheatline, logo, registration) between aircraft templates",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "source_aircraft": {"type": "string", "description": "Source aircraft ID"},
@@ -1516,7 +1525,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_export_textures",
         description="Export livery textures from an object in PNG, TARGA, or for DDS conversion",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object with livery materials"},
@@ -1534,7 +1543,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_create_package",
         description="Create MSFS livery package folder structure with manifest.json and layout.json",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "aircraft_id": {"type": "string", "description": "Aircraft identifier (e.g., 'fbw_a32nx')"},
@@ -1551,7 +1560,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_convert_to_dds",
         description="Convert texture to DDS format for MSFS (requires texconv)",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "input_path": {"type": "string", "description": "Path to input image"},
@@ -1567,7 +1576,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_msfs_livery_validate_package",
         description="Validate a livery package structure for MSFS compatibility",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "package_dir": {"type": "string", "description": "Path to the livery package"},
@@ -1579,7 +1588,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_extrude",
         description="Extrude faces, edges, or vertices along an offset vector. The most fundamental mesh modeling operation - creates new geometry by extending existing elements outward.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -1611,7 +1620,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_inset",
         description="Inset faces to create border loops. Essential for panel lines, window frames, recessed details on hard surfaces.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -1631,7 +1640,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_bevel",
         description="Bevel edges for smooth transitions and rounded corners. Can target specific edges or auto-select all sharp edges.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -1651,7 +1660,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_loop_cut",
         description="Add edge loops (loop cuts) to a mesh for topology control. Adds resolution to specific areas without subdividing the whole mesh.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -1666,7 +1675,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_curve_create",
         description="Create a Bezier, NURBS, or Poly curve from control points. Curves enable smooth profiles, body panels, pipe routing, and organic shapes.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name for the curve object"},
@@ -1699,7 +1708,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_curve_to_mesh",
         description="Convert a curve to mesh with optional bevel (tube) or extrude (flat panel). A curve with bevel_depth becomes a tube; with extrude becomes a flat panel.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "curve_name": {"type": "string", "description": "Name of the curve object"},
@@ -1725,7 +1734,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_curve_from_mesh_edge",
         description="Extract a curve from mesh edge indices. Useful for creating curves that follow existing geometry for pipe routing or profile extraction.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -1748,7 +1757,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_boolean_op",
         description="Perform a boolean operation (union, difference, intersect) between two objects in a single call. Optionally apply immediately and hide the tool object.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "target": {"type": "string", "description": "Name of the object to modify"},
@@ -1782,7 +1791,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_from_data",
         description="Create a mesh object from raw vertex/face data using mesh.from_pydata(). Useful for procedural geometry.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name for the new mesh object"},
@@ -1814,7 +1823,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_set_origin",
         description="Set the origin (pivot point) of an object",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1835,7 +1844,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_object_apply_transforms",
         description="Apply (bake) object transforms to mesh data so location/rotation/scale reset to identity",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
@@ -1850,7 +1859,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_execute_script",
         description="Execute arbitrary Python/bmesh script in Blender's context. Enables real mesh modeling with vertices, edges, faces, extrusion, bevel, and full Blender API access. The script can import bmesh, mathutils, math, etc. Set a 'result' variable in the script to return data.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "script": {
@@ -1869,7 +1878,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_render_multi_angle",
         description="Render an object from multiple angles (front, right, top, perspective) for visual feedback. Uses Workbench engine for speed. Returns file paths to rendered PNG images.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -1898,7 +1907,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_analyze_viewport",
         description="Render multi-angle views and analyze with Ollama vision model. Returns structured feedback with quality score, issues, and fix suggestions for iterative mesh refinement.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -1934,7 +1943,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_refine_iteration",
         description="Run one iteration of the AI refinement loop: render object from multiple angles, analyze with vision model, check for convergence. Returns score, issues, and whether to continue refining.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -1969,7 +1978,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_refine_create_session",
         description="Create a new refinement session to track iterative improvement of a 3D model",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -1991,7 +2000,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_refine_get_session",
         description="Get details and iteration history of a refinement session",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "session_id": {
@@ -2005,7 +2014,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_refine_list_sessions",
         description="List all refinement sessions with their status and iteration counts",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -2015,7 +2024,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_evaluate",
         description="Evaluate any render or output (model, texture, animation) using Ollama vision with category-specific criteria. Returns structured scores and improvement suggestions.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "render_path": {
@@ -2051,7 +2060,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_refine",
         description="Run one iteration of AI self-refinement: render object, evaluate with vision model, return scores and suggestions. Call repeatedly in a loop, applying suggestions between calls, until converged.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2101,7 +2110,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_mesh_cleanup",
         description="Clean up a generated mesh: remove doubles, fix normals, remove loose geometry, remove degenerate faces. Essential post-processing step after AI model generation.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2140,7 +2149,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_mesh_decimate",
         description="Reduce polygon count of a mesh while preserving shape. Supports COLLAPSE, UN_SUBDIVIDE, and PLANAR methods. Can target specific vertex groups and optionally preserve UVs.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2186,7 +2195,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_mesh_remesh",
         description="Retopologize a mesh using VOXEL or SMOOTH methods. Controls voxel size, octree depth, and smoothing. Useful for converting AI-generated meshes to clean topology.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2236,7 +2245,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_mesh_optimize",
         description="Run full optimization pipeline on a mesh: cleanup, decimation, auto-UV, and normal smoothing in one call. Convenience wrapper for post-generation processing.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2277,7 +2286,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_auto_uv",
         description="Generate UV maps for a mesh using SMART or LIGHTMAP projection. Controls angle limit, island margin, area weighting, and aspect correction.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2326,7 +2335,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_fix_mesh_issues",
         description="Fix common mesh problems: non-manifold edges, holes, inverted normals, interior faces. Useful for repairing AI-generated meshes before export.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2365,7 +2374,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_mesh_stats",
         description="Get detailed statistics about a mesh: vertex/edge/face counts, bounding box dimensions, non-manifold edges, UV layers, material slots, and more.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -2380,7 +2389,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_probe_backends",
         description="Probe all AI backends and report capabilities: which ComfyUI 3D generation nodes are available (SF3D, TripoSR, TripoSG, InstantMesh, Hunyuan3D, CRM, Zero123Plus), GPU VRAM, queue status.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "check_nodes": {
@@ -2396,7 +2405,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_pipeline_generate",
         description="Full AI pipeline: reference photo/prompt -> 3D model generation -> import to Blender -> mesh cleanup -> UV unwrap -> texture -> optional MSFS prep. Quality tiers: quick (SF3D, 15s blob), standard (TripoSG, good single-image), multiview_quality (Zero123Plus+InstantMesh, best structure), vehicle_components (multi-view + part separation). Returns pipeline status with results from each stage.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "prompt": {
@@ -2453,7 +2462,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_ai_pipeline_status",
         description="Get status of a pipeline run or resume from last successful stage.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "pipeline_id": {
@@ -2472,7 +2481,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_select",
         description="Multi-criteria mesh selection engine. Select vertices, edges, or faces by index, position range, normal direction, material, edge angle, or face area. Supports grow/shrink and linked selection. Returns selected indices for piping to subsequent edit operations.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2555,7 +2564,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_select_trait",
         description="Select mesh elements by geometric trait: non-manifold edges, boundary edges, loose vertices, interior faces, faces by side count, ungrouped vertices, or non-planar faces. Essential for finding problem areas.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2585,7 +2594,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_select_linked_flat",
         description="Flood-select connected coplanar faces from a seed face. Selects entire flat panels by expanding to neighboring faces within an angle threshold. Ideal for selecting body panels.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2605,7 +2614,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_select_shortest_path",
         description="Select shortest path between two mesh elements. Useful for selecting edge loops or vertex paths along the mesh surface.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2630,7 +2639,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_get_selection",
         description="Query current mesh selection state without modifying it. Returns indices of selected vertices, edges, or faces.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2647,7 +2656,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_select_edge_loops",
         description="Select complete edge loops or edge rings through a given edge. Fundamental for hard surface modeling — loops define the flow of geometry.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2668,7 +2677,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_shade_smooth",
         description="Set smooth, flat, or auto-smooth shading on an object. Auto-smooth applies smooth shading while keeping edges sharper than the angle threshold as flat — essential for mechanical surfaces.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2690,7 +2699,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_crease",
         description="Set edge crease values for subdivision surface control. THE hard surface modeling tool — crease=1.0 keeps edges sharp through subdivision, crease=0.5 creates softer feature lines.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2716,7 +2725,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_mark_sharp",
         description="Mark or clear sharp edges. Sharp edges override auto-smooth angle for precise normal control on specific edges.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2742,7 +2751,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_mark_seam",
         description="Mark or clear UV seams on edges. UV seams define where the UV map is cut for unwrapping. Essential for texture mapping preparation.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2769,7 +2778,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_dissolve",
         description="Remove vertices, edges, or faces while preserving surrounding geometry. Unlike delete, dissolve merges the surrounding geometry to fill the gap.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2795,7 +2804,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_merge",
         description="Merge vertices together — close gaps, join geometry, remove doubles. Supports merge to center, first, last, or by distance threshold.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2822,7 +2831,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_bridge",
         description="Bridge two edge loops to create connecting faces — connect body panels, create tubes between openings, join separate mesh islands.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2858,7 +2867,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_fill",
         description="Fill boundary edges with faces — cap holes, close open geometry. Supports n-gon fill, triangle fan, and grid fill.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2885,7 +2894,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_subdivide",
         description="Subdivide selected edges/faces to add resolution. Add geometry where needed without subdividing the entire mesh.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2917,7 +2926,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_edge_slide",
         description="Slide edges along their connected faces to fine-tune edge loop position. Non-destructive repositioning of topology.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2943,7 +2952,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_tris_to_quads",
         description="Convert triangles to quads — clean up triangulated meshes to get cleaner quad topology. Pairs adjacent triangles based on angle and UV matching.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -2970,7 +2979,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_knife_project",
         description="Project a curve or mesh outline onto a target surface to cut panel lines. The cutter object is projected along the view/normal onto the target.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "target_object": {"type": "string", "description": "Name of the object to cut into"},
@@ -2987,7 +2996,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_bisect",
         description="Cut mesh with an infinite plane defined by a point and normal. Can optionally clear geometry on either side and fill the cut. Perfect for splitting vehicles into sections.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3023,7 +3032,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_separate_selected",
         description="Separate selected faces into a new object — extract body panels, components, or regions into independent objects.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3043,7 +3052,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_split",
         description="Split edges or faces without separating into a new object — creates hard boundaries within the mesh by duplicating shared vertices.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3066,7 +3075,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_silhouette_compare",
         description="Render object silhouette and compare against a reference image. Returns a difference score and overlay image for proportion verification.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to render"},
@@ -3089,7 +3098,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_measure",
         description="Measure distances, bounding box dimensions, edge lengths, and vertex-to-vertex distances in world units.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3126,7 +3135,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_reference_image_setup",
         description="Load a reference image as a background empty for modeling viewport overlay. Position it on a specific axis plane for tracing geometry.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to the reference image file"},
@@ -3159,7 +3168,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_array_along_curve",
         description="Instance objects along a curve path — rivet lines, bolt patterns, cable runs. Uses Array + Curve modifiers for parametric control.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "source_object": {"type": "string", "description": "Name of the object to array"},
@@ -3187,7 +3196,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_scatter_on_surface",
         description="Scatter objects on a mesh surface using a particle system — bolts, rivets, damage marks, vegetation. Control count, randomization, and area restriction.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "target_object": {"type": "string", "description": "Name of the surface object to scatter on"},
@@ -3228,7 +3237,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_collection_instance",
         description="Place collection instances at specific locations — efficient placement of repeated complex objects like wheel assemblies, control panels, or structural details.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "collection_name": {"type": "string", "description": "Name of the collection to instance"},
@@ -3255,7 +3264,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_proportional_transform",
         description="Move, rotate, or scale vertices with proportional falloff affecting neighbors — organic shape refinement, smooth deformations, sculpt-like adjustments via MCP.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3293,7 +3302,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_shrinkwrap",
         description="Snap vertices to another object's surface — conform details to body panels, project geometry onto curved surfaces.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object whose vertices to snap"},
@@ -3321,7 +3330,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_mesh_flatten",
         description="Flatten selected vertices to a plane — clean up bumpy surfaces, create perfectly flat areas on body panels.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
@@ -3348,7 +3357,7 @@ TOOLS: list[Tool] = [
             "DYNTOPO (dynamic topology for adaptive detail), and SIMPLE mode. "
             "Can configure symmetry axes for mirrored sculpting."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3393,7 +3402,7 @@ TOOLS: list[Tool] = [
             "Useful for smoothing, sharpening detail, adding surface noise, inflating, "
             "or relaxing topology."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3435,7 +3444,7 @@ TOOLS: list[Tool] = [
             "concave areas, ALL fills the entire mask, NONE clears it, RANDOM creates "
             "a random mask pattern. Optional blur smooths mask edges."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3467,7 +3476,7 @@ TOOLS: list[Tool] = [
             "MATERIAL groups by material assignment, NORMAL groups by face orientation, "
             "SHARP_EDGES splits at sharp edges, UV_ISLAND groups by UV islands."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3491,7 +3500,7 @@ TOOLS: list[Tool] = [
             "APPLY_BASE applies sculpted changes to the base mesh, DELETE_HIGHER removes "
             "levels above current, DELETE_LOWER removes levels below current."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3522,7 +3531,7 @@ TOOLS: list[Tool] = [
             "(voxel or quadriflow), auto-UV unwraps, and optionally bakes displacement "
             "from the original. Essential for game-ready asset production."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3562,7 +3571,7 @@ TOOLS: list[Tool] = [
             "thickness via solidify. Useful for creating armor plates, panel lines, "
             "or detail pieces from sculpted forms."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3589,7 +3598,7 @@ TOOLS: list[Tool] = [
             "cleaning up boolean results, imported meshes, or preparing for sculpting. "
             "Smaller voxel_size = higher detail but more polygons."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3620,7 +3629,7 @@ TOOLS: list[Tool] = [
             "head/tail positions, optional parent, connection state, and roll angle. "
             "Use this for precise skeleton construction from known bone positions."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -3681,7 +3690,7 @@ TOOLS: list[Tool] = [
             "DOOR_HINGE (limited rotation), PISTON (stretch-to pair), LANDING_GEAR (retract chain). "
             "Optionally auto-weights the mesh and configures for MSFS export."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3723,7 +3732,7 @@ TOOLS: list[Tool] = [
             "Specify either bone_name (for pose bone constraint) or object_name "
             "(for object constraint), plus target and type-specific settings."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3783,7 +3792,7 @@ TOOLS: list[Tool] = [
             "PISTON_PAIR: two bones with mutual stretch-to. WHEEL_SPIN: rotation driver. "
             "DOOR_SWING: limit rotation constraint. TURRET_TRACK: two-axis tracking."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3825,7 +3834,7 @@ TOOLS: list[Tool] = [
             "Creates (or reuses) a wire mesh shape and assigns it as the bone's custom_shape. "
             "Shapes: CIRCLE, SQUARE, CUBE, SPHERE, ARROW, DIAMOND, CROSS."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3856,7 +3865,7 @@ TOOLS: list[Tool] = [
             "(location, rotation, scale) as custom properties on the armature. "
             "Optionally filter to save only specific bones."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3883,7 +3892,7 @@ TOOLS: list[Tool] = [
             "current pose via blend_factor (0=keep current, 1=full saved pose). "
             "Useful for creating animation keyframes from preset poses."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3909,7 +3918,7 @@ TOOLS: list[Tool] = [
             "hierarchy structure, constraint setup, deform bone flags, and scale/orientation. "
             "Returns a list of issues and a compatibility score for the target format."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "armature_name": {
@@ -3929,7 +3938,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_rigid_body_add",
         description="Add a rigid body physics simulation to an object. Makes it participate in physics as either an active (affected by forces) or passive (static collider) body.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -3973,7 +3982,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_rigid_body_batch",
         description="Add rigid body physics to multiple objects at once. Optionally designate a ground/floor object as a PASSIVE collider.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_names": {
@@ -4001,7 +4010,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_simulate",
         description="Run the physics simulation for a frame range. Optionally apply results to make the final positions permanent (freezes simulation).",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "frame_start": {
@@ -4023,7 +4032,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_cloth_add",
         description="Add cloth simulation to a mesh object. Supports material presets (silk, cotton, denim, etc.), vertex group pinning, collision objects, and wind.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4068,7 +4077,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_soft_body_add",
         description="Add soft body simulation to a mesh object. Soft bodies deform under forces while trying to maintain their shape.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4094,7 +4103,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_physics_fluid_quick",
         description="Quick fluid simulation setup with a domain and flow object. Creates a Mantaflow-based liquid or gas simulation.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain_object": {
@@ -4126,7 +4135,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_annotation_add",
         description="Add 3D annotation strokes to the scene as a grease pencil annotation layer. Useful for marking up geometry, drawing guides, or highlighting areas of interest.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "points": {
@@ -4157,7 +4166,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_annotation_text",
         description="Add a 3D text annotation at a specific location. Creates a font/text object that can be used as a label or callout.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "text": {
@@ -4185,7 +4194,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_annotation_dimension",
         description="Add a dimension line between two 3D points showing the distance measurement. Creates endpoint markers, a connecting line, and a text label with the calculated distance.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "point_a": {
@@ -4218,7 +4227,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_annotation_clear",
         description="Clear annotation layers. Can clear a specific layer by name or all annotation layers at once.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "layer_name": {
@@ -4232,7 +4241,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_grease_pencil_create",
         description="Create a grease pencil object with one or more strokes. Grease pencil objects are persistent 2D/3D drawing objects in the scene.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -4273,7 +4282,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_grease_pencil_markup",
         description="Overlay markup annotations (arrows, circles, rectangles, text) on a rendered image. Uses Pillow if available, otherwise falls back to Blender compositor.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "render_path": {
@@ -4355,7 +4364,7 @@ TOOLS: list[Tool] = [
             "Lists every node (name, type, location, input values/connections, output connections) "
             "and every link (from_node, from_output, to_node, to_input)."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {
@@ -4374,7 +4383,7 @@ TOOLS: list[Tool] = [
             "ShaderNodeBump, ShaderNodeMapping, ShaderNodeNormalMap, ShaderNodeValToRGB, etc.). "
             "Optionally set location and input default values."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {
@@ -4411,7 +4420,7 @@ TOOLS: list[Tool] = [
             "Connect two nodes in a material's shader graph via their socket names. "
             "Creates a link from an output socket on one node to an input socket on another."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {
@@ -4444,7 +4453,7 @@ TOOLS: list[Tool] = [
             "Create a reusable shader node group with defined inputs and outputs. "
             "The group can later be instanced inside any material via a ShaderNodeGroup node."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -4499,7 +4508,7 @@ TOOLS: list[Tool] = [
             "PLASTIC_MATTE, CONCRETE, FABRIC, REFLECTIVE_TAPE, LED_DISPLAY, RUST, GOLD, "
             "COPPER, SCRATCHED_PAINT, SNOW, WATER, WOOD, BRICK."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -4542,7 +4551,7 @@ TOOLS: list[Tool] = [
             "Analyzes current nodes to extract color, roughness, metallic, etc., then rebuilds "
             "as a standard PBR graph compatible with the target format."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {
@@ -4564,7 +4573,7 @@ TOOLS: list[Tool] = [
             "Render a material preview on a standard shape. Creates a temporary scene "
             "with the chosen shape, assigns the material, renders it, and returns the output path."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "material_name": {
@@ -4604,7 +4613,7 @@ TOOLS: list[Tool] = [
             "per-material breakdown.  Reports area in scene units squared "
             "(typically m^2).  Supports local or world-space calculation."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4639,7 +4648,7 @@ TOOLS: list[Tool] = [
             "volume in scene units cubed (typically m^3).  Also reports "
             "whether the mesh is manifold (watertight)."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4659,7 +4668,7 @@ TOOLS: list[Tool] = [
             "two mesh objects.  Detects intersection (overlap) and returns "
             "the closest point pair.  Useful for collision/clearance checks."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_a": {
@@ -4691,7 +4700,7 @@ TOOLS: list[Tool] = [
             "values with a configurable tolerance.  Reports per-axis "
             "pass/fail with deviations."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4763,7 +4772,7 @@ TOOLS: list[Tool] = [
             "dimension matches along a chosen axis.  Applies transforms "
             "afterwards so scale returns to (1,1,1)."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4804,7 +4813,7 @@ TOOLS: list[Tool] = [
             "Optionally filter to specific edge indices and flag edges "
             "outside a threshold range.  Angles are in degrees."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4846,7 +4855,7 @@ TOOLS: list[Tool] = [
             "score (0-1), per-check pass/fail results, and a list of "
             "blocking issues that would prevent clean export."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -4887,7 +4896,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_collection_create",
         description="Create a new collection. Collections organize objects into logical groups in the scene hierarchy.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -4920,7 +4929,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_collection_list",
         description="List all collections in the scene with their full hierarchy, objects, visibility, and render state. Returns a nested tree structure.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -4929,7 +4938,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_collection_move",
         description="Move one or more objects to a target collection. Can optionally remove them from their current collections.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_names": {
@@ -4952,7 +4961,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_collection_visibility",
         description="Toggle collection visibility, renderability, and selectability in the current view layer.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "collection_name": {
@@ -4979,7 +4988,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_undo",
         description="Undo the last operation in Blender. Equivalent to Ctrl+Z.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -4988,7 +4997,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_redo",
         description="Redo the last undone operation in Blender. Equivalent to Ctrl+Shift+Z.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -4997,7 +5006,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_save",
         description="Save the current Blender file. The file must have been saved at least once before (has a filepath).",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "compress": {
@@ -5011,7 +5020,7 @@ TOOLS: list[Tool] = [
     Tool(
         name="blender_save_as",
         description="Save the current Blender file to a new path. Creates parent directories if needed.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filepath": {
@@ -5042,7 +5051,7 @@ TOOLS: list[Tool] = [
             "DISPLACEMENT, COMBINED), creates temp images, configures bake settings, and "
             "saves each map to disk. Returns a dict mapping channel name to output file path."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5114,7 +5123,7 @@ TOOLS: list[Tool] = [
             "Ideal for transferring normals, AO, and other maps from a sculpt or subdivision "
             "model to a game-ready low-poly mesh."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "lowpoly_name": {
@@ -5178,7 +5187,7 @@ TOOLS: list[Tool] = [
             "Uses Blender's multires bake mode to transfer detail from higher "
             "subdivision levels to a texture."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5216,7 +5225,7 @@ TOOLS: list[Tool] = [
             "pixel data to per-vertex colors via UV lookup. Useful for mobile/performance "
             "rendering where texture lookups are expensive."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5250,7 +5259,7 @@ TOOLS: list[Tool] = [
             "Maps concave areas to dark, convex to bright (or both). Useful for "
             "edge wear, dirt accumulation, and procedural texturing masks."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5287,7 +5296,7 @@ TOOLS: list[Tool] = [
             "bakes EMIT, then restores originals. Essential for texture painting workflows "
             "and Substance Painter masks."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5326,7 +5335,7 @@ TOOLS: list[Tool] = [
             "and outputs.  A Geometry input and Geometry output are always "
             "added automatically.  Returns the group name and socket layout."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "name": {
@@ -5396,7 +5405,7 @@ TOOLS: list[Tool] = [
             "modifier and optionally set input values.  Returns the "
             "modifier name and current input state."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5431,7 +5440,7 @@ TOOLS: list[Tool] = [
             "another.  Supports density, Poisson-disk spacing, random "
             "scale range, random rotation, and normal alignment."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "target_object": {
@@ -5500,7 +5509,7 @@ TOOLS: list[Tool] = [
             "object in LINEAR, GRID_2D, RADIAL, or HEXAGONAL arrangements.  "
             "The modifier is applied to object_name."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5562,7 +5571,7 @@ TOOLS: list[Tool] = [
             "The mesh is stretched or fitted along the curve length.  "
             "Useful for roads, rails, cables, and profile sweeps."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5594,7 +5603,7 @@ TOOLS: list[Tool] = [
             "Curve to Mesh node.  Creates a new object with the extruded "
             "geometry.  Great for pipes, railings, moulding, and trim."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "profile_object": {
@@ -5640,7 +5649,7 @@ TOOLS: list[Tool] = [
             "values, and output names.  Useful for introspection before "
             "tweaking values with geonode_apply."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "object_name": {
@@ -5665,26 +5674,27 @@ TOOLS: list[Tool] = [
 def create_server(host: str, port: int) -> Server:
     """Create and configure the MCP server."""
     server = Server("mcp-blender")
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
+    async def handle_list_tools(
+        ctx: ServerRequestContext,
+        params: ListToolsRequest,
+    ) -> ListToolsResult:
         """Return the list of available tools."""
-        return TOOLS
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        return ListToolsResult(tools=TOOLS)
+    async def handle_call_tool(
+        ctx: ServerRequestContext,
+        params: CallToolRequestParams,
+    ) -> CallToolResult:
         """Handle tool calls by forwarding to Blender."""
+        name = params.name
+        arguments = params.arguments or {}
         logger.info(f"Tool call: {name} with args: {arguments}")
-
         try:
             client = await get_client(host, port)
-
             # Map tool name to Blender command (remove 'blender_' prefix)
             command = name.replace("blender_", "")
-
             # Extract timeout from arguments, or use longer defaults
             # for known long-running commands
-            timeout = arguments.pop("timeout", None)
+            timeout = arguments.pop("timeout", None) if isinstance(arguments, dict) else None
             if timeout is None:
                 _long_running = {
                     "ai_pipeline_generate", "ai_generate_model_sync",
@@ -5693,28 +5703,30 @@ def create_server(host: str, port: int) -> Server:
                     "ai_generate_model",
                 }
                 timeout = 600.0 if command in _long_running else 30.0
-
             result = await client.send_command(command, arguments, timeout=timeout)
-
             # Format result as text
             if isinstance(result, dict):
                 result_text = json.dumps(result, indent=2)
             else:
                 result_text = str(result)
-
-            return [TextContent(type="text", text=result_text)]
-
+            return CallToolResult(content=[TextContent(type="text", text=result_text)])
         except ConnectionRefusedError:
-            return [TextContent(
-                type="text",
-                text="Error: Could not connect to Blender. Make sure Blender is running and the MCP Server addon is enabled with the server started.",
-            )]
+            return CallToolResult(
+                content=[TextContent(
+                    type="text",
+                    text="Error: Could not connect to Blender. Make sure Blender is running and the MCP Server addon is enabled with the server started.",
+                )],
+                isError=True,
+            )
         except Exception as e:
             logger.exception(f"Error calling tool {name}")
-            return [TextContent(type="text", text=f"Error: {str(e)}")]
-
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error: {str(e)}")],
+                isError=True,
+            )
+    server.add_request_handler("tools/list", ListToolsRequest, handle_list_tools)
+    server.add_request_handler("tools/call", CallToolRequestParams, handle_call_tool)
     return server
-
 
 async def run_server(host: str, port: int):
     """Run the MCP server with stdio transport."""
