@@ -12,7 +12,7 @@ class TestToolDefinitions:
         for tool in TOOLS:
             assert tool.name, "Tool missing name"
             assert tool.description, f"Tool {tool.name} missing description"
-            assert tool.inputSchema, f"Tool {tool.name} missing inputSchema"
+            assert tool.input_schema, f"Tool {tool.name} missing inputSchema"
 
     def test_tool_names_are_unique(self):
         """Tool names should be unique."""
@@ -27,7 +27,7 @@ class TestToolDefinitions:
     def test_input_schemas_are_valid(self):
         """Input schemas should be valid JSON Schema objects."""
         for tool in TOOLS:
-            schema = tool.inputSchema
+            schema = tool.input_schema
             assert schema.get("type") == "object", f"Tool {tool.name} schema type should be 'object'"
             assert "properties" in schema, f"Tool {tool.name} schema missing 'properties'"
             assert "required" in schema, f"Tool {tool.name} schema missing 'required'"
@@ -35,7 +35,7 @@ class TestToolDefinitions:
     def test_required_fields_exist_in_properties(self):
         """Required fields should be defined in properties."""
         for tool in TOOLS:
-            schema = tool.inputSchema
+            schema = tool.input_schema
             properties = schema.get("properties", {})
             required = schema.get("required", [])
             for req in required:

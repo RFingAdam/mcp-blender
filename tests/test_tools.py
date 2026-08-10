@@ -13,7 +13,7 @@ class TestToolSchemas:
     def test_object_create_schema(self):
         """Test object_create tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_object_create")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         # Should have type property with enum
         assert "type" in schema["properties"]
@@ -27,7 +27,7 @@ class TestToolSchemas:
     def test_object_transform_schema(self):
         """Test object_transform tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_object_transform")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         # Should have name, location, rotation, scale
         assert "name" in schema["properties"]
@@ -41,7 +41,7 @@ class TestToolSchemas:
     def test_material_set_color_schema(self):
         """Test material_set_color tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_material_set_color")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "material_name" in schema["properties"]
         assert "color" in schema["properties"]
@@ -54,7 +54,7 @@ class TestToolSchemas:
     def test_modifier_add_schema(self):
         """Test modifier_add tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_modifier_add")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "modifier_type" in schema["properties"]
@@ -65,7 +65,7 @@ class TestToolSchemas:
     def test_render_set_engine_schema(self):
         """Test render_set_engine tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_render_set_engine")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "engine" in schema["properties"]
         assert "enum" in schema["properties"]["engine"]
@@ -76,7 +76,7 @@ class TestToolSchemas:
     def test_export_gltf_schema(self):
         """Test export_gltf tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_export_gltf")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "filepath" in schema["properties"]
         assert "export_format" in schema["properties"]
@@ -86,7 +86,7 @@ class TestToolSchemas:
     def test_polyhaven_search_schema(self):
         """Test polyhaven_search tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_polyhaven_search")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "query" in schema["properties"]
         assert "asset_type" in schema["properties"]
@@ -96,7 +96,7 @@ class TestToolSchemas:
     def test_ai_generate_model_schema(self):
         """Test ai_generate_model tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_generate_model")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         # Should have prompt and image_path for text-to-3D and image-to-3D
         assert "prompt" in schema["properties"]
@@ -114,7 +114,7 @@ class TestToolSchemas:
     def test_ai_generate_texture_schema(self):
         """Test ai_generate_texture tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_generate_texture")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "prompt" in schema["properties"]
         assert "object_name" in schema["properties"]
@@ -125,7 +125,7 @@ class TestToolSchemas:
     def test_ai_generate_texture_sync_schema(self):
         """Test ai_generate_texture_sync tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_generate_texture_sync")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "prompt" in schema["properties"]
         assert "object_name" in schema["properties"]
@@ -138,7 +138,7 @@ class TestToolSchemas:
     def test_ai_generate_reference_image_schema(self):
         """Test ai_generate_reference_image tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_generate_reference_image")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "prompt" in schema["properties"]
         assert "resolution" in schema["properties"]
@@ -147,7 +147,7 @@ class TestToolSchemas:
     def test_ai_inpaint_texture_schema(self):
         """Test ai_inpaint_texture tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_inpaint_texture")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "image_path" in schema["properties"]
         assert "mask_path" in schema["properties"]
@@ -160,7 +160,7 @@ class TestToolSchemas:
     def test_ai_texture_from_render_schema(self):
         """Test ai_texture_from_render tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_texture_from_render")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "prompt" in schema["properties"]
@@ -175,7 +175,7 @@ class TestToolSchemas:
     def test_ai_evaluate_schema(self):
         """Test ai_evaluate tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_evaluate")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "render_path" in schema["properties"]
         assert "category" in schema["properties"]
@@ -189,7 +189,7 @@ class TestToolSchemas:
     def test_ai_refine_schema(self):
         """Test ai_refine tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_ai_refine")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "prompt" in schema["properties"]
