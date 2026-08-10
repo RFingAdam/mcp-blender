@@ -26,3 +26,5 @@ Brief description of what this PR does.
 - [ ] Handler returns `{"success": True, ...}` or `{"error": "..."}`
 - [ ] README updated if new tools added
 - [ ] CHANGELOG updated
+
+- [ ] I have read and agree to [CLA.md](../CLA.md) for this contribution.
