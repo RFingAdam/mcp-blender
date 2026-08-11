@@ -442,6 +442,15 @@ with the eng-mcp-suite toolkit-wide AGPL move. The underlying Blender
 application remains GPL-3.0+ and is invoked at runtime, not redistributed
 by this wrapper.
 
+## Commercial licensing
+
+This project is licensed under AGPL-3.0-or-later. A commercial license —
+for embedding in a closed-source product, hosting as a paid service
+without AGPL's share-back obligations, or proprietary redistribution —
+is available on a case-by-case basis. See [eng-mcp-suite's licensing
+policy](https://github.com/RFingAdam/eng-mcp-suite/blob/main/LICENSE_SUMMARY.md#commercial-licensing)
+or open an issue and tag `@RFingAdam`.
+
 ## Acknowledgments
 
 - **[Blender Foundation](https://www.blender.org/)** — for Blender itself.
