@@ -1057,10 +1057,10 @@ class MeasurementHandlersMixin:
         socket, and .npy is the natural format for the numpy analysis this
         feeds into.
         """
+        import bmesh
         import numpy as np
         from mathutils import Vector
         from mathutils.bvhtree import BVHTree
-        import bmesh
 
         object_name = require_param(params, "object_name", str)
         bb_min = validate_vector3(require_param(params, "bb_min", list), "bb_min")

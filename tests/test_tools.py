@@ -204,7 +204,7 @@ class TestToolSchemas:
     def test_text_create_schema(self):
         """Test text_create tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_text_create")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "content" in schema["properties"]
         assert "extrude" in schema["properties"]
@@ -218,7 +218,7 @@ class TestToolSchemas:
     def test_text_to_mesh_schema(self):
         """Test text_to_mesh tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_text_to_mesh")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "keep_original" in schema["properties"]
@@ -227,7 +227,7 @@ class TestToolSchemas:
     def test_object_rename_schema(self):
         """Test object_rename tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_object_rename")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "name" in schema["properties"]
         assert "new_name" in schema["properties"]
@@ -236,7 +236,7 @@ class TestToolSchemas:
     def test_object_get_bounds_schema(self):
         """Test object_get_bounds tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_object_get_bounds")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "name" in schema["properties"]
         assert schema["required"] == ["name"]
@@ -244,7 +244,7 @@ class TestToolSchemas:
     def test_mesh_triangulate_schema(self):
         """Test mesh_triangulate tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_mesh_triangulate")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "quad_method" in schema["properties"]
@@ -255,7 +255,7 @@ class TestToolSchemas:
     def test_mesh_check_watertight_schema(self):
         """Test mesh_check_watertight tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_mesh_check_watertight")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert schema["required"] == ["object_name"]
@@ -263,7 +263,7 @@ class TestToolSchemas:
     def test_text_add_relief_schema(self):
         """Test text_add_relief tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_text_add_relief")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "content" in schema["properties"]
         assert "target_object" in schema["properties"]
@@ -277,14 +277,14 @@ class TestToolSchemas:
     def test_server_restart_schema(self):
         """Test server_restart tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_server_restart")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert schema["required"] == []
 
     def test_mesh_add_relief_schema(self):
         """Test mesh_add_relief tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_mesh_add_relief")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "source_objects" in schema["properties"]
         assert schema["properties"]["source_objects"]["type"] == "array"
@@ -301,7 +301,7 @@ class TestToolSchemas:
     def test_mesh_bake_heightmap_schema(self):
         """Test mesh_bake_heightmap tool schema."""
         tool = next(t for t in TOOLS if t.name == "blender_mesh_bake_heightmap")
-        schema = tool.inputSchema
+        schema = tool.input_schema
 
         assert "object_name" in schema["properties"]
         assert "bb_min" in schema["properties"]
