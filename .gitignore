@@ -89,3 +89,10 @@ credentials.*
 # Claude/MCP local config
 .claude/
 tasks/
+
+# CAD/design files
+*.kicad_pcb
+*.brd
+*.step
+*.stp
+.ip-denylist
