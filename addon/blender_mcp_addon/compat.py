@@ -221,11 +221,25 @@ def get_eevee_engine_name():
     """
     Get the correct EEVEE engine identifier for the Blender version.
 
-    EEVEE Next was introduced in 4.2, so for 4.2+ it's always BLENDER_EEVEE_NEXT.
+    EEVEE Next shipped as ``BLENDER_EEVEE_NEXT`` in 4.2, then 5.0 dropped the
+    legacy engine and renamed it back to ``BLENDER_EEVEE``. Query the enum
+    rather than mapping from the version number so the addon keeps working on
+    future releases too.
     """
-    if IS_4_2_OR_LATER:
+    try:
+        identifiers = {
+            item.identifier
+            for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items
+        }
+    except (AttributeError, KeyError):
+        identifiers = set()
+
+    if "BLENDER_EEVEE_NEXT" in identifiers:
         return "BLENDER_EEVEE_NEXT"
-    return "BLENDER_EEVEE"
+    if "BLENDER_EEVEE" in identifiers:
+        return "BLENDER_EEVEE"
+    # Enum unavailable (headless edge cases); fall back to the version mapping.
+    return "BLENDER_EEVEE_NEXT" if IS_4_2_OR_LATER else "BLENDER_EEVEE"
 
 
 def get_compositor_node_mapping():

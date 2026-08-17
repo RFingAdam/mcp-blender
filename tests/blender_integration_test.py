@@ -449,6 +449,71 @@ def test_export_obj(runner: TestRunner):
             os.unlink(output_path)
 
 
+def test_stl_roundtrip(runner: TestRunner):
+    """Test export_stl followed by import_file on the same .stl."""
+    runner.reset_scene()
+    runner.handlers.handle("object_create", {"type": "cube", "name": "StlCube"})
+
+    with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+        output_path = f.name
+
+    try:
+        runner.handlers.handle("export_stl", {"filepath": output_path})
+        assert os.path.exists(output_path), "STL file not created"
+
+        runner.handlers.handle("scene_clear", {})
+        result = runner.handlers.handle("import_file", {"filepath": output_path})
+        assert result["count"] >= 1, f"STL import produced no objects: {result}"
+    finally:
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+
+
+def test_mesh_fill_enum_values(runner: TestRunner):
+    """Test that mesh_fill accepts its documented fill_type values."""
+    from blender_mcp_addon.validation import ValidationError
+
+    runner.reset_scene()
+    bpy.ops.mesh.primitive_grid_add(x_subdivisions=4, y_subdivisions=4, size=2)
+    grid = bpy.context.active_object
+    grid.name = "FillGrid"
+
+    # Punch a hole so the mesh has boundary edges to fill.
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    grid.data.polygons[4].select = True
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.delete(type="FACE")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    selection = runner.handlers.handle(
+        "mesh_select_trait", {"object_name": "FillGrid", "trait": "BOUNDARY"}
+    )
+    edges = selection["selected_indices"]
+    assert edges, "expected boundary edges after deleting a face"
+
+    for fill_type in ("NGON", "TRIANGLE_FAN"):
+        result = runner.handlers.handle("mesh_fill", {
+            "object_name": "FillGrid",
+            "edge_indices": edges,
+            "fill_type": fill_type,
+        })
+        assert result["success"], f"mesh_fill rejected fill_type={fill_type}"
+
+    # An invalid value must still be rejected.
+    try:
+        runner.handlers.handle("mesh_fill", {
+            "object_name": "FillGrid",
+            "edge_indices": edges,
+            "fill_type": "NOT_A_FILL_TYPE",
+        })
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("mesh_fill accepted an invalid fill_type")
+
+
 def test_compat_version_detection(runner: TestRunner):
     """Test version compatibility detection."""
     info = compat.get_version_info()
@@ -461,6 +526,11 @@ def test_compat_eevee_name(runner: TestRunner):
     """Test EEVEE engine name detection."""
     name = compat.get_eevee_engine_name()
     assert name in ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"), f"Unexpected EEVEE name: {name}"
+
+    # The reported name must be one this Blender build actually accepts.
+    valid = {item.identifier
+             for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
+    assert name in valid, f"EEVEE name {name} not in this build's engines: {sorted(valid)}"
 
 
 def test_compat_principled_inputs(runner: TestRunner):
@@ -528,6 +598,11 @@ def main():
     print("\nExport Tests:")
     runner.run_test("export_gltf", lambda: test_export_gltf(runner))
     runner.run_test("export_obj", lambda: test_export_obj(runner))
+    runner.run_test("stl_roundtrip", lambda: test_stl_roundtrip(runner))
+
+    # Mesh editing tests
+    print("\nMesh Editing Tests:")
+    runner.run_test("mesh_fill_enum_values", lambda: test_mesh_fill_enum_values(runner))
 
     # Compatibility tests
     print("\nCompatibility Tests:")
