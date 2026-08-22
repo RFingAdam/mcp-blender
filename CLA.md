@@ -4,9 +4,9 @@ This Contributor License Agreement ("Agreement") applies to any
 contribution ("Contribution") you submit to a repository maintained by
 Adam Engelbrecht ("Maintainer") in the `RFingAdam` engineering-MCP
 toolkit (this repository and its sibling repos, collectively the
-"Project"). By submitting a Contribution — a pull request, patch,
+"Project"). By submitting a Contribution. A pull request, patch,
 issue-linked code snippet, or any other material intended for inclusion
-in the Project — you accept and agree to the following terms. If you
+in the Project. You accept and agree to the following terms. If you
 are submitting on behalf of an employer or other entity, you represent
 that you have the authority to bind that entity to this Agreement.
 
@@ -19,7 +19,7 @@ publicly display, publicly perform, sublicense, and distribute your
 Contribution and derivative works of it.
 
 This license explicitly includes the right for the Maintainer to
-**relicense** your Contribution — alone or as part of the Project — under
+**relicense** your Contribution: alone or as part of the Project: under
 license terms different from the Project's current outbound license,
 including a proprietary or commercial license, at the Maintainer's sole
 discretion. This is the specific right that lets the Maintainer offer
@@ -65,7 +65,7 @@ any kind, express or implied.
 
 ## 5. You keep your rights
 
-This Agreement does not transfer ownership of your Contribution — you
+This Agreement does not transfer ownership of your Contribution. You
 retain your copyright and may use, license, or relicense your own
 Contribution elsewhere, subject to any obligations you separately owe
 to the Project's own license terms once merged.

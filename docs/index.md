@@ -1,6 +1,6 @@
 # mcp-blender
 
-**Control Blender from any MCP client — 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
+**Control Blender from any MCP client: 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
 **Drive it from your IDE, terminal, or AI agent and run an iterative render-analyze-refine loop without leaving Blender.**
 
 ---
@@ -46,15 +46,15 @@ or the release ZIP. Enable it in Blender preferences.
 
 ## Where to next
 
-- [Tool reference](tools.md) — 218 tools grouped by Blender pipeline stage
-- [Usage examples](usage.md) — self-refinement loop, MSFS, livery walkthroughs
-- [Architecture](architecture.md) — server / addon / TCP layout
-- [MSFS roadmap](MSFS_ROADMAP.md) — MSFS content workflow
+- [Tool reference](tools.md): 218 tools grouped by Blender pipeline stage
+- [Usage examples](usage.md): self-refinement loop, MSFS, livery walkthroughs
+- [Architecture](architecture.md): server / addon / TCP layout
+- [MSFS roadmap](MSFS_ROADMAP.md): MSFS content workflow
 
 ---
 
 !!! note "Part of eng-mcp-suite"
-    This MCP server is part of [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite) —
+    This MCP server is part of [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite),
     an umbrella of engineering MCP servers. `mcp-blender` is a
     creative-tooling tangent in the family: it shares brand and MCP
     wiring, but doesn't fit the engineering compliance loop directly.

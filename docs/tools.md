@@ -224,7 +224,7 @@ ComfyUI / SDXL / ControlNet backed.
 
 ## AI evaluation (2)
 
-`ai_evaluate`, `ai_refine` — Ollama vision scoring with category-specific
+`ai_evaluate`, `ai_refine`: Ollama vision scoring with category-specific
 metrics (model / texture / animation).
 
 ## AI self-refinement (7)
@@ -250,4 +250,4 @@ runtime. From your client:
 > *"What arguments does `blender_geonode_scatter_instances` take?"*
 
 Your assistant reads the schema and reports the parameter names, types,
-and defaults. Schemas are authoritative — this page only summarises.
+and defaults. Schemas are authoritative. This page only summarises.

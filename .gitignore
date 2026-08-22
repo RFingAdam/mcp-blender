@@ -51,7 +51,7 @@ Desktop.ini
 *.blend1
 *.blend2
 
-# Assets — keep only banner.svg for README, ignore everything else
+# Assets: keep only banner.svg for README, ignore everything else
 # (renders, screenshots, reference images, 3D models, blend files)
 assets/*.png
 assets/*.jpg

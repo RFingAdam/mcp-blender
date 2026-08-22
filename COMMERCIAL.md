@@ -1,7 +1,7 @@
 # Commercial licensing
 
 This project is licensed under AGPL-3.0-or-later. You may use, modify,
-self-host, and contribute back under those terms at no cost — that
+self-host, and contribute back under those terms at no cost. That
 includes running it inside a company, including for a for-profit
 product, as long as you comply with AGPL (share modifications back,
 including for network/SaaS use per §13).
@@ -18,4 +18,4 @@ A separate commercial license is available if you want to:
 [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite/issues), and
 tag `@RFingAdam`. Personal use, research, internal engineering use
 under AGPL's terms, and AGPL-compliant open projects don't need to
-contact us — you're already covered.
+contact us. You're already covered.

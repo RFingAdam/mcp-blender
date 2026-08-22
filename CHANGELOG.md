@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] — 2026-05-13
+## [0.4.0]: 2026-05-13
 
 ### Changed
 - **License: MIT → AGPL-3.0-or-later.** Aligns with the eng-mcp-suite
@@ -20,74 +20,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Material Inspection & Manipulation** (7 new tools):
-  - `material_inspect_graph` — return full shader node graph as structured JSON
-  - `material_node_add` — add any shader node to a material
-  - `material_node_connect` — connect nodes via socket names
-  - `material_node_group_create` — create reusable node groups
-  - `material_procedural_preset` — 23 one-call procedural materials (VEHICLE_PAINT, CHROME, RUST, CARBON_FIBER, etc.)
-  - `material_convert_to_pbr` — convert materials to clean Principled BSDF for GLTF/MSFS/UE5
-  - `material_preview_render` — render material preview on standard shape
+  - `material_inspect_graph`: return full shader node graph as structured JSON
+  - `material_node_add`: add any shader node to a material
+  - `material_node_connect`: connect nodes via socket names
+  - `material_node_group_create`: create reusable node groups
+  - `material_procedural_preset`: 23 one-call procedural materials (VEHICLE_PAINT, CHROME, RUST, CARBON_FIBER, etc.)
+  - `material_convert_to_pbr`: convert materials to clean Principled BSDF for GLTF/MSFS/UE5
+  - `material_preview_render`: render material preview on standard shape
 
 - **Measurement & Validation** (7 new tools):
-  - `measure_surface_area` — total + per-material area breakdown
-  - `measure_volume` — mesh volume with manifold check
-  - `measure_clearance` — min/max/avg distance between two objects
-  - `validate_dimensions` — check dimensions against spec with tolerance
-  - `calibrate_from_reference` — scale object to match known real-world dimension
-  - `measure_edge_angle` — dihedral angles at edges with threshold flagging
-  - `validate_mesh_quality` — 11-check comprehensive mesh quality audit
+  - `measure_surface_area`: total + per-material area breakdown
+  - `measure_volume`: mesh volume with manifold check
+  - `measure_clearance`: min/max/avg distance between two objects
+  - `validate_dimensions`. Check dimensions against spec with tolerance
+  - `calibrate_from_reference`: scale object to match known real-world dimension
+  - `measure_edge_angle`: dihedral angles at edges with threshold flagging
+  - `validate_mesh_quality`: 11-check comprehensive mesh quality audit
 
 - **Baking** (6 new tools):
-  - `bake_pbr_batch` — bake ALL PBR channels (diffuse, normal, roughness, metallic, AO, emission, displacement) in one call
-  - `bake_highpoly_to_lowpoly` — selected-to-active baking
-  - `bake_from_multires` — bake from multires sculpt data
-  - `bake_to_vertex_colors` — bake lighting/AO to vertex colors
-  - `bake_curvature` — curvature map for wear/edge effects
-  - `bake_id_map` — color ID map per material/object/face_set
+  - `bake_pbr_batch`: bake ALL PBR channels (diffuse, normal, roughness, metallic, AO, emission, displacement) in one call
+  - `bake_highpoly_to_lowpoly`: selected-to-active baking
+  - `bake_from_multires`: bake from multires sculpt data
+  - `bake_to_vertex_colors`: bake lighting/AO to vertex colors
+  - `bake_curvature`: curvature map for wear/edge effects
+  - `bake_id_map`: color ID map per material/object/face_set
 
-- **Geometry Nodes** (7 new tools — first-ever GN support via MCP):
-  - `geonode_create_group` — create typed node group with inputs/outputs
-  - `geonode_apply` — apply GN group as modifier with input values
-  - `geonode_scatter_instances` — one-call scatter with Poisson, density, random scale/rotation
-  - `geonode_array_grid` — parametric arrays (linear, grid, radial, hexagonal)
-  - `geonode_deform_curve` — deform mesh along curve
-  - `geonode_extrude_profile` — sweep profile along curve path
-  - `geonode_inspect` — read current GN setup and input values
+- **Geometry Nodes** (7 new tools: first-ever GN support via MCP):
+  - `geonode_create_group`: create typed node group with inputs/outputs
+  - `geonode_apply`: apply GN group as modifier with input values
+  - `geonode_scatter_instances`. One-call scatter with Poisson, density, random scale/rotation
+  - `geonode_array_grid`: parametric arrays (linear, grid, radial, hexagonal)
+  - `geonode_deform_curve`: deform mesh along curve
+  - `geonode_extrude_profile`: sweep profile along curve path
+  - `geonode_inspect`: read current GN setup and input values
 
-- **Sculpting** (8 new tools — pipeline-focused, not brush strokes):
-  - `sculpt_setup` — enter sculpt mode with multires/dyntopo/symmetry config
-  - `sculpt_mesh_filter` — global mesh filters (SMOOTH, SHARPEN, INFLATE, etc.)
-  - `sculpt_mask_by_topology` — mask by cavity/curvature/vertex group
-  - `sculpt_face_set_create` — face sets by linked/material/normal/UV
-  - `sculpt_multires_reshape` — manage multires levels
-  - `sculpt_to_retopo` — full sculpt-to-retopo pipeline with displacement baking
-  - `sculpt_extract_mask` — extract masked region as separate mesh
-  - `sculpt_remesh_voxel` — voxel remesh with configurable resolution
+- **Sculpting** (8 new tools: pipeline-focused, not brush strokes):
+  - `sculpt_setup`: enter sculpt mode with multires/dyntopo/symmetry config
+  - `sculpt_mesh_filter`: global mesh filters (SMOOTH, SHARPEN, INFLATE, etc.)
+  - `sculpt_mask_by_topology`: mask by cavity/curvature/vertex group
+  - `sculpt_face_set_create`: face sets by linked/material/normal/UV
+  - `sculpt_multires_reshape`: manage multires levels
+  - `sculpt_to_retopo`: full sculpt-to-retopo pipeline with displacement baking
+  - `sculpt_extract_mask`: extract masked region as separate mesh
+  - `sculpt_remesh_voxel`: voxel remesh with configurable resolution
 
-- **Rigging & Armature** (8 new tools — with auto-rig presets):
-  - `armature_create` — create armature from bone chain definitions
-  - `autorig_preset` — one-call auto-rig (BIPED, VEHICLE, MECHANICAL_ARM, WHEEL_ASSEMBLY, TURRET, PISTON, LANDING_GEAR, etc.)
-  - `constraint_add` — add bone/object constraints (IK, COPY_ROT, TRACK_TO, etc.)
-  - `constraint_preset` — preset constraint setups (IK_ARM, PISTON_PAIR, WHEEL_SPIN, etc.)
-  - `bone_shape_assign` — custom control shapes for bones
-  - `pose_library_save` / `pose_library_apply` — save and restore poses with blending
-  - `rig_validate` — validate rig for MIXAMO/UE5/MSFS export
+- **Rigging & Armature** (8 new tools: with auto-rig presets):
+  - `armature_create`: create armature from bone chain definitions
+  - `autorig_preset`. One-call auto-rig (BIPED, VEHICLE, MECHANICAL_ARM, WHEEL_ASSEMBLY, TURRET, PISTON, LANDING_GEAR, etc.)
+  - `constraint_add`: add bone/object constraints (IK, COPY_ROT, TRACK_TO, etc.)
+  - `constraint_preset`: preset constraint setups (IK_ARM, PISTON_PAIR, WHEEL_SPIN, etc.)
+  - `bone_shape_assign`: custom control shapes for bones
+  - `pose_library_save` / `pose_library_apply`: save and restore poses with blending
+  - `rig_validate`: validate rig for MIXAMO/UE5/MSFS export
 
 - **Physics Simulation** (6 new tools):
-  - `physics_rigid_body_add` — add rigid body with collision shape config
-  - `physics_rigid_body_batch` — batch add rigid bodies to multiple objects
-  - `physics_simulate` — run simulation with optional apply-to-mesh
-  - `physics_cloth_add` — cloth with 7 presets (SILK, CANVAS, TARP, etc.) + wind
-  - `physics_soft_body_add` — soft body for deformable objects
-  - `physics_fluid_quick` — quick Mantaflow fluid setup
+  - `physics_rigid_body_add`: add rigid body with collision shape config
+  - `physics_rigid_body_batch`: batch add rigid bodies to multiple objects
+  - `physics_simulate`. Run simulation with optional apply-to-mesh
+  - `physics_cloth_add`: cloth with 7 presets (SILK, CANVAS, TARP, etc.) + wind
+  - `physics_soft_body_add`: soft body for deformable objects
+  - `physics_fluid_quick`: quick Mantaflow fluid setup
 
 - **Annotations & Grease Pencil** (6 new tools):
-  - `annotation_add` — 3D annotation strokes
-  - `annotation_text` — text labels at 3D points
-  - `annotation_dimension` — dimension lines with measurement display
-  - `annotation_clear` — clear annotation layers
-  - `grease_pencil_create` — create GP objects with strokes
-  - `grease_pencil_markup` — overlay markup on rendered images
+  - `annotation_add`: 3D annotation strokes
+  - `annotation_text`: text labels at 3D points
+  - `annotation_dimension`: dimension lines with measurement display
+  - `annotation_clear`: clear annotation layers
+  - `grease_pencil_create`: create GP objects with strokes
+  - `grease_pencil_markup`: overlay markup on rendered images
 
 - **Collections & System** (8 new tools):
   - `collection_create`, `collection_list`, `collection_move`, `collection_visibility`
@@ -106,9 +106,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **AI Texture Generation (sync)**: `blender_ai_generate_texture_sync` — queues ComfyUI job and polls until complete in one call, eliminating the need for manual status polling
-- **AI Output Evaluation**: `blender_ai_evaluate` — evaluate any render/output (model, texture, animation) using Ollama vision with category-specific scoring criteria
-- **AI Self-Refinement**: `blender_ai_refine` — run one iteration of render → evaluate → suggest loop for iterative quality improvement
+- **AI Texture Generation (sync)**: `blender_ai_generate_texture_sync`: queues ComfyUI job and polls until complete in one call, eliminating the need for manual status polling
+- **AI Output Evaluation**: `blender_ai_evaluate`: evaluate any render/output (model, texture, animation) using Ollama vision with category-specific scoring criteria
+- **AI Self-Refinement**: `blender_ai_refine`. Run one iteration of render → evaluate → suggest loop for iterative quality improvement
 - Ollama Vision `evaluate_output()` method with structured scoring and category-specific criteria (model/texture/animation)
 - `refine_with_feedback()` orchestration function for iterative self-refinement sessions
 - Asset organization: `assets/generated/` directory for generated models and textures (gitignored)
@@ -124,14 +124,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **AI Self-Refinement Loop** (7 new tools):
-  - Script execution: `execute_script` — run arbitrary Python/bmesh code in Blender
-  - Multi-angle rendering: `render_multi_angle` — render from front, right, top, perspective
-  - Vision analysis: `analyze_viewport` — analyze renders with Ollama vision model
-  - Refinement iteration: `refine_iteration` — render + analyze + convergence check
+  - Script execution: `execute_script`. Run arbitrary Python/bmesh code in Blender
+  - Multi-angle rendering: `render_multi_angle`: render from front, right, top, perspective
+  - Vision analysis: `analyze_viewport`: analyze renders with Ollama vision model
+  - Refinement iteration: `refine_iteration`: render + analyze + convergence check
   - Session management: `refine_create_session`, `refine_get_session`, `refine_list_sessions`
 - **Refinement session state management** module (`refinement.py`)
 - **Ollama Vision** `analyze_for_refinement()` method for structured model feedback
-- **TripoSR subprocess execution** — runs via system Python for PyTorch/CUDA support
+- **TripoSR subprocess execution**: runs via system Python for PyTorch/CUDA support
 - **Stable Fast 3D** backend for local image-to-3D generation
 - **Multi-Backend AI 3D Generation System**:
   - Backend Management tools: list_backends, set_backend, get_backend_info, configure_backend
@@ -181,7 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Version bump to 0.2.0
 - Total tool count increased from 44 to 97
 - TripoSR backend rewritten to use subprocess (avoids Blender Python limitations with PyTorch/CUDA)
-- Simplified `compat.py` — removed redundant BSDF input branching
+- Simplified `compat.py`: removed redundant BSDF input branching
 - `get_event_loop()` → `get_running_loop()` deprecation fix in `blender_client.py`
 - Removed unused imports across multiple modules
 - Refactored AI generation system to use pluggable backend architecture

@@ -69,7 +69,7 @@ mcp-blender/
 ## Position in eng-mcp-suite
 
 `mcp-blender` is a **creative-tooling tangent** in the eng-mcp-suite
-family — it shares the brand, MCP wiring, and docs structure with the
+family: it shares the brand, MCP wiring, and docs structure with the
 engineering MCPs, but doesn't fit the engineering compliance loop
 directly.
 

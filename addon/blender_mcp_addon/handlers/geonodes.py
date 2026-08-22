@@ -265,7 +265,7 @@ class GeoNodesHandlersMixin:
             _link(tree, n_rand_scale.outputs['Value'], n_combine.inputs['Z'])
             _link(tree, n_combine.outputs['Vector'], n_iop.inputs['Scale'])
         else:
-            # Uniform fixed scale — no node needed, just set default
+            # Uniform fixed scale. No node needed, just set default
             n_iop.inputs['Scale'].default_value = (scale_min, scale_min, scale_min)
 
         # -- Rotation --
@@ -688,7 +688,7 @@ class GeoNodesHandlersMixin:
                 has_geo_out = True
         if not has_geo_out:
             tree.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
-        # Remove default input Geometry — we source from Object Info nodes
+        # Remove default input Geometry. We source from Object Info nodes
         for item in list(tree.interface.items_tree):
             if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name == 'Geometry':
                 tree.interface.remove(item)

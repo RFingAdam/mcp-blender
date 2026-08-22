@@ -6,8 +6,8 @@
   Replaces the older 800px assets/banner.svg (kept as banner-legacy.svg).
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320"
-     role="img" aria-label="mcp-blender — 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline">
-  <title>mcp-blender — 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline</title>
+     role="img" aria-label="mcp-blender: 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline">
+  <title>mcp-blender: 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline</title>
 
   <defs>
     <linearGradient id="t-bg" x1="0" y1="0" x2="1" y2="0">

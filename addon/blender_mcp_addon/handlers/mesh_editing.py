@@ -1095,7 +1095,7 @@ class MeshEditingHandlersMixin:
             bpy.ops.object.shade_smooth()
         elif shade_type == "AUTO":
             bpy.ops.object.shade_smooth()
-            # Blender 4.2+ removed use_auto_smooth — use Smooth by Angle modifier
+            # Blender 4.2+ removed use_auto_smooth. Use Smooth by Angle modifier
             if compat.IS_4_2_OR_LATER:
                 # Check if modifier already exists
                 existing = None

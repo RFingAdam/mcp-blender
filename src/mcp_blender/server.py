@@ -2505,12 +2505,12 @@ TOOLS: list[Tool] = [
                 "position_min": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Minimum position [x, y, z] — select elements above this",
+                    "description": "Minimum position [x, y, z]: select elements above this",
                 },
                 "position_max": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Maximum position [x, y, z] — select elements below this",
+                    "description": "Maximum position [x, y, z]: select elements below this",
                 },
                 "normal_direction": {
                     "type": "array",
@@ -2655,7 +2655,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_select_edge_loops",
-        description="Select complete edge loops or edge rings through a given edge. Fundamental for hard surface modeling — loops define the flow of geometry.",
+        description="Select complete edge loops or edge rings through a given edge. Fundamental for hard surface modeling: loops define the flow of geometry.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2676,7 +2676,7 @@ TOOLS: list[Tool] = [
     # ==================== Shading & Normal Control ====================
     Tool(
         name="blender_shade_smooth",
-        description="Set smooth, flat, or auto-smooth shading on an object. Auto-smooth applies smooth shading while keeping edges sharper than the angle threshold as flat — essential for mechanical surfaces.",
+        description="Set smooth, flat, or auto-smooth shading on an object. Auto-smooth applies smooth shading while keeping edges sharper than the angle threshold as flat: essential for mechanical surfaces.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2698,7 +2698,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_crease",
-        description="Set edge crease values for subdivision surface control. THE hard surface modeling tool — crease=1.0 keeps edges sharp through subdivision, crease=0.5 creates softer feature lines.",
+        description="Set edge crease values for subdivision surface control. THE hard surface modeling tool: crease=1.0 keeps edges sharp through subdivision, crease=0.5 creates softer feature lines.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2803,7 +2803,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_merge",
-        description="Merge vertices together — close gaps, join geometry, remove doubles. Supports merge to center, first, last, or by distance threshold.",
+        description="Merge vertices together: close gaps, join geometry, remove doubles. Supports merge to center, first, last, or by distance threshold.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2830,7 +2830,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_bridge",
-        description="Bridge two edge loops to create connecting faces — connect body panels, create tubes between openings, join separate mesh islands.",
+        description="Bridge two edge loops to create connecting faces: connect body panels, create tubes between openings, join separate mesh islands.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2866,7 +2866,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_fill",
-        description="Fill boundary edges with faces — cap holes, close open geometry. Supports n-gon fill, triangle fan, and grid fill.",
+        description="Fill boundary edges with faces: cap holes, close open geometry. Supports n-gon fill, triangle fan, and grid fill.",
         input_schema={
             "type": "object",
             "properties": {
@@ -2951,7 +2951,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_tris_to_quads",
-        description="Convert triangles to quads — clean up triangulated meshes to get cleaner quad topology. Pairs adjacent triangles based on angle and UV matching.",
+        description="Convert triangles to quads: clean up triangulated meshes to get cleaner quad topology. Pairs adjacent triangles based on angle and UV matching.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3031,7 +3031,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_separate_selected",
-        description="Separate selected faces into a new object — extract body panels, components, or regions into independent objects.",
+        description="Separate selected faces into a new object: extract body panels, components, or regions into independent objects.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3051,7 +3051,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_split",
-        description="Split edges or faces without separating into a new object — creates hard boundaries within the mesh by duplicating shared vertices.",
+        description="Split edges or faces without separating into a new object: creates hard boundaries within the mesh by duplicating shared vertices.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3167,7 +3167,7 @@ TOOLS: list[Tool] = [
     # ==================== Detail Placement & Instancing ====================
     Tool(
         name="blender_array_along_curve",
-        description="Instance objects along a curve path — rivet lines, bolt patterns, cable runs. Uses Array + Curve modifiers for parametric control.",
+        description="Instance objects along a curve path: rivet lines, bolt patterns, cable runs. Uses Array + Curve modifiers for parametric control.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3195,7 +3195,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_scatter_on_surface",
-        description="Scatter objects on a mesh surface using a particle system — bolts, rivets, damage marks, vegetation. Control count, randomization, and area restriction.",
+        description="Scatter objects on a mesh surface using a particle system: bolts, rivets, damage marks, vegetation. Control count, randomization, and area restriction.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3236,7 +3236,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_collection_instance",
-        description="Place collection instances at specific locations — efficient placement of repeated complex objects like wheel assemblies, control panels, or structural details.",
+        description="Place collection instances at specific locations: efficient placement of repeated complex objects like wheel assemblies, control panels, or structural details.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3263,7 +3263,7 @@ TOOLS: list[Tool] = [
     # ==================== Transform & Deform ====================
     Tool(
         name="blender_mesh_proportional_transform",
-        description="Move, rotate, or scale vertices with proportional falloff affecting neighbors — organic shape refinement, smooth deformations, sculpt-like adjustments via MCP.",
+        description="Move, rotate, or scale vertices with proportional falloff affecting neighbors: organic shape refinement, smooth deformations, sculpt-like adjustments via MCP.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3301,7 +3301,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_shrinkwrap",
-        description="Snap vertices to another object's surface — conform details to body panels, project geometry onto curved surfaces.",
+        description="Snap vertices to another object's surface: conform details to body panels, project geometry onto curved surfaces.",
         input_schema={
             "type": "object",
             "properties": {
@@ -3329,7 +3329,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_mesh_flatten",
-        description="Flatten selected vertices to a plane — clean up bumpy surfaces, create perfectly flat areas on body panels.",
+        description="Flatten selected vertices to a plane: clean up bumpy surfaces, create perfectly flat areas on body panels.",
         input_schema={
             "type": "object",
             "properties": {

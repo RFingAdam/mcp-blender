@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo-banner.svg" alt="mcp-blender — 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline" width="100%"/>
+<img src="assets/logo-banner.svg" alt="mcp-blender: 218 Blender tools: 3D modeling, AI generation, MSFS content pipeline" width="100%"/>
 
 <br/>
 
@@ -10,7 +10,7 @@
 [![MCP](https://img.shields.io/badge/MCP-server-A78BFA.svg)](https://modelcontextprotocol.io)
 [![eng-mcp-suite](https://img.shields.io/badge/eng--mcp--suite-member-22D3EE.svg)](https://github.com/RFingAdam/eng-mcp-suite)
 
-**Control Blender from any MCP client — 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
+**Control Blender from any MCP client: 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
 **Drive it from your IDE, terminal, or AI agent and run an iterative render-analyze-refine loop without leaving Blender.**
 
 [Quick start](#quick-start) ·
@@ -81,13 +81,13 @@ pip install -e .
 
 ### 2. Install the Blender addon
 
-**Option A — from ZIP (recommended):**
+**Option A: from ZIP (recommended):**
 
 1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/RFingAdam/mcp-blender/releases).
 2. In Blender: **Edit → Preferences → Add-ons → Install…**
 3. Select the ZIP, enable "MCP Server Addon".
 
-**Option B — from source:**
+**Option B: from source:**
 
 ```bash
 # Linux
@@ -129,7 +129,7 @@ Then enable the addon in Blender preferences.
 1. Open Blender.
 2. Press `N` in the 3D viewport.
 3. Open the "MCP Server" panel.
-4. Click "Start Server" — confirm "Server running on port 9876".
+4. Click "Start Server": confirm "Server running on port 9876".
 
 </td>
 <td valign="top" width="50%">
@@ -249,7 +249,7 @@ Assets are cached locally.
 
 ### AI 3D model generation
 
-Multi-backend text/image-to-3D — cloud APIs and local models.
+Multi-backend text/image-to-3D: cloud APIs and local models.
 
 | Backend         | Type   | Requirements    | Capabilities                          |
 | --------------- | ------ | --------------- | ------------------------------------- |
@@ -293,7 +293,7 @@ Formats: `glb` (default), `gltf`, `fbx`, `obj`, `usdz`.
 ## Workflows
 
 `mcp-blender` is a creative-tooling tangent in
-[eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite) — it doesn't
+[eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite). It doesn't
 fit the engineering compliance loop directly, but it shares brand,
 docs, and MCP wiring with the rest of the family.
 
@@ -303,11 +303,11 @@ Part of [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite).
 
 ## Documentation
 
-- 📘 **[Quick Start](docs/index.md)** — install through first call.
-- 🛠️ **[Tool reference](docs/tools.md)** — all 218 tools grouped by stage.
-- 📐 **[Usage examples](docs/usage.md)** — end-to-end walkthroughs (self-refine, MSFS, livery).
-- 🏗️ **[Architecture](docs/architecture.md)** — how this MCP fits in eng-mcp-suite.
-- ✈️ **[MSFS roadmap](docs/MSFS_ROADMAP.md)** — MSFS content workflow.
+- 📘 **[Quick Start](docs/index.md)**: install through first call.
+- 🛠️ **[Tool reference](docs/tools.md)**. All 218 tools grouped by stage.
+- 📐 **[Usage examples](docs/usage.md)**: end-to-end walkthroughs (self-refine, MSFS, livery).
+- 🏗️ **[Architecture](docs/architecture.md)**: how this MCP fits in eng-mcp-suite.
+- ✈️ **[MSFS roadmap](docs/MSFS_ROADMAP.md)**: MSFS content workflow.
 
 ---
 
@@ -327,8 +327,8 @@ or jump to a sibling:</sub>
 | --------------------------- | ---------------------------------------------------------------------------- |
 | **RF / Transmission lines** | [lineforge](https://github.com/RFingAdam/lineforge)                          |
 | **EMC regulatory**          | [mcp-emc-regulations](https://github.com/RFingAdam/mcp-emc-regulations)      |
-| **PCB / SI**                | mcp-pcb-emcopilot *(private — public soon)*                                  |
-| **EM simulation**           | mcp-openems, mcp-nec2-antenna *(private — public soon)*                      |
+| **PCB / SI**                | mcp-pcb-emcopilot *(private: public soon)*                                  |
+| **EM simulation**           | mcp-openems, mcp-nec2-antenna *(private: public soon)*                      |
 | **Diagrams**                | [drawio-engineering-mcp](https://github.com/RFingAdam/drawio-engineering-mcp) |
 | **3D / rendering**          | **mcp-blender** *(this repo)*                                                |
 | **Remote access**           | [mcp-remote-access](https://github.com/RFingAdam/mcp-remote-access)          |
@@ -352,8 +352,8 @@ Options:
 
 In the 3D viewport sidebar:
 
-- **Port** — TCP port for the socket server (default 9876).
-- **Start / Stop Server** — toggle the MCP socket server.
+- **Port**: TCP port for the socket server (default 9876).
+- **Start / Stop Server**: toggle the MCP socket server.
 
 ---
 
@@ -373,22 +373,22 @@ The layer handles these differences automatically.
 
 ## Troubleshooting
 
-**"Connection refused"** — make sure Blender is running, the MCP Server
+**"Connection refused"**. Make sure Blender is running, the MCP Server
 panel shows "Server running", the port matches, and the firewall allows
 local TCP on `9876`.
 
-**"Tool not found"** — restart Claude / Codex after editing the MCP
+**"Tool not found"**: restart Claude / Codex after editing the MCP
 config; verify `mcp-blender --help` runs; check the client's MCP server
 log.
 
-**Addon not appearing in Blender** — check Blender's system console for
+**Addon not appearing in Blender**. Check Blender's system console for
 errors; verify Python version (Blender 4.2+ uses Python 3.11+); try
 reinstalling.
 
-**Poly Haven downloads fail** — check connectivity; verify the asset
+**Poly Haven downloads fail**. Check connectivity; verify the asset
 ID exists on polyhaven.com; check disk space.
 
-**AI generation not working** — `blender_ai_list_backends` shows status;
+**AI generation not working**: `blender_ai_list_backends` shows status;
 verify API keys (`RODIN_API_KEY`, `MESHY_API_KEY`, `TRIPO_API_KEY`) for
 cloud; verify models / VRAM for local; monitor with
 `blender_ai_model_status`; check history with `blender_ai_get_history`.
@@ -444,22 +444,22 @@ by this wrapper.
 
 ## Commercial licensing
 
-This project is licensed under AGPL-3.0-or-later. A commercial license —
-for embedding in a closed-source product, hosting as a paid service
-without AGPL's share-back obligations, or proprietary redistribution —
+This project is licensed under AGPL-3.0-or-later. A commercial license
+(for embedding in a closed-source product, hosting as a paid service
+without AGPL's share-back obligations, or proprietary redistribution)
 is available on a case-by-case basis. See [eng-mcp-suite's licensing
 policy](https://github.com/RFingAdam/eng-mcp-suite/blob/main/LICENSE_SUMMARY.md#commercial-licensing)
 or open an issue and tag `@RFingAdam`.
 
 ## Acknowledgments
 
-- **[Blender Foundation](https://www.blender.org/)** — for Blender itself.
-- **[Poly Haven](https://polyhaven.com/)** — for free 3D assets.
-- **[Hyper3D Rodin](https://hyperhuman.deemos.com/)**, **[Meshy.ai](https://www.meshy.ai/)**, **[Tripo](https://www.tripo3d.ai/)**, **TripoSR**, **Stable Fast 3D**, **Hunyuan3D**, **ComfyUI** — AI 3D backends.
-- **The MCP working group** — for the [Model Context Protocol](https://modelcontextprotocol.io) specification.
+- **[Blender Foundation](https://www.blender.org/)**: for Blender itself.
+- **[Poly Haven](https://polyhaven.com/)**: for free 3D assets.
+- **[Hyper3D Rodin](https://hyperhuman.deemos.com/)**, **[Meshy.ai](https://www.meshy.ai/)**, **[Tripo](https://www.tripo3d.ai/)**, **TripoSR**, **Stable Fast 3D**, **Hunyuan3D**, **ComfyUI**: AI 3D backends.
+- **The MCP working group**: for the [Model Context Protocol](https://modelcontextprotocol.io) specification.
 
 <div align="center">
 
-<sub>Part of <a href="https://github.com/RFingAdam/eng-mcp-suite">eng-mcp-suite</a> — built for RF engineers, PCB designers, EMC labs, and AI agents.</sub>
+<sub>Part of <a href="https://github.com/RFingAdam/eng-mcp-suite">eng-mcp-suite</a>: built for RF engineers, PCB designers, EMC labs, and AI agents.</sub>
 
 </div>
