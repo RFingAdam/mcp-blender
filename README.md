@@ -442,6 +442,16 @@ with the eng-mcp-suite toolkit-wide AGPL move. The underlying Blender
 application remains GPL-3.0+ and is invoked at runtime, not redistributed
 by this wrapper.
 
+## Trademarks and brand assets
+
+This project is not affiliated with, endorsed by, or sponsored by the Blender
+Foundation. "Blender" is a trademark of the Blender Foundation. It is used here
+only to identify the software this project interoperates with.
+
+The project name and the logo files in this repository are not part of the licensed
+work. The licence above grants no permission to use them, except as needed to describe
+the origin of the work.
+
 ## Commercial licensing
 
 This project is licensed under AGPL-3.0-or-later. A commercial license
