@@ -42,24 +42,24 @@ addon listens on a local TCP socket and dispatches into Blender's
 
 **What it does well:**
 
-- 🤖 **AI-native via MCP.** First-class [Model Context Protocol](https://modelcontextprotocol.io)
+- **AI-native via MCP.** First-class [Model Context Protocol](https://modelcontextprotocol.io)
   server with **218 tools** across every Blender pipeline stage.
-- 🎨 **End-to-end coverage.** Scene, object, mesh, material, modifier,
+- **End-to-end coverage.** Scene, object, mesh, material, modifier,
   animation, render, export, baking, geometry nodes, sculpting, rigging,
   physics, annotations.
-- ✈️ **MSFS-ready.** Full **Microsoft Flight Simulator 2020 / 2024**
+- **MSFS-ready.** Full **Microsoft Flight Simulator 2020 / 2024**
   content pipeline: LOD hierarchies, collision meshes, MSFS materials,
   animation tags, livery painting + transfer for FBW / Fenix / PMDG /
   iniBuilds / Aerosoft.
-- 🧠 **AI 3D generation.** Multi-backend (Hyper3D Rodin, Meshy, Tripo,
+- **AI 3D generation.** Multi-backend (Hyper3D Rodin, Meshy, Tripo,
   TripoSR, Stable Fast 3D, Hunyuan3D, ComfyUI) text/image-to-3D with
   auto mesh cleanup and decimation.
-- 🔁 **Self-refinement loop.** `render_multi_angle` → `analyze_viewport`
-  → `refine_iteration` against an Ollama vision model converges geometry
+- **Self-refinement loop.** `render_multi_angle` -> `analyze_viewport`
+  -> `refine_iteration` against an Ollama vision model converges geometry
   toward a target prompt.
-- 🪨 **Poly Haven built-in.** Free HDRIs, textures, and models with no
+- **Poly Haven built-in.** Free HDRIs, textures, and models with no
   API key.
-- 🔒 **MIT licensed.**
+- **MIT licensed.**
 
 ---
 
@@ -84,7 +84,7 @@ pip install -e .
 **Option A: from ZIP (recommended):**
 
 1. Download `blender_mcp_addon.zip` from the [releases page](https://github.com/RFingAdam/mcp-blender/releases).
-2. In Blender: **Edit → Preferences → Add-ons → Install…**
+2. In Blender: **Edit -> Preferences -> Add-ons -> Install…**
 3. Select the ZIP, enable "MCP Server Addon".
 
 **Option B: from source:**
@@ -303,11 +303,11 @@ Part of [eng-mcp-suite](https://github.com/RFingAdam/eng-mcp-suite).
 
 ## Documentation
 
-- 📘 **[Quick Start](docs/index.md)**: install through first call.
-- 🛠️ **[Tool reference](docs/tools.md)**. All 218 tools grouped by stage.
-- 📐 **[Usage examples](docs/usage.md)**: end-to-end walkthroughs (self-refine, MSFS, livery).
-- 🏗️ **[Architecture](docs/architecture.md)**: how this MCP fits in eng-mcp-suite.
-- ✈️ **[MSFS roadmap](docs/MSFS_ROADMAP.md)**: MSFS content workflow.
+- **[Quick Start](docs/index.md)**: install through first call.
+- **[Tool reference](docs/tools.md)**. All 218 tools grouped by stage.
+- **[Usage examples](docs/usage.md)**: end-to-end walkthroughs (self-refine, MSFS, livery).
+- **[Architecture](docs/architecture.md)**: how this MCP fits in eng-mcp-suite.
+- **[MSFS roadmap](docs/MSFS_ROADMAP.md)**: MSFS content workflow.
 
 ---
 
