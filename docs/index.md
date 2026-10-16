@@ -14,8 +14,10 @@ dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
 
 ## Install
 
+The `mcp-blender` package on PyPI is an unrelated project; install this one from GitHub.
+
 ```bash
-pip install mcp-blender
+pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
 ```
 
 Then install the Blender addon from

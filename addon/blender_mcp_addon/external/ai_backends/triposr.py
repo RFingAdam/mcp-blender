@@ -116,7 +116,7 @@ class TripoSRBackend(BaseBackend):
             try:
                 import tsr
             except ImportError:
-                missing.append("tsr (pip install triposr)")
+                missing.append("tsr (clone https://github.com/VAST-AI-Research/TripoSR and add it to PYTHONPATH)")
             try:
                 import PIL
             except ImportError:

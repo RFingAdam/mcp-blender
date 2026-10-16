@@ -15,7 +15,7 @@ Ollama vision model, and iterate until the score converges.
 ### Setup
 
 ```bash
-pip install mcp-blender
+pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
 ollama pull llava   # vision model
 ```
 

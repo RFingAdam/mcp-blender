@@ -67,8 +67,10 @@ addon listens on a local TCP socket and dispatches into Blender's
 
 ### 1. Install the MCP server
 
+The `mcp-blender` package on PyPI is an unrelated project; install this one from GitHub.
+
 ```bash
-pip install mcp-blender
+pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
 ```
 
 Or from source:
@@ -273,7 +275,11 @@ export TRIPO_API_KEY="your-tripo-key"
 Local setup:
 
 ```bash
-pip install triposr     # fast image-to-3D
+# TripoSR (fast image-to-3D) is not on PyPI: clone it and put it on PYTHONPATH
+git clone https://github.com/VAST-AI-Research/TripoSR
+pip install -r TripoSR/requirements.txt
+export PYTHONPATH="$PWD/TripoSR:$PYTHONPATH"
+
 ollama pull llava       # vision model
 ```
 
