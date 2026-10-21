@@ -6,13 +6,9 @@ on:
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   lint:
-    runs-on: [self-hosted, Linux, X64, haven]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +26,7 @@ jobs:
         run: ruff check .
 
   test:
-    runs-on: [self-hosted, Linux, X64, haven]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -53,7 +49,7 @@ jobs:
           pytest tests/ --ignore=tests/blender_integration_test.py -v
 
   build:
-    runs-on: [self-hosted, Linux, X64, haven]
+    runs-on: ubuntu-latest
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
