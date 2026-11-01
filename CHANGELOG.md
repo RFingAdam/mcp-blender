@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0a1] - 2026-11-01
+
+First release on PyPI, as `meshwire`. This is an alpha: many tools still fail in real Blender, and
+the socket has no authentication yet. See the README status note.
+
+### Added
+- A truth harness that runs every tool in real headless Blender on every PR and fails on any
+  unrecorded change. See the Truth harness section of `CONTRIBUTING.md`.
+- `meshwire --version`.
+- A release workflow that publishes to PyPI and attaches the addon ZIP to the GitHub release.
+
 ### Changed
+- One version for the whole project, in `src/mcp_blender/__init__.py`. It was four different
+  numbers in different files.
 - Renamed the project to Meshwire. Blender's trademark policy asks third parties not to use its
   name in product names, and an original name makes clear this is not an official Blender project.
   Old GitHub URLs redirect. The `mcp-blender` command still works as an alias for `meshwire`.
@@ -220,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-blocking socket server using `bpy.app.timers`
 - JSON-RPC 2.0 protocol for command communication
 
+[0.5.0a1]: https://github.com/RFingAdam/meshwire/releases/tag/v0.5.0a1
 [0.2.1]: https://github.com/RFingAdam/meshwire/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/RFingAdam/meshwire/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RFingAdam/meshwire/releases/tag/v0.1.0

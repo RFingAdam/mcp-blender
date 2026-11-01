@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo.svg" width="140" alt="Meshwire logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/RFingAdam/meshwire/main/assets/logo.svg" width="140" alt="Meshwire logo"></p>
 
 # Meshwire
 
@@ -52,22 +52,23 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 
 ### 1. Run the MCP server
 
-Meshwire is not on PyPI yet, so install it from GitHub.
+Meshwire is in alpha, so ask for pre-releases.
 With [uv](https://docs.astral.sh/uv/) there is nothing to install up front:
 
 ```bash
-uvx --from git+https://github.com/RFingAdam/meshwire meshwire --help
+uvx --prerelease allow meshwire --help
 ```
 
 Or with pip:
 
 ```bash
-pip install "meshwire @ git+https://github.com/RFingAdam/meshwire.git"
+pip install --pre meshwire
 ```
 
 ### 2. Install the Blender addon
 
-Build the addon ZIP from source. Recent releases don't include one yet.
+Download `blender_mcp_addon-<version>.zip` from [Releases](https://github.com/RFingAdam/meshwire/releases),
+or build it from source:
 
 ```bash
 git clone https://github.com/RFingAdam/meshwire
@@ -77,7 +78,7 @@ python scripts/package_addon.py
 ```
 
 In Blender, open **Edit > Preferences > Add-ons**, choose **Install from Disk** from the menu at
-the top right, select the ZIP, and enable **MCP Server Addon**.
+the top right, select the ZIP, and enable **Meshwire**.
 
 ### 3. Configure your MCP client
 
@@ -263,7 +264,7 @@ meshwire [--host HOST] [--port PORT]
   --port PORT   Blender addon port (default: 9876)
 ```
 
-The **MCP Server** tab in Blender's sidebar sets the socket port and starts or stops the server.
+The **Meshwire** tab in Blender's sidebar sets the socket port and starts or stops the server.
 
 ---
 

@@ -15,10 +15,10 @@ dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
 
 ## Install
 
-Meshwire is not on PyPI yet, so install it from GitHub.
+Meshwire is in alpha, so ask for pre-releases.
 
 ```bash
-pip install "meshwire @ git+https://github.com/RFingAdam/meshwire.git"
+pip install --pre meshwire
 ```
 
 Then install the Blender addon from
@@ -42,7 +42,7 @@ or the release ZIP. Enable it in Blender preferences.
     }
     ```
 
-    Press `N` in the Blender viewport, open the "MCP Server" panel,
+    Press `N` in the Blender viewport, open the "Meshwire" panel,
     click "Start Server". Then ask your assistant:
 
     > *"Create a red cube at (2, 0, 0), add a subdivision surface modifier with 2 levels, and render it to /tmp/render.png."*

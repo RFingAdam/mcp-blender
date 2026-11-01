@@ -19,6 +19,7 @@ from mcp.types import (
     Tool,
 )
 
+from . import __version__
 from .blender_client import BlenderClient
 
 # Configure logging
@@ -5743,7 +5744,8 @@ async def run_server(host: str, port: int):
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="MCP server for Blender")
+    parser = argparse.ArgumentParser(description="An independent MCP server for Blender")
+    parser.add_argument("--version", action="version", version=f"meshwire {__version__}")
     parser.add_argument(
         "--host",
         default="127.0.0.1",

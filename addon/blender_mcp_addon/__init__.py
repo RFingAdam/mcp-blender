@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Meshwire",
     "author": "Meshwire contributors",
-    "version": (0, 3, 0),
+    "version": (0, 5, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > MCP Server",
     "description": "Socket server for Model Context Protocol integration with AI assistants",
@@ -13,7 +13,7 @@ bl_info = {
 import logging
 
 _logger = logging.getLogger(__name__)
-_logger.info("MCP addon loaded - version 0.2.0")
+_logger.info("Meshwire addon loaded, version %s", ".".join(map(str, bl_info["version"])))
 
 import bpy
 
