@@ -10,11 +10,13 @@ Outcomes: PASS, FAIL, CRASH (Blender died) or HANG (no reply at all in time).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import time
@@ -30,6 +32,9 @@ STARTUP_TIMEOUT = 120.0
 PING_TIMEOUT = 10.0
 CHECK_TIMEOUT = 60.0
 KILL_GRACE = 3.0
+BIND_FAILED_EXIT = 4  # socket_boot.py exit code when the port was taken
+START_ATTEMPTS = 3
+RENDER_SIZE = 64
 SCREEN = "1280x800x24"
 BIG_REPLY_BYTES = 16 * 1024 * 1024
 
@@ -151,11 +156,39 @@ class TeardownError(RuntimeError):
 
 
 def _group_gone(pgid: int) -> bool:
+    """True when no live (non-zombie) process remains in the group.
+
+    killpg(pgid, 0) still succeeds for a zombie, and in a container without an init
+    nobody reaps orphans, so read the process state from /proc.
+    """
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:
         return True
-    return False
+    for stat in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            text = stat.read_text()
+        except OSError:
+            continue
+        # "pid (comm) state ppid pgrp ...": comm may contain spaces and parens.
+        fields = text[text.rindex(")") + 2 :].split()
+        if int(fields[2]) == pgid and fields[0] != "Z":
+            return False
+    return True
+
+
+@contextlib.contextmanager
+def sigterm_as_exit():
+    """Turn SIGTERM into SystemExit so finally-blocks tear Blender down on a CI cancel."""
+
+    def handler(signum, frame):
+        raise SystemExit(128 + signum)
+
+    previous = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def teardown(proc: subprocess.Popen, grace: float = KILL_GRACE) -> None:
@@ -219,8 +252,7 @@ class BlenderSession:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self) -> None:
-        self.port = free_port()
+    def _spawn(self) -> None:
         cmd = [
             "xvfb-run", "-a", "-s", f"-screen 0 {SCREEN}",
             self.blender, "--factory-startup", "--python", str(BOOT), "--",
@@ -234,14 +266,28 @@ class BlenderSession:
                 cmd, stdout=log, stderr=log, env=env, start_new_session=True
             )
         self.starts += 1
-        deadline = time.monotonic() + STARTUP_TIMEOUT
-        while time.monotonic() < deadline:
-            if not self.alive():
-                raise StartupError(f"Blender exited during startup, see {self.log_path}")
-            if self.healthy():
-                return
-            time.sleep(0.5)
-        raise StartupError(f"Blender did not answer ping in {STARTUP_TIMEOUT}s")
+
+    def start(self) -> None:
+        """Start Blender; if another process grabbed the port first, retry on a new one."""
+        for attempt in range(START_ATTEMPTS):
+            self.port = free_port()
+            self._spawn()
+            deadline = time.monotonic() + STARTUP_TIMEOUT
+            while time.monotonic() < deadline:
+                if not self.alive():
+                    break
+                if self.healthy():
+                    return
+                time.sleep(0.5)
+            else:
+                raise StartupError(f"Blender did not answer ping in {STARTUP_TIMEOUT}s")
+            code = self.proc.poll()
+            self.stop()
+            if code != BIND_FAILED_EXIT:
+                raise StartupError(
+                    f"Blender exited with {code} during startup, see {self.log_path}"
+                )
+        raise StartupError(f"port was taken {START_ATTEMPTS} times in a row")
 
     def healthy(self) -> bool:
         if not self.alive():
@@ -301,6 +347,13 @@ def write_baseline(path: Path, series: str, results: dict) -> None:
     path.write_text(json.dumps(merged, indent=2, sort_keys=True) + "\n")
 
 
+def png_size(data: bytes) -> tuple[int, int]:
+    """Width and height from the IHDR chunk of a PNG."""
+    if len(data) < 24 or not data.startswith(b"\x89PNG\r\n\x1a\n") or data[12:16] != b"IHDR":
+        raise ValueError("not a PNG")
+    return struct.unpack(">II", data[16:24])
+
+
 # --- checks ---------------------------------------------------------------------
 
 
@@ -356,12 +409,18 @@ def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
     )
     after = ctx.conn.exec(probe)
     method = reply.get("method") if isinstance(reply, dict) else None
+    if not (isinstance(reply, dict) and reply.get("success") is True):
+        raise CheckFailed(f"knife project did not report success: {str(reply)[:120]}")
     if after["max_x"] < before["max_x"] - 1e-4 or after["verts"] < before["verts"]:
         raise CheckFailed(
             f"geometry outside the cut was lost: verts {before['verts']} -> {after['verts']}, "
             f"max |x| {before['max_x']:.2f} -> {after['max_x']:.2f} (reported method {method})"
         )
-    return f"outer geometry kept (reported method {method})"
+    if after["verts"] <= before["verts"]:
+        raise CheckFailed(
+            f"no cut was made: verts {before['verts']} -> {after['verts']} (reported method {method})"
+        )
+    return f"outer geometry kept and cut added ({before['verts']} -> {after['verts']} verts)"
 
 
 def check_render_image_writes_file(ctx: Ctx) -> str:
@@ -377,8 +436,8 @@ def check_render_image_writes_file(ctx: Ctx) -> str:
         "s = bpy.context.scene\n"
         "s.camera = cam\n"
         "s.render.engine = 'BLENDER_WORKBENCH'\n"
-        "s.render.resolution_x = 64\n"
-        "s.render.resolution_y = 64\n"
+        f"s.render.resolution_x = {RENDER_SIZE}\n"
+        f"s.render.resolution_y = {RENDER_SIZE}\n"
         "s.render.resolution_percentage = 100\n"
     )
     ctx.conn.call("render_image", {"output_path": str(out)})
@@ -387,9 +446,13 @@ def check_render_image_writes_file(ctx: Ctx) -> str:
     data = out.read_bytes()
     if not data:
         raise CheckFailed("render_image wrote an empty file")
-    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise CheckFailed(f"render_image output is not a PNG ({len(data)} bytes)")
-    return f"wrote a {len(data)} byte PNG"
+    try:
+        width, height = png_size(data)
+    except ValueError:
+        raise CheckFailed(f"render_image output is not a PNG ({len(data)} bytes)") from None
+    if width != RENDER_SIZE:
+        raise CheckFailed(f"PNG is {width}x{height}, scene was set to {RENDER_SIZE} px wide")
+    return f"wrote a {len(data)} byte {width}x{height} PNG"
 
 
 def check_undo_reverts(ctx: Ctx) -> str:
@@ -409,13 +472,15 @@ def check_undo_reverts(ctx: Ctx) -> str:
 
 
 def check_execute_script_stdout(ctx: Ctx) -> str:
-    token = "lane-token-7f3a"
-    res = ctx.conn.call("execute_script", {"script": f"print('{token}')"})
+    # The expected text is computed inside Blender, so echoing the source cannot pass.
+    expected = "lane-" + str(6 * 7 * 1000 + 1)
+    res = ctx.conn.call("execute_script", {"script": "print('lane-' + str(6 * 7 * 1000 + 1))"})
     if not res.get("success"):
         raise CheckFailed(f"execute_script reported failure: {res.get('error')}")
-    if token not in res.get("stdout", ""):
-        raise CheckFailed(f"stdout {res.get('stdout')!r} does not contain the printed token")
-    return "printed text came back in stdout"
+    stdout = res.get("stdout", "").strip()
+    if stdout != expected:
+        raise CheckFailed(f"stdout {stdout!r}, expected {expected!r}")
+    return "computed text came back in stdout"
 
 
 def check_reply_16mb_complete(ctx: Ctx) -> str:
@@ -462,8 +527,8 @@ def classify_failure(exc: Exception, blender_alive: bool) -> tuple[str, str]:
     """Map an exception raised by a check to (outcome, reason)."""
     if not blender_alive:
         return "CRASH", f"Blender died during the check ({type(exc).__name__}: {exc})"
-    if isinstance(exc, ReplyTimeout) and exc.got == 0:
-        return "HANG", str(exc)
+    if (isinstance(exc, ReplyTimeout) and exc.got == 0) or isinstance(exc, TimeoutError):
+        return "HANG", f"{type(exc).__name__}: {exc}"
     return "FAIL", f"{type(exc).__name__}: {exc}"
 
 
@@ -493,6 +558,8 @@ def run_check(session: BlenderSession, name: str, fn, seconds: float, out_dir: P
             outcome = "PASS"
         except FAILURES as exc:
             outcome, reason = classify(exc)
+        except Exception as exc:  # e.g. a reply of unexpected shape: report, keep going
+            outcome, reason = "FAIL", f"{type(exc).__name__}: {exc}"
     finally:
         conn.close()
     if outcome != "CRASH" and not session.alive():
@@ -507,35 +574,43 @@ def run_lane(blender: str, out_dir: Path, checks=CHECKS) -> tuple[str, dict[str,
     scene = out_dir / "scene.blend"
     log = out_dir / "blender.log"
     log.write_bytes(b"")
-    build = subprocess.Popen(
-        [blender, "-b", "--factory-startup", "--python", str(BOOT), "--",
-         "--build-scene", "--scene", str(scene)],
-        stdout=log.open("ab"), stderr=subprocess.STDOUT, start_new_session=True,
-    )  # fmt: skip
-    try:
-        build.wait(timeout=STARTUP_TIMEOUT)
-    finally:
-        teardown(build)
+    with log.open("ab") as build_log:
+        build = subprocess.Popen(
+            [blender, "-b", "--factory-startup", "--python", str(BOOT), "--",
+             "--build-scene", "--scene", str(scene)],
+            stdout=build_log, stderr=subprocess.STDOUT, start_new_session=True,
+        )  # fmt: skip
+        try:
+            build.wait(timeout=STARTUP_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise StartupError(f"fixture scene build timed out, see {log}") from None
+        finally:
+            teardown(build)
     if build.returncode != 0 or not scene.exists():
         raise StartupError(f"could not build the fixture scene, see {log}")
 
     session = BlenderSession(blender, out_dir, scene)
-    results: dict[str, str] = {}
     try:
-        for name, fn, seconds in checks:
-            try:
-                if session.ensure_ready():
-                    print(f"# blender (re)started on port {session.port}", flush=True)
-            except StartupError as exc:
-                results[name] = "CRASH"
-                print(f"{name} CRASH could not start Blender: {exc}", flush=True)
-                continue
-            outcome, reason = run_check(session, name, fn, seconds, out_dir)
-            results[name] = outcome
-            print(f"{name} {outcome} {reason}", flush=True)
+        results = run_checks(session, checks, out_dir)
     finally:
         session.stop()
     return series, results
+
+
+def run_checks(session, checks, out_dir: Path) -> dict[str, str]:
+    results: dict[str, str] = {}
+    for name, fn, seconds in checks:
+        try:
+            if session.ensure_ready():
+                print(f"# blender (re)started on port {session.port}", flush=True)
+        except StartupError as exc:
+            results[name] = "CRASH"
+            print(f"{name} CRASH could not start Blender: {exc}", flush=True)
+            continue
+        outcome, reason = run_check(session, name, fn, seconds, out_dir)
+        results[name] = outcome
+        print(f"{name} {outcome} {reason}", flush=True)
+    return results
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -548,7 +623,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_baseline and args.check_baseline:
         parser.error("--write-baseline and --check-baseline are mutually exclusive")
 
-    series, results = run_lane(args.blender, args.out)
+    with sigterm_as_exit():
+        series, results = run_lane(args.blender, args.out)
     (args.out / "results.json").write_text(
         json.dumps({series: results}, indent=2, sort_keys=True) + "\n"
     )

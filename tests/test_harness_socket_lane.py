@@ -148,3 +148,175 @@ def test_teardown_of_already_dead_process_is_a_no_op():
     proc = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
     proc.wait()
     lane.teardown(proc, grace=0.2)
+
+
+# --- fix round 1 ---------------------------------------------------------------
+
+
+class FakeConn:
+    def __init__(self, replies):
+        self.replies = replies
+        self.sock = None
+        self.budget = lane.Budget(5)
+
+    def call(self, method, params=None):
+        reply = self.replies[method]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    def exec(self, code):
+        return self.call("harness_exec", {"code": code})
+
+    def close(self):
+        pass
+
+
+class FakeSession:
+    def __init__(self, conn, alive=True):
+        self.conn = conn
+        self._alive = alive
+        self.port = 1
+        self.stopped = False
+
+    def ensure_ready(self):
+        return False
+
+    def alive(self):
+        return self._alive
+
+    def alive_after_close(self, grace=5.0):
+        return self._alive
+
+    def connect(self, budget):
+        return self.conn
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_classify_failure_crash_hang_and_fail():
+    assert lane.classify_failure(lane.ReplyTimeout(0), False)[0] == "CRASH"
+    assert lane.classify_failure(lane.ConnectionClosed(0), False)[0] == "CRASH"
+    assert lane.classify_failure(lane.ReplyTimeout(0), True)[0] == "HANG"
+    assert lane.classify_failure(lane.ReplyTimeout(10), True)[0] == "FAIL"
+    assert lane.classify_failure(lane.CheckFailed("x"), True)[0] == "FAIL"
+    assert lane.classify_failure(socket.timeout("connect"), True)[0] == "HANG"
+
+
+def test_unexpected_reply_shape_is_a_fail_and_other_checks_still_run(tmp_path):
+    conn = FakeConn({"harness_reset": {}, "ping": {"pong": True}})
+
+    def bad(ctx):
+        return ctx.conn.call("ping")["no_such_key"]
+
+    def good(ctx):
+        return "fine"
+
+    session = FakeSession(conn)
+    results = lane.run_checks(
+        session, [("bad", bad, 5), ("good", good, 5), ("bad2", bad, 5)], tmp_path
+    )
+    assert results == {"bad": "FAIL", "good": "PASS", "bad2": "FAIL"}
+
+
+def test_run_check_does_not_swallow_keyboard_interrupt(tmp_path):
+    def interrupted(ctx):
+        raise KeyboardInterrupt
+
+    session = FakeSession(FakeConn({"harness_reset": {}}))
+    with pytest.raises(KeyboardInterrupt):
+        lane.run_check(session, "x", interrupted, 5, tmp_path)
+
+
+def test_dead_blender_after_check_is_crash(tmp_path):
+    session = FakeSession(FakeConn({"harness_reset": {}}), alive=False)
+    outcome, _ = lane.run_check(session, "x", lambda ctx: "ok", 5, tmp_path)
+    assert outcome == "CRASH"
+
+
+class FakeProc:
+    def __init__(self, returncode):
+        self.returncode = returncode
+        self.pid = 0
+
+    def poll(self):
+        return self.returncode
+
+
+class RetrySession(lane.BlenderSession):
+    """Spawns fake processes: the first exits with the bind-failure code."""
+
+    def __init__(self, tmp_path, exit_codes):
+        super().__init__("blender", tmp_path, tmp_path / "s.blend")
+        self.exit_codes = list(exit_codes)
+        self.ports = []
+        self.stopped = 0
+
+    def _spawn(self):
+        self.ports.append(self.port)
+        self.proc = FakeProc(self.exit_codes.pop(0))
+
+    def healthy(self):
+        return self.proc.returncode is None
+
+    def stop(self):
+        self.stopped += 1
+
+
+def test_start_retries_with_new_port_on_bind_failure(tmp_path):
+    s = RetrySession(tmp_path, [lane.BIND_FAILED_EXIT, lane.BIND_FAILED_EXIT, None])
+    s.start()
+    assert len(s.ports) == 3 and s.alive()
+
+
+def test_start_gives_up_after_three_bind_failures(tmp_path):
+    s = RetrySession(tmp_path, [lane.BIND_FAILED_EXIT] * 3)
+    with pytest.raises(lane.StartupError):
+        s.start()
+    assert len(s.ports) == 3
+
+
+def test_start_does_not_retry_other_exit_codes(tmp_path):
+    s = RetrySession(tmp_path, [1, None])
+    with pytest.raises(lane.StartupError):
+        s.start()
+    assert len(s.ports) == 1
+
+
+def test_png_width_reads_ihdr():
+    import struct
+
+    png = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 64, 32)
+    assert lane.png_size(png + b"\0" * 20) == (64, 32)
+    with pytest.raises(ValueError):
+        lane.png_size(b"nope")
+
+
+def test_zombie_only_group_counts_as_gone():
+    proc = subprocess.Popen([sys.executable, "-c", "pass"], start_new_session=True)
+    for _ in range(100):
+        time.sleep(0.05)
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        if lane._group_gone(proc.pid):
+            break
+    try:
+        os.killpg(proc.pid, 0)  # the unreaped zombie is still visible to killpg
+    except ProcessLookupError:
+        pytest.skip("zombie already reaped")
+    assert lane._group_gone(proc.pid)
+    proc.wait()
+
+
+def test_sigterm_handler_raises_system_exit():
+    import signal
+
+    before = signal.getsignal(signal.SIGTERM)
+    with lane.sigterm_as_exit():
+        with pytest.raises(SystemExit):
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(1)
+    assert signal.getsignal(signal.SIGTERM) == before

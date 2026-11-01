@@ -16,6 +16,7 @@ import sys
 import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+BIND_FAILED_EXIT = 4
 ADDON_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "addon"))
 
 
@@ -57,7 +58,8 @@ def main(argv):
         server = MCPSocketServer(host="127.0.0.1", port=args.port)
         _install_harness_handlers(server, args.scene)
         if not server.start():
-            raise RuntimeError(f"server failed to start on port {args.port}")
+            print(f"server failed to start on port {args.port}", flush=True)
+            os._exit(BIND_FAILED_EXIT)
     except BaseException:
         traceback.print_exc()
         sys.stdout.flush()
