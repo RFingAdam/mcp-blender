@@ -95,9 +95,9 @@ jobs:
           name: harness-${{ matrix.version }}
           path: |
             ${{ runner.temp }}/runs
-            !**/*.blend
-            !**/*.blend1
-            !**/tmp/**
+            !${{ runner.temp }}/runs/**/*.blend
+            !${{ runner.temp }}/runs/**/*.blend1
+            !${{ runner.temp }}/runs/**/tmp/**
           if-no-files-found: ignore
           retention-days: 14
 
@@ -155,8 +155,8 @@ jobs:
           name: harness-4.2.23
           path: |
             ${{ runner.temp }}/runs
-            !**/*.blend
-            !**/*.blend1
-            !**/tmp/**
+            !${{ runner.temp }}/runs/**/*.blend
+            !${{ runner.temp }}/runs/**/*.blend1
+            !${{ runner.temp }}/runs/**/tmp/**
           if-no-files-found: ignore
           retention-days: 14

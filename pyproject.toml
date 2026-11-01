@@ -33,6 +33,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "jsonschema>=4.0.0",
     "ruff>=0.3.0",
 ]
 
