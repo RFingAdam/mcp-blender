@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`ai_auto_uv` read freed memory.** It held a UV layer reference across a mode change, then
+  read its name. The outcome depended on what was left in that memory: it crashed Blender 5.2
+  every time and failed unpredictably on 4.5.
 - **`validate_enum()` called with swapped arguments in 20 handlers.** Every
   affected handler rejected all of its documented enum values, because the
   `allowed` list landed in the `name` slot and the parameter-name string landed

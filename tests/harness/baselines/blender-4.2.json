@@ -677,7 +677,7 @@
   "physics_cloth_add#enum:preset=TARP": "PASS",
   "physics_cloth_add#invalid": "EXPECTED",
   "physics_cloth_add#minimal": "PASS",
-  "physics_fluid_quick#enum:fluid_type=GAS": "CRASH",
+  "physics_fluid_quick#enum:fluid_type=GAS": "BUG",
   "physics_fluid_quick#enum:fluid_type=LIQUID": "PASS",
   "physics_fluid_quick#invalid": "EXPECTED",
   "physics_fluid_quick#minimal": "PASS",
