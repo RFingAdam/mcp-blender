@@ -371,6 +371,10 @@ def auto_uv_unwrap(
         # Set as active
         obj.data.uv_layers.active = uv_layer
 
+        # Changing mode rebuilds the mesh's layers, so this reference does not survive the
+        # unwrap below. Reading uv_layer after that reads freed memory.
+        active_uv_layer_name = uv_layer.name
+
         # Enter edit mode and select all
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="SELECT")
@@ -458,7 +462,7 @@ def auto_uv_unwrap(
             "success": True,
             "object": object_name,
             "method": method,
-            "uv_layer": uv_layer.name,
+            "uv_layer": active_uv_layer_name,
             "uv_layers": list(obj.data.uv_layers.keys()),
         }
 

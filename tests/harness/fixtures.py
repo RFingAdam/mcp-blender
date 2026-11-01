@@ -186,7 +186,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
 # defective cases belongs here.
 SOFT_FAIL_DEFECTS: dict[str, str] = {
     "bake_id_map": "handler calls a helper, _bake_create_image, that does not exist",
-    "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects; SMART fails to decode a file on 4.5",
+    "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects",
     "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
     "mesh_knife_project": "the modifier is disabled, so the apply is skipped",
     "ai_texture_from_render": "5.2 fails to render the depth and normal passes",
