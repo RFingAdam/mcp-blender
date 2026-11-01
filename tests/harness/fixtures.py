@@ -168,3 +168,33 @@ KNOWN_UNREACHED: dict[str, str] = {
     "ai_pipeline_status": "needs a pipeline id that only a live AI backend can issue",
     "refine_get_session": "needs a session id from a prior refine_create_session call",
 }
+
+# SOFT_FAIL classes the baselines may keep, keyed by tool name, with the reason.
+# Benign means the harness environment is the cause, not the tool: offline, a
+# fixture id or fixture limit, or background mode.
+# M3 is done only when both defect tables below are empty.
+SOFT_FAIL_ALLOWED: dict[str, str] = {
+    "ai_generate_model": "no AI backend is reachable offline",
+    "ai_generate_model_sync": "no AI backend is reachable offline",
+    "ai_generate_reference_image": "no AI backend is reachable offline",
+    "ai_generate_texture": "no AI backend is reachable offline",
+    "ai_generate_texture_sync": "no AI backend is reachable offline",
+    "sculpt_multires_reshape": "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
+}
+
+# Tools whose SOFT_FAIL hides a real defect. A tool with both benign and
+# defective cases belongs here.
+SOFT_FAIL_DEFECTS: dict[str, str] = {
+    "bake_id_map": "handler calls a helper, _bake_create_image, that does not exist",
+    "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects; SMART fails to decode a file on 4.5",
+    "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
+    "mesh_knife_project": "the modifier is disabled, so the apply is skipped",
+    "material_preview_render": "5.2 has no BLENDER_EEVEE_NEXT engine enum",
+    "ai_texture_from_render": "5.2 fails to render the depth and normal passes",
+}
+
+# Tools that report success shape but hide a failure in the payload.
+FALSE_PASS_DEFECTS: dict[str, str] = {
+    "ai_pipeline_generate": "stages.import.status is failed and mesh_path is null, with no top-level success",
+    "sculpt_to_retopo": "displacement_error reports the enum DISPLACEMENT is not found",
+}

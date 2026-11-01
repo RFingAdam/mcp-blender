@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 NETWORK_SENTINEL = "harness: network disabled"
-CODE_BUG_TYPES = {"ImportError", "AttributeError", "TypeError", "NameError"}
 
 
 def _soft_fail(result) -> bool:

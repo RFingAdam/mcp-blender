@@ -1,5 +1,8 @@
 """Unit tests for the pure-Python harness layer (no Blender)."""
 
+import json
+from pathlib import Path
+
 import jsonschema
 import pytest
 
@@ -7,6 +10,12 @@ from mcp_blender.server import TOOLS
 from tests.harness.cases import build_cases, minimal_args
 from tests.harness.catalog import load_tools
 from tests.harness.classify import classify
+from tests.harness.fixtures import (
+    FALSE_PASS_DEFECTS,
+    KNOWN_UNREACHED,
+    SOFT_FAIL_ALLOWED,
+    SOFT_FAIL_DEFECTS,
+)
 
 
 def test_load_tools_has_all():
@@ -298,3 +307,51 @@ def test_baseline_file_is_sorted_with_trailing_newline(tmp_path):
     path = tmp_path / "b.json"
     write_baseline(path, {"z#m": "BUG", "a#m": "PASS"})
     assert path.read_text() == '{\n  "a#m": "PASS",\n  "z#m": "BUG"\n}\n'
+
+
+BASELINES = Path(__file__).parent / "harness" / "baselines"
+BASELINE_FILES = ("blender-4.2.json", "blender-4.5.json", "blender-5.2.json")
+
+
+def _baseline(name):
+    return json.loads((BASELINES / name).read_text())
+
+
+def _soft_fail_tools():
+    return {
+        case_id.split("#")[0]
+        for name in BASELINE_FILES
+        for case_id, cls in _baseline(name).items()
+        if cls == "SOFT_FAIL"
+    }
+
+
+def test_every_soft_fail_tool_is_accounted_for():
+    known = set(KNOWN_UNREACHED) | set(SOFT_FAIL_ALLOWED) | set(SOFT_FAIL_DEFECTS)
+    missing = sorted(_soft_fail_tools() - known)
+    assert not missing, (
+        f"SOFT_FAIL tools not in KNOWN_UNREACHED, SOFT_FAIL_ALLOWED or SOFT_FAIL_DEFECTS: {missing}"
+    )
+
+
+def test_soft_fail_tables_have_no_dead_rows():
+    dead = sorted((set(SOFT_FAIL_ALLOWED) | set(SOFT_FAIL_DEFECTS)) - _soft_fail_tools())
+    assert not dead, f"rows with no SOFT_FAIL line in any baseline: {dead}"
+
+
+def test_soft_fail_tables_are_disjoint_and_defects_are_real_tools():
+    assert not set(SOFT_FAIL_ALLOWED) & set(SOFT_FAIL_DEFECTS)
+    tools = set(load_tools())
+    for table in (SOFT_FAIL_ALLOWED, SOFT_FAIL_DEFECTS, FALSE_PASS_DEFECTS):
+        assert set(table) <= tools, sorted(set(table) - tools)
+
+
+@pytest.mark.parametrize("name", BASELINE_FILES)
+def test_baseline_ids_match_generated_cases(name):
+    ids = {c.id for c in build_cases(load_tools())}
+    recorded = set(_baseline(name))
+    missing, extra = sorted(ids - recorded), sorted(recorded - ids)
+    assert not (missing or extra), (
+        f"{name}: cases missing from the baseline {missing[:10]}, "
+        f"cases in the baseline that no longer exist {extra[:10]}"
+    )
