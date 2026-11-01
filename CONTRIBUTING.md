@@ -19,7 +19,7 @@ agreement. Read CLA.md before you submit if you want the full terms.
 ### Prerequisites
 
 - Python 3.10 or later
-- Blender 4.2 LTS or 5.0 (for testing)
+- Blender 4.5 LTS or 5.2 LTS (for testing). 4.2 LTS also works, on a best-effort basis.
 - Git
 
 ### Setting Up the Development Environment
@@ -86,19 +86,98 @@ Unit tests don't require Blender:
 pytest tests/ --ignore=tests/blender_integration_test.py -v
 ```
 
-### Running Integration Tests
+### Running Tests Against Real Blender
 
-Integration tests require Blender:
-
-```bash
-blender --background --python tests/blender_integration_test.py
-```
+The truth harness runs every tool in real headless Blender. See
+[Truth harness](#truth-harness) below. The older
+`tests/blender_integration_test.py` script is not run in CI.
 
 ### Writing Tests
 
 - Add unit tests to `tests/test_*.py`
-- Add integration tests to `tests/blender_integration_test.py`
+- Real-Blender behaviour is covered by the truth harness, so a new tool needs no extra script
 - Ensure tests are deterministic and don't depend on external state
+
+## Truth harness
+
+The truth harness runs every tool in real headless Blender and compares the results with
+committed baselines. It runs on Blender 4.5 and 5.2 on every pull request. Blender 4.2 runs
+nightly and is best effort. Baselines live in `tests/harness/baselines/`. They hold case ids
+and result classes only, never messages or paths.
+
+Each tool gets several cases: a minimal call, one call per enum value, and a call with a
+required argument left out. Each case ends up in one class:
+
+- `PASS`: the tool returned a result with no error.
+- `EXPECTED`: the failure is the right one. The network was blocked on purpose, or a bad
+  argument raised a validation error.
+- `SOFT_FAIL`: the tool returned an error result instead of raising. Often benign, such as no
+  AI backend offline. Sometimes a real defect.
+- `BUG`: the tool raised an exception it should not have raised.
+- `CRASH`: Blender died during the case.
+- `HANG`: the case ran past its time limit and was killed.
+- `FAIL`: used only by the socket lane, when a check did not hold.
+
+### Reading a failed check
+
+A failed check prints one line per difference from the baseline:
+
+- `worse: id OLD -> NEW`: the class got more severe.
+- `improved: id OLD -> NEW`: the class got less severe. This fails too, because an
+  improvement must be recorded in the baseline.
+- `changed: id OLD -> NEW`: the class changed with no change in severity.
+- `added: id NEW`: a case exists that the baseline does not know.
+- `removed: id (was OLD)`: the baseline has a case that no longer exists.
+
+### Reproduce locally
+
+`scripts/fetch_blender.py` downloads and checks a Blender build. It supports linux-x64 only.
+
+```bash
+BIN=$(python scripts/fetch_blender.py 4.5.15 --dest ~/blender)
+python -m tests.harness.driver --blender "$BIN" --out runs/4.5 \
+    --check-baseline tests/harness/baselines/blender-4.5.json
+```
+
+To record new results, use `--write-baseline tests/harness/baselines/blender-4.5.json` in place
+of `--check-baseline`. The driver refuses to write `blender-X.Y.json` from a different Blender
+series. A run takes several minutes. Run it with the dev dependencies installed
+(`uv sync --extra dev`).
+
+### Without Linux
+
+Download the `harness-<version>` artifact from the failed CI run. Its `results.json` has the
+same shape as a baseline. Copy it over the baseline file, sorted by key, indented by two
+spaces, with a trailing newline. This is what `write_baseline` writes:
+
+```bash
+python -c "import json,sys; d=json.load(open(sys.argv[1])); open(sys.argv[2],'w').write(json.dumps(d,indent=2,sort_keys=True)+'\n')" \
+    results.json tests/harness/baselines/blender-4.5.json
+```
+
+### The socket lane
+
+The socket lane starts a GUI Blender (under `xvfb-run`) with the real addon socket and checks
+the scene afterwards instead of trusting the reply. Run it with:
+
+```bash
+xvfb-run -a python -m tests.harness.socket_lane --blender "$BIN" --out runs/socket-4.5 \
+    --check-baseline tests/harness/baselines/socket-lane.json
+```
+
+Use `--write-baseline` to update it. The file is keyed by Blender series (`4.5`, `5.2`) and
+the lane replaces only the series it ran. An artifact's `results.json` is
+`{"<series>": {...}}`, so merge that one key into the file. Do not copy it over.
+
+### Adding a tool
+
+A new tool shows up as `added:` lines. That is expected. Record them in the 4.5 and 5.2
+baselines. Copy the same lines into the 4.2 baseline too, so the sync test passes. The nightly
+job flags any real difference there.
+
+If the new tool has a `SOFT_FAIL` case, add the tool to `SOFT_FAIL_ALLOWED` (benign) or
+`SOFT_FAIL_DEFECTS` (a real defect) in `tests/harness/fixtures.py`, with a reason. A test fails
+until you do.
 
 ## Project Structure
 
@@ -163,9 +242,9 @@ In `addon/blender_mcp_addon/handlers.py`:
 
 ### 3. Add Tests
 
-Add tests for the new tool in both:
-- `tests/test_tools.py` (schema validation)
-- `tests/blender_integration_test.py` (functional test)
+Add a schema test in `tests/test_tools.py`. The truth harness generates cases for the
+new tool on its own, so record its results in the baselines. See
+[Truth harness](#truth-harness).
 
 ## Version Compatibility
 
@@ -173,14 +252,14 @@ When adding features that differ between Blender versions:
 
 1. Add detection in `addon/blender_mcp_addon/compat.py`
 2. Use the compatibility functions in handlers
-3. Test on both Blender 4.2 and 5.0
+3. Test on both Blender 4.5 and 5.2
 
 Example:
 ```python
 from .compat import IS_5_0_OR_LATER
 
 if IS_5_0_OR_LATER:
-    # Blender 5.0 code path
+    # Blender 5.x code path
 else:
     # Blender 4.2 code path
 ```

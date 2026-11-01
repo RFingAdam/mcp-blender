@@ -5,7 +5,7 @@ AI 3D generation, and Microsoft Flight Simulator content.
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-1E40AF.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg)](https://www.python.org/downloads/)
-[![Blender 4.2 LTS](https://img.shields.io/badge/blender-4.2%20LTS-F5792A.svg)](https://www.blender.org/)
+[![Blender 4.5 | 5.2 LTS](https://img.shields.io/badge/blender-4.5%20%7C%205.2%20LTS-F5792A.svg)](https://www.blender.org/)
 [![MCP](https://img.shields.io/badge/MCP-server-A78BFA.svg)](https://modelcontextprotocol.io)
 
 [Quick start](#quick-start) ·
@@ -267,8 +267,8 @@ The **MCP Server** tab in Blender's sidebar sets the socket port and starts or s
 
 ## Blender versions
 
-Development and testing target Blender 4.2 LTS. Blender 5.x has API changes that the addon doesn't
-handle correctly yet, so expect failures there until the compatibility work lands.
+Blender 4.5 LTS and 5.2 LTS are tested on every pull request. Blender 4.2 LTS is tested nightly on a
+best-effort basis.
 
 ---
 
@@ -314,7 +314,7 @@ pip install -e ".[dev]"
 
 ```bash
 pytest tests/ --ignore=tests/blender_integration_test.py   # unit tests
-blender --background --python tests/blender_integration_test.py   # needs Blender
+python -m tests.harness.driver --help   # truth harness, needs Blender; see CONTRIBUTING.md
 ruff check .
 ruff format .
 python scripts/package_addon.py   # builds the addon ZIP

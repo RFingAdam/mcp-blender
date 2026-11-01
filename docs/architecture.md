@@ -61,7 +61,7 @@ mcp-blender/
 │   └── msfs/                     ← MSFS content + livery tools
 ├── docs/                         ← this docs/ directory
 ├── scripts/                      ← build / packaging scripts
-└── tests/                        ← unit + Blender integration tests
+└── tests/                        ← unit tests + truth harness (real Blender)
 ```
 
 ## Design decisions
