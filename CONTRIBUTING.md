@@ -26,8 +26,8 @@ agreement. Read CLA.md before you submit if you want the full terms.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/RFingAdam/mcp-blender
-   cd mcp-blender
+   git clone https://github.com/RFingAdam/meshwire
+   cd meshwire
    ```
 
 2. **Create a virtual environment:**
@@ -186,7 +186,7 @@ until you do.
 ## Project Structure
 
 ```
-mcp-blender/
+meshwire/
 ├── src/mcp_blender/           # MCP server package
 │   ├── server.py              # Tool definitions and MCP handlers
 │   ├── blender_client.py      # TCP client for Blender

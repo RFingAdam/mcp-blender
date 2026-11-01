@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Package the Blender MCP addon as a ZIP file for distribution.
+Package the Meshwire addon as a ZIP file for distribution.
 
 Usage:
     python scripts/package_addon.py [--output OUTPUT_PATH]
@@ -90,7 +90,7 @@ def package_addon(output_path: str | None = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Package Blender MCP addon")
+    parser = argparse.ArgumentParser(description="Package the Meshwire addon")
     parser.add_argument(
         "--output", "-o",
         help="Output ZIP file path (default: dist/blender_mcp_addon-VERSION.zip)",

@@ -56,7 +56,7 @@ class TestServerCreation:
         """Server should be created successfully."""
         server = create_server("127.0.0.1", 9876)
         assert server is not None
-        assert server.name == "mcp-blender"
+        assert server.name == "meshwire"
 
 
 class TestToolCategories:

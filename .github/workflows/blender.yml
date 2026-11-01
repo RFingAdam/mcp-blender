@@ -53,7 +53,7 @@ jobs:
       - name: Cache Blender tarball
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/mcp-blender/*.tar.xz
+          path: ~/.cache/meshwire/*.tar.xz
           key: blender-${{ matrix.version }}-${{ hashFiles('scripts/fetch_blender.py') }}
 
       - name: Install test dependencies
@@ -125,7 +125,7 @@ jobs:
       - name: Cache Blender tarball
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/mcp-blender/*.tar.xz
+          path: ~/.cache/meshwire/*.tar.xz
           key: blender-4.2.23-${{ hashFiles('scripts/fetch_blender.py') }}
 
       - name: Install test dependencies

@@ -379,7 +379,7 @@ wheels = [
 ]
 
 [[package]]
-name = "mcp-blender"
+name = "meshwire"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [

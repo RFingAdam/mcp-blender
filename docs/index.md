@@ -1,4 +1,4 @@
-# mcp-blender
+# meshwire
 
 **Control Blender from any MCP client: 218 tools across modeling, materials, sculpting, animation, AI 3D generation, and MSFS content creation.**
 **Drive it from your IDE, terminal, or AI agent and run an iterative render-analyze-refine loop without leaving Blender.**
@@ -7,7 +7,7 @@
 
 ## What it is
 
-`mcp-blender` exposes 218 Blender tools via the Model Context Protocol.
+`meshwire` exposes 218 Blender tools via the Model Context Protocol.
 The MCP server speaks stdio; a Blender addon listens on local TCP and
 dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
 **Blender 4.5 LTS** and **Blender 5.2 LTS** (tested on every PR), and
@@ -15,14 +15,14 @@ dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
 
 ## Install
 
-The `mcp-blender` package on PyPI is an unrelated project; install this one from GitHub.
+Meshwire is not on PyPI yet, so install it from GitHub.
 
 ```bash
-pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
+pip install "meshwire @ git+https://github.com/RFingAdam/meshwire.git"
 ```
 
 Then install the Blender addon from
-[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon)
+[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon)
 or the release ZIP. Enable it in Blender preferences.
 
 ## First call
@@ -35,7 +35,7 @@ or the release ZIP. Enable it in Blender preferences.
     {
       "mcpServers": {
         "blender": {
-          "command": "mcp-blender",
+          "command": "meshwire",
           "args": ["--port", "9876"]
         }
       }

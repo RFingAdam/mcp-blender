@@ -1,4 +1,4 @@
-"""Utility functions for the Blender MCP addon."""
+"""Utility functions for the Meshwire addon."""
 
 import fnmatch
 import json

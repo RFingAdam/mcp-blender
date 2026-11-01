@@ -1,8 +1,8 @@
-"""Blender MCP Addon - Socket server for MCP integration."""
+"""Meshwire addon: socket server for MCP clients."""
 
 bl_info = {
-    "name": "MCP Server Addon",
-    "author": "MCP Blender Contributors",
+    "name": "Meshwire",
+    "author": "Meshwire contributors",
     "version": (0, 3, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > MCP Server",
@@ -71,11 +71,11 @@ class MCP_OT_StopServer(bpy.types.Operator):
 class MCP_PT_ServerPanel(bpy.types.Panel):
     """MCP Server control panel"""
 
-    bl_label = "MCP Server"
+    bl_label = "Meshwire"
     bl_idname = "MCP_PT_server_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "MCP Server"
+    bl_category = "Meshwire"
 
     def draw(self, context):
         layout = self.layout

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp-blender"
+name = "meshwire"
 version = "0.4.0"
 description = "MCP server for Blender: modeling, materials, animation, AI 3D generation, and MSFS content"
 readme = "README.md"
@@ -38,13 +38,14 @@ dev = [
 ]
 
 [project.scripts]
+meshwire = "mcp_blender.server:main"
 mcp-blender = "mcp_blender.server:main"
 
 [project.urls]
-Homepage = "https://github.com/RFingAdam/mcp-blender"
-Repository = "https://github.com/RFingAdam/mcp-blender"
-Issues = "https://github.com/RFingAdam/mcp-blender/issues"
-Changelog = "https://github.com/RFingAdam/mcp-blender/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/RFingAdam/meshwire"
+Repository = "https://github.com/RFingAdam/meshwire"
+Issues = "https://github.com/RFingAdam/meshwire/issues"
+Changelog = "https://github.com/RFingAdam/meshwire/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_blender"]

@@ -1,7 +1,9 @@
-# mcp-blender
+<p align="center"><img src="assets/logo.svg" width="140" alt="Meshwire logo"></p>
 
-Control Blender from any MCP client, with tools for modeling, materials, sculpting, animation,
-AI 3D generation, and Microsoft Flight Simulator content.
+# Meshwire
+
+An independent MCP server for Blender. Control Blender from any MCP client, with tools for
+modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Flight Simulator content.
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-1E40AF.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg)](https://www.python.org/downloads/)
@@ -16,14 +18,14 @@ AI 3D generation, and Microsoft Flight Simulator content.
 
 > **Status, October 2026:** a full audit found that many tools fail in real Blender, including
 > every MSFS tool, most bake tools, and a group of mesh tools. Fixes are landing now and are
-> tracked in the [issues](https://github.com/RFingAdam/mcp-blender/issues). Treat those areas
+> tracked in the [issues](https://github.com/RFingAdam/meshwire/issues). Treat those areas
 > as not working until the next release.
 
 ---
 
-## What is mcp-blender?
+## What is Meshwire?
 
-`mcp-blender` is an MCP server for AI clients such as Claude Desktop, Claude Code, and Codex CLI.
+Meshwire is an MCP server for AI clients such as Claude Desktop, Claude Code, and Codex CLI.
 The server speaks the Model Context Protocol over stdio. A Blender addon listens on a local TCP
 socket and runs each command on Blender's main thread through `bpy.app.timers`.
 
@@ -50,17 +52,17 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 
 ### 1. Run the MCP server
 
-The `mcp-blender` package on PyPI is an unrelated project, so install this one from GitHub.
+Meshwire is not on PyPI yet, so install it from GitHub.
 With [uv](https://docs.astral.sh/uv/) there is nothing to install up front:
 
 ```bash
-uvx --from git+https://github.com/RFingAdam/mcp-blender mcp-blender --help
+uvx --from git+https://github.com/RFingAdam/meshwire meshwire --help
 ```
 
 Or with pip:
 
 ```bash
-pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
+pip install "meshwire @ git+https://github.com/RFingAdam/meshwire.git"
 ```
 
 ### 2. Install the Blender addon
@@ -68,8 +70,8 @@ pip install "mcp-blender @ git+https://github.com/RFingAdam/mcp-blender.git"
 Build the addon ZIP from source. Recent releases don't include one yet.
 
 ```bash
-git clone https://github.com/RFingAdam/mcp-blender
-cd mcp-blender
+git clone https://github.com/RFingAdam/meshwire
+cd meshwire
 python scripts/package_addon.py
 # creates dist/blender_mcp_addon-<version>.zip
 ```
@@ -86,15 +88,15 @@ the top right, select the ZIP, and enable **MCP Server Addon**.
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/RFingAdam/mcp-blender",
-        "mcp-blender"
+        "git+https://github.com/RFingAdam/meshwire",
+        "meshwire"
       ]
     }
   }
 }
 ```
 
-If you installed with pip, use `"command": "mcp-blender"` with no `args`.
+If you installed with pip, use `"command": "meshwire"` with no `args`.
 
 ### 4. Connect
 
@@ -248,14 +250,14 @@ inside Blender. Any process on your machine that can reach the port can run code
 - Don't run untrusted prompts or scripts against a Blender session with work you care about.
 
 Authentication and a Python execution switch are planned for the next stable release
-([#12](https://github.com/RFingAdam/mcp-blender/issues/12)).
+([#12](https://github.com/RFingAdam/meshwire/issues/12)).
 
 ---
 
 ## Configuration
 
 ```
-mcp-blender [--host HOST] [--port PORT]
+meshwire [--host HOST] [--port PORT]
 
   --host HOST   Blender addon host (default: 127.0.0.1)
   --port PORT   Blender addon port (default: 9876)
@@ -305,8 +307,8 @@ for cloud backends, or your models and VRAM for local ones. Follow a job with
 ## Development
 
 ```bash
-git clone https://github.com/RFingAdam/mcp-blender
-cd mcp-blender
+git clone https://github.com/RFingAdam/meshwire
+cd meshwire
 python -m venv .venv
 source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
@@ -342,3 +344,10 @@ project works with.
   **[Tripo](https://www.tripo3d.ai/)**, **TripoSR**, **Stable Fast 3D**, **Hunyuan3D**, and
   **ComfyUI** for AI 3D backends.
 - **The MCP working group** for the [Model Context Protocol](https://modelcontextprotocol.io).
+
+## Trademarks
+
+Meshwire is an independent project. It is not affiliated with, endorsed by, or sponsored by the
+Blender Foundation, Microsoft, or Asobo Studio. Blender is a registered trademark of the Blender
+Foundation. Microsoft Flight Simulator is a trademark of Microsoft Corporation. These names are used
+only to say what Meshwire works with.

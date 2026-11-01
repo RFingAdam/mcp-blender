@@ -25,7 +25,7 @@ SHA256 = {
     "4.5.15": "0d2b8bb2efe97e6c8eb57de6b7322f8800e1984e3125b60decca5f6771e4773e",
     "5.2.3": "78486c018b4443efe5e75ab54c290ed8c15abafd249b862c2c9ce2530a918eec",
 }
-CACHE = Path.home() / ".cache" / "mcp-blender"
+CACHE = Path.home() / ".cache" / "meshwire"
 
 
 def _sha256(path: Path) -> str:
