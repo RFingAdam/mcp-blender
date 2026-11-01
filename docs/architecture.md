@@ -47,7 +47,7 @@ mcp-blender/
 │   ├── __init__.py               ← addon registration + UI
 │   ├── socket_server.py          ← TCP server (bpy.app.timers)
 │   ├── handlers/                 ← 218 command dispatchers (20-file pkg)
-│   ├── compat.py                 ← Blender 4.2 / 5.0 compatibility
+│   ├── compat.py                 ← Blender version compatibility
 │   ├── validation.py             ← parameter validation
 │   ├── utils.py                  ← shared utilities
 │   ├── external/                 ← integrations
@@ -61,7 +61,7 @@ mcp-blender/
 │   └── msfs/                     ← MSFS content + livery tools
 ├── docs/                         ← this docs/ directory
 ├── scripts/                      ← build / packaging scripts
-└── tests/                        ← unit + Blender integration tests
+└── tests/                        ← unit tests + truth harness (real Blender)
 ```
 
 ## Design decisions

@@ -89,6 +89,7 @@ credentials.*
 # Claude/MCP local config
 .claude/
 tasks/
+runs/
 
 # CAD/design files
 *.kicad_pcb

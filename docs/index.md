@@ -10,7 +10,8 @@
 `mcp-blender` exposes 218 Blender tools via the Model Context Protocol.
 The MCP server speaks stdio; a Blender addon listens on local TCP and
 dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
-**Blender 4.2 LTS** and **Blender 5.0**.
+**Blender 4.5 LTS** and **Blender 5.2 LTS** (tested on every PR), and
+**Blender 4.2 LTS** (nightly, best effort).
 
 ## Install
 
