@@ -10,6 +10,14 @@ def _soft_fail(result) -> bool:
     return isinstance(result, dict) and (result.get("error") or result.get("success") is False)
 
 
+def _sentinel_error(result) -> bool:
+    return (
+        isinstance(result, dict)
+        and bool(result.get("error"))
+        and NETWORK_SENTINEL in str(result["error"])
+    )
+
+
 def classify(case_pass: str, outcome: dict | None) -> str:
     if outcome is None:
         return "CRASH"
@@ -17,6 +25,8 @@ def classify(case_pass: str, outcome: dict | None) -> str:
     if status == "hang":
         return "HANG"
     if status == "ok":
+        if _sentinel_error(outcome.get("result")):
+            return "EXPECTED"
         if case_pass == "invalid":
             return "BUG"
         return "SOFT_FAIL" if _soft_fail(outcome.get("result")) else "PASS"

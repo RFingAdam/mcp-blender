@@ -5,7 +5,6 @@ import json
 import os
 import socket
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "addon"))
@@ -66,6 +65,7 @@ def main(argv):
     parser.add_argument("--out", required=True)
     parser.add_argument("--scene", required=True)
     parser.add_argument("--start", type=int, default=0)
+    parser.add_argument("--tmp", required=True)
     args = parser.parse_args(argv)
 
     import bpy
@@ -83,7 +83,7 @@ def main(argv):
     handlers = CommandHandlers()
     with open(args.cases) as fh:
         cases = json.load(fh)
-    tmp = tempfile.mkdtemp(prefix="harness-")
+    tmp = args.tmp
 
     with open(args.out, "a") as out:
         for i in range(args.start, len(cases)):

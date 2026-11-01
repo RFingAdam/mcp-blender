@@ -26,6 +26,9 @@ FAKE = textwrap.dedent(
         out.flush()
         os.fsync(out.fileno())
 
+    open(os.path.join(os.path.dirname(opt["--out"]), "seen_tmpdir"), "w").write(
+        os.environ.get("TMPDIR", "") + "|" + opt["--tmp"] + "|" + str(os.path.exists(opt["--tmp"] + "/in.png"))
+    )
     for i in range(int(opt["--start"]), len(cases)):
         mode = cases[i]["params"].get("fake", "ok")
         emit({"i": i, "event": "start"})
@@ -83,3 +86,12 @@ def test_only_filters_by_tool(fake_blender, tmp_path):
     cases = make_cases("ok", "ok", "ok")
     assert [c.tool for c in driver.select(cases, ["t1"])] == ["t1"]
     assert driver.select(cases, []) == cases
+
+
+def test_tmp_dir_lives_under_out_and_is_removed(fake_blender, tmp_path):
+    out = tmp_path / "out"
+    driver.run(fake_blender, make_cases("ok"), out)
+    tmpdir, tmp_arg, has_asset = (out / "seen_tmpdir").read_text().split("|")
+    assert tmpdir == tmp_arg == str(out / "tmp")
+    assert has_asset == "True"
+    assert not (out / "tmp").exists()

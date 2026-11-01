@@ -6,12 +6,14 @@ import argparse
 import dataclasses
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+from . import assets
 from .cases import Case
 from .classify import classify
 
@@ -81,6 +83,19 @@ def _terminate(proc: subprocess.Popen) -> None:
 def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -> dict[str, str]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir = out_dir / "tmp"
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    tmp_dir.mkdir()
+    try:
+        assets.prepare(tmp_dir)
+        return _run(blender, cases, out_dir, tmp_dir, timeout)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _run(
+    blender: str, cases: list[Case], out_dir: Path, tmp_dir: Path, timeout: float
+) -> dict[str, str]:
     cases_file = out_dir / "cases.json"
     events_file = out_dir / "events.jsonl"
     log_file = out_dir / "blender.log"
@@ -90,7 +105,7 @@ def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -
     events_file.write_bytes(b"")
     log_file.write_bytes(b"")
 
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp_dir))
     outcomes: dict[int, dict | None] = {}
     offset = 0
     nxt = 0
@@ -98,7 +113,7 @@ def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -
         cmd = [
             blender, "-b", "--factory-startup", "--python", str(RUNNER), "--",
             "--cases", str(cases_file), "--out", str(events_file),
-            "--scene", str(scene_file), "--start", str(nxt),
+            "--scene", str(scene_file), "--start", str(nxt), "--tmp", str(tmp_dir),
         ]  # fmt: skip
         with log_file.open("ab") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)

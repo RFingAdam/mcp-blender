@@ -1,5 +1,7 @@
 """Build the fixture .blend the harness reloads before every case."""
 
+import json
+
 import bpy
 
 
@@ -22,7 +24,8 @@ def build(path):
     cube.data.materials.append(mat)
 
     bpy.ops.mesh.primitive_uv_sphere_add(location=(4, 0, 0))
-    bpy.context.active_object.name = "Sphere"
+    sphere = bpy.context.active_object
+    sphere.name = "Sphere"
 
     bpy.ops.curve.primitive_bezier_curve_add(location=(0, 4, 0))
     bpy.context.active_object.name = "Curve"
@@ -40,13 +43,60 @@ def build(path):
     bpy.ops.object.mode_set(mode="OBJECT")
 
     bpy.ops.object.camera_add(location=(0, -8, 4))
-    bpy.context.active_object.name = "Camera"
+    cam = bpy.context.active_object
+    cam.name = "Camera"
+    scene.camera = cam
     bpy.ops.object.light_add(type="POINT", location=(0, 0, 6))
     bpy.context.active_object.name = "Light"
     bpy.ops.object.empty_add(location=(0, -4, 0))
     bpy.context.active_object.name = "Empty"
 
+    _add_state(scene, cube, sphere, arm)
+
     scene.collection.children.link(bpy.data.collections.new("Collection"))
     bpy.data.images.new("Image", 16, 16).use_fake_user = True
 
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
+
+
+def _add_state(scene, cube, sphere, arm):
+    """State that tools need to find before they can act: modifiers, keys, poses."""
+    group = bpy.data.node_groups.new("GeoGroup", "GeometryNodeTree")
+    group.use_fake_user = True
+    group.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    group.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    node_in = group.nodes.new("NodeGroupInput")
+    node_out = group.nodes.new("NodeGroupOutput")
+    group.links.new(node_in.outputs[0], node_out.inputs[0])
+    sphere.modifiers.new("Bevel", "BEVEL")
+    sphere.modifiers.new("GeometryNodes", "NODES").node_group = group
+    multires = sphere.modifiers.new("Multires", "MULTIRES")
+    bpy.ops.object.select_all(action="DESELECT")
+    sphere.select_set(True)
+    bpy.context.view_layer.objects.active = sphere
+    bpy.ops.object.multires_subdivide(modifier=multires.name, mode="CATMULL_CLARK")
+
+    cube.location = (0, 0, 0)
+    cube.keyframe_insert("location", frame=1)
+    cube.location = (0, 0, 1)
+    cube.keyframe_insert("location", frame=5)
+    cube.location = (0, 0, 0)
+    cube.animation_data.action.name = "CubeAction"
+
+    pose = {
+        b.name: {
+            "location": [0.0, 0.0, 0.0],
+            "rotation_quaternion": [1.0, 0.0, 0.0, 0.0],
+            "rotation_euler": [0.0, 0.0, 0.0],
+            "rotation_mode": "QUATERNION",
+            "scale": [1.0, 1.0, 1.0],
+        }
+        for b in arm.pose.bones
+    }
+    arm["_pose_lib_Pose"] = json.dumps(pose)
+    arm["_pose_lib_index"] = json.dumps(["Pose"])
+
+    bpy.ops.rigidbody.world_add()
+    sphere.select_set(True)
+    bpy.context.view_layer.objects.active = sphere
+    bpy.ops.rigidbody.object_add()
