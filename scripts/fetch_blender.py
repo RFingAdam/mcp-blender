@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
+import shutil
 import sys
 import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -44,7 +47,7 @@ def _download(version: str, target: Path) -> None:
             with urllib.request.urlopen(url, timeout=60) as resp, part.open("wb") as out:
                 while chunk := resp.read(1 << 20):
                     out.write(chunk)
-        except OSError as exc:
+        except (OSError, http.client.HTTPException) as exc:
             errors.append(f"{url}: {exc}")
             continue
         if _sha256(part) != SHA256[version]:
@@ -68,10 +71,19 @@ def fetch(version: str, dest: Path) -> Path:
     if not tarball.exists() or _sha256(tarball) != SHA256[version]:
         _download(version, tarball)
     dest.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(tarball) as tar:
-        tar.extractall(dest, filter="data") if hasattr(tarfile, "data_filter") else tar.extractall(
-            dest
-        )
+    top = binary.parent.name
+    # Extract beside the target and rename once complete, so an interrupted
+    # extraction never leaves a half-populated tree that looks finished.
+    staging = Path(tempfile.mkdtemp(prefix=".extract-", dir=dest))
+    try:
+        with tarfile.open(tarball) as tar:
+            if hasattr(tarfile, "data_filter"):
+                tar.extractall(staging, filter="data")
+            else:
+                tar.extractall(staging)
+        (staging / top).rename(binary.parent)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return binary
 
 

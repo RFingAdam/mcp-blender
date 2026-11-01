@@ -134,19 +134,162 @@ def test_compare_identical_is_empty():
     assert compare({"a#minimal": "PASS"}, {"a#minimal": "PASS"}) == []
 
 
-def test_compare_reports_worse_improved_added_removed():
+def test_compare_reports_each_difference_exactly():
     from tests.harness.driver import compare
 
-    base = {"a#m": "PASS", "b#m": "BUG", "gone#m": "PASS", "same#m": "BUG"}
-    now = {"a#m": "BUG", "b#m": "PASS", "new#m": "PASS", "same#m": "BUG"}
-    lines = compare(base, now)
-    assert len(lines) == 4
-    text = "\n".join(lines)
-    assert "a#m" in text and "worse" in text and "PASS -> BUG" in text
-    assert "b#m" in text and "improved" in text and "BUG -> PASS" in text
-    assert "new#m" in text and "added" in text
-    assert "gone#m" in text and "removed" in text
-    assert "same#m" not in text
+    base = {
+        "a#m": "PASS",
+        "b#m": "BUG",
+        "c#m": "BUG",
+        "gone#m": "PASS",
+        "same#m": "BUG",
+    }
+    now = {
+        "a#m": "BUG",
+        "b#m": "PASS",
+        "c#m": "SOFT_FAIL",
+        "new#m": "PASS",
+        "same#m": "BUG",
+    }
+    assert compare(base, now) == [
+        "worse: a#m PASS -> BUG",
+        "improved: b#m BUG -> PASS",
+        "improved: c#m BUG -> SOFT_FAIL",
+        "removed: gone#m (was PASS)",
+        "added: new#m PASS",
+    ]
+
+
+def test_compare_reports_same_severity_change():
+    from tests.harness.driver import compare
+
+    assert compare({"a#m": "CRASH"}, {"a#m": "HANG"}) == ["changed: a#m CRASH -> HANG"]
+    assert compare({"a#m": "PASS"}, {"a#m": "EXPECTED"}) == ["changed: a#m PASS -> EXPECTED"]
+
+
+def test_compare_unknown_class_fails_loudly():
+    from tests.harness.driver import compare
+
+    with pytest.raises(KeyError):
+        compare({"a#m": "PASS"}, {"a#m": "WAT"})
+
+
+def _cli(monkeypatch, tmp_path, baseline, results, *flags):
+    import json
+
+    from tests.harness import driver
+
+    path = tmp_path / "base.json"
+    path.write_text(json.dumps(baseline))
+    (tmp_path / "out").mkdir()
+    monkeypatch.setattr(driver, "run", lambda *a, **k: results)
+    argv = ["--blender", "x", "--out", str(tmp_path / "out"), *flags]
+    return driver.main(argv + ["--check-baseline", str(path)])
+
+
+def test_check_baseline_exit_zero_when_identical(monkeypatch, tmp_path):
+    same = {"a#m": "PASS", "b#m": "BUG"}
+    assert _cli(monkeypatch, tmp_path, same, dict(same)) == 0
+
+
+@pytest.mark.parametrize(
+    "baseline,results",
+    [
+        ({"a#m": "PASS"}, {"a#m": "BUG"}),
+        ({"a#m": "BUG"}, {"a#m": "PASS"}),
+        ({"a#m": "CRASH"}, {"a#m": "HANG"}),
+        ({"a#m": "PASS"}, {"a#m": "PASS", "b#m": "PASS"}),
+        ({"a#m": "PASS", "b#m": "PASS"}, {"a#m": "PASS"}),
+    ],
+    ids=["worse", "improved", "changed", "added", "removed"],
+)
+def test_check_baseline_exit_one_on_difference(monkeypatch, tmp_path, baseline, results):
+    assert _cli(monkeypatch, tmp_path, baseline, results) == 1
+
+
+@pytest.mark.parametrize("flag", ["--write-baseline", "--check-baseline"])
+def test_only_rejected_with_baseline_flags(tmp_path, flag):
+    from tests.harness import driver
+
+    with pytest.raises(SystemExit):
+        driver.main(
+            ["--blender", "x", "--out", str(tmp_path), "--only", "t", flag, str(tmp_path / "b")]
+        )
+
+
+def test_both_baseline_flags_rejected(tmp_path):
+    from tests.harness import driver
+
+    with pytest.raises(SystemExit):
+        driver.main(
+            ["--blender", "x", "--out", str(tmp_path)]
+            + ["--write-baseline", str(tmp_path / "a"), "--check-baseline", str(tmp_path / "b")]
+        )
+
+
+def _load_fetch():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "fetch_blender.py"
+    spec = importlib.util.spec_from_file_location("fetch_blender", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _fake_release(tmp_path, mod, monkeypatch):
+    import hashlib
+    import io
+    import tarfile
+
+    top = "blender-9.9.9-linux-x64"
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    tarball = cache / f"{top}.tar.xz"
+    with tarfile.open(tarball, "w:xz") as tar:
+        for name, data in (("blender", b"bin"), ("lib/data", b"data")):
+            info = tarfile.TarInfo(f"{top}/{name}")
+            info.size = len(data)
+            info.mode = 0o755
+            tar.addfile(info, io.BytesIO(data))
+    monkeypatch.setattr(mod, "CACHE", cache)
+    monkeypatch.setitem(mod.SHA256, "9.9.9", hashlib.sha256(tarball.read_bytes()).hexdigest())
+    return top
+
+
+def test_fetch_extracts_and_reuses(tmp_path, monkeypatch):
+    mod = _load_fetch()
+    top = _fake_release(tmp_path, mod, monkeypatch)
+    dest = tmp_path / "dest"
+    binary = mod.fetch("9.9.9", dest)
+    assert binary == dest / top / "blender"
+    assert (dest / top / "lib" / "data").read_bytes() == b"data"
+    assert mod.fetch("9.9.9", dest) == binary
+
+
+def test_fetch_ignores_partial_extraction(tmp_path, monkeypatch):
+    import tarfile
+
+    mod = _load_fetch()
+    top = _fake_release(tmp_path, mod, monkeypatch)
+    dest = tmp_path / "dest"
+    real = tarfile.TarFile.extractall
+
+    def interrupted(self, path=".", *args, **kwargs):
+        member = self.getmembers()[0]
+        self.extract(member, path)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        mod.fetch("9.9.9", dest)
+    assert not (dest / top).exists()
+
+    monkeypatch.setattr(tarfile.TarFile, "extractall", real)
+    binary = mod.fetch("9.9.9", dest)
+    assert (dest / top / "lib" / "data").exists()
+    assert binary == dest / top / "blender"
 
 
 def test_baseline_file_is_sorted_with_trailing_newline(tmp_path):

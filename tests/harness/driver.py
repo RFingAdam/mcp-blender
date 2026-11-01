@@ -172,11 +172,12 @@ def compare(baseline: dict[str, str], results: dict[str, str]) -> list[str]:
             lines.append(f"added: {case_id} {new}")
         elif new is None:
             lines.append(f"removed: {case_id} (was {old})")
+        elif SEVERITY[new] > SEVERITY[old]:
+            lines.append(f"worse: {case_id} {old} -> {new}")
+        elif SEVERITY[new] < SEVERITY[old]:
+            lines.append(f"improved: {case_id} {old} -> {new}")
         else:
-            kind = "worse" if SEVERITY.get(new, 0) > SEVERITY.get(old, 0) else "improved"
-            if SEVERITY.get(new, 0) == SEVERITY.get(old, 0):
-                kind = "changed"
-            lines.append(f"{kind}: {case_id} {old} -> {new}")
+            lines.append(f"changed: {case_id} {old} -> {new}")
     return lines
 
 
@@ -192,6 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--write-baseline", type=Path, metavar="FILE")
     parser.add_argument("--check-baseline", type=Path, metavar="FILE")
     args = parser.parse_args(argv)
+    if args.write_baseline and args.check_baseline:
+        parser.error("--write-baseline and --check-baseline are mutually exclusive")
+    if args.only and (args.write_baseline or args.check_baseline):
+        parser.error("--only cannot be combined with a baseline flag (partial run)")
 
     from .cases import build_cases
     from .catalog import load_tools
