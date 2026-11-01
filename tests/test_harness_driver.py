@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 import stat
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -16,6 +19,9 @@ FAKE = textwrap.dedent(
     #!/usr/bin/env python3
     import json, os, signal, sys, time
 
+    if "--version" in sys.argv:
+        print(os.environ.get("FAKE_VERSION", "Blender 4.5.15"))
+        sys.exit(0)
     args = sys.argv[sys.argv.index("--") + 1:]
     opt = dict(zip(args[::2], args[1::2]))
     cases = json.load(open(opt["--cases"]))
@@ -31,16 +37,33 @@ FAKE = textwrap.dedent(
     )
     for i in range(int(opt["--start"]), len(cases)):
         mode = cases[i]["params"].get("fake", "ok")
+        if mode == "die_before_start":
+            os._exit(1)
         emit({"i": i, "event": "start"})
         print("garbage {not json", flush=True)
         if mode == "crash":
             os._exit(1)
+        if mode == "crash_file":
+            open(os.path.join(os.environ["TMPDIR"], "scene.crash.txt"), "w").write("trace")
+            os._exit(1)
+        if mode == "pid_hang":
+            open(os.path.join(os.path.dirname(opt["--out"]), "pid"), "w").write(str(os.getpid()))
+            time.sleep(60)
         if mode == "exit":
             sys.exit(3)
         if mode == "hang":
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             time.sleep(60)
         emit({"i": i, "event": "end", "outcome": {"status": "ok", "result": {"n": i}}})
+        if mode == "die_after":
+            os._exit(1)
+        if mode == "hang_after":
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            time.sleep(60)
+        if mode == "exit0_after":
+            sys.exit(0)
+        if mode == "exit139_after":
+            os._exit(139)
     """
 )
 
@@ -95,3 +118,107 @@ def test_tmp_dir_lives_under_out_and_is_removed(fake_blender, tmp_path):
     assert tmpdir == tmp_arg == str(out / "tmp")
     assert has_asset == "True"
     assert not (out / "tmp").exists()
+
+
+def test_death_between_cases_blames_last_finished(fake_blender, tmp_path):
+    result = driver.run(fake_blender, make_cases("ok", "die_after", "ok"), tmp_path / "out")
+    assert result == {"t0#minimal": "PASS", "t1#minimal": "CRASH", "t2#minimal": "PASS"}
+
+
+def test_hang_between_cases_blames_last_finished(fake_blender, tmp_path, monkeypatch):
+    monkeypatch.setattr(driver, "STARTUP_TIMEOUT", 1.0)
+    result = driver.run(
+        fake_blender, make_cases("ok", "hang_after", "ok"), tmp_path / "out", timeout=1
+    )
+    assert result == {"t0#minimal": "PASS", "t1#minimal": "HANG", "t2#minimal": "PASS"}
+
+
+def test_clean_exit_before_last_case_is_crash(fake_blender, tmp_path):
+    result = driver.run(fake_blender, make_cases("ok", "exit0_after", "ok"), tmp_path / "out")
+    assert result == {"t0#minimal": "PASS", "t1#minimal": "CRASH", "t2#minimal": "PASS"}
+
+
+def test_nonzero_exit_after_last_case_is_crash(fake_blender, tmp_path):
+    result = driver.run(fake_blender, make_cases("ok", "exit139_after"), tmp_path / "out")
+    assert result == {"t0#minimal": "PASS", "t1#minimal": "CRASH"}
+
+
+def test_death_at_startup_blames_next_case(fake_blender, tmp_path):
+    cases = make_cases("die_before_start", "ok", "die_after", "die_before_start", "ok")
+    result = driver.run(fake_blender, cases, tmp_path / "out")
+    assert list(result.values()) == ["CRASH", "PASS", "CRASH", "CRASH", "PASS"]
+
+
+def test_interrupt_does_not_orphan_blender(fake_blender, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    real = driver._read_events
+
+    def interrupt_once_started(path, offset):
+        for _ in range(200):
+            if (out / "pid").exists() and (out / "pid").read_text():
+                raise KeyboardInterrupt
+            time.sleep(0.05)
+        return real(path, offset)
+
+    monkeypatch.setattr(driver, "_read_events", interrupt_once_started)
+    with pytest.raises(KeyboardInterrupt):
+        driver.run(fake_blender, make_cases("pid_hang"), out)
+    pid = int((out / "pid").read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+def test_crash_dump_is_kept_under_blamed_index(fake_blender, tmp_path):
+    out = tmp_path / "out"
+    result = driver.run(fake_blender, make_cases("ok", "crash_file", "ok"), out)
+    assert result["t1#minimal"] == "CRASH"
+    assert (out / "crash-1.txt").read_text() == "trace"
+    assert not (out / "tmp").exists()
+
+
+def _stub_catalog(monkeypatch):
+    from tests.harness import cases, catalog
+
+    monkeypatch.setattr(catalog, "load_tools", lambda: [])
+    monkeypatch.setattr(cases, "build_cases", lambda tools: make_cases("ok"))
+
+
+def test_write_baseline_rejects_wrong_version_before_running(
+    fake_blender, tmp_path, monkeypatch, capsys
+):
+    _stub_catalog(monkeypatch)
+    monkeypatch.setenv("FAKE_VERSION", "Blender 4.2.23")
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit) as exc:
+        driver.main(
+            ["--blender", fake_blender, "--out", str(out),
+             "--write-baseline", str(tmp_path / "blender-4.5.json")]
+        )  # fmt: skip
+    assert exc.value.code == 2
+    assert "4.5" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_write_baseline_accepts_matching_and_unmatched_names(fake_blender, tmp_path, monkeypatch):
+    _stub_catalog(monkeypatch)
+    for name in ("blender-4.5.json", "anything.json"):
+        target = tmp_path / name
+        code = driver.main(
+            ["--blender", fake_blender, "--out", str(tmp_path / "o" / name),
+             "--write-baseline", str(target)]
+        )  # fmt: skip
+        assert code == 0
+        assert json.loads(target.read_text()) == {"t0#minimal": "PASS"}
+
+
+def test_check_baseline_diff_points_at_contributing(fake_blender, tmp_path, monkeypatch, capsys):
+    _stub_catalog(monkeypatch)
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps({"t0#minimal": "CRASH"}))
+    code = driver.main(
+        ["--blender", fake_blender, "--out", str(tmp_path / "o"), "--check-baseline", str(base)]
+    )
+    err = capsys.readouterr().err.strip().splitlines()
+    assert code == 1
+    assert err[0].startswith("improved:")
+    assert "CONTRIBUTING.md" in err[-1] and "Truth harness" in err[-1]

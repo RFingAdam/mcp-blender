@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .driver import compare
+from .driver import DIFF_HINT, compare
 
 HERE = Path(__file__).resolve().parent
 BOOT = HERE / "socket_boot.py"
@@ -635,6 +635,8 @@ def main(argv: list[str] | None = None) -> int:
         diff = diff_baseline(json.loads(args.check_baseline.read_text()), series, results)
         for line in diff:
             print(line, file=sys.stderr)
+        if diff:
+            print(DIFF_HINT, file=sys.stderr)
         return 1 if diff else 0
     return 0
 

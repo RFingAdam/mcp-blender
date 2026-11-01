@@ -88,12 +88,17 @@ def main(argv):
     with open(args.out, "a") as out:
         for i in range(args.start, len(cases)):
             case = cases[i]
+            # save#minimal writes the loaded fixture back over scene.blend. That is
+            # harmless because the scene is freshly reloaded here for every case.
             bpy.ops.wm.open_mainfile(filepath=args.scene)
             _emit(out, {"i": i, "event": "start"})
             params = _expand(case["params"], tmp)
             _emit(
                 out, {"i": i, "event": "end", "outcome": _outcome(handlers, case["tool"], params)}
             )
+    # Blender's own teardown is not under test, and on 4.2 it crashes inside
+    # Py_FinalizeEx. The driver reads the exit code, so leave without running it.
+    os._exit(0)
 
 
 if __name__ == "__main__":

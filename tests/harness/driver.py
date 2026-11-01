@@ -6,6 +6,7 @@ import argparse
 import dataclasses
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -42,6 +43,7 @@ STARTUP_TIMEOUT = 120.0
 KILL_GRACE = 3.0
 POLL = 0.05
 RUNNER = Path(__file__).with_name("runner.py")
+DIFF_HINT = "see CONTRIBUTING.md, section 'Truth harness', for how to read and record these lines"
 
 
 def select(cases: list[Case], only: list[str]) -> list[Case]:
@@ -79,6 +81,13 @@ def _terminate(proc: subprocess.Popen) -> None:
         except subprocess.TimeoutExpired:
             continue
     proc.wait()
+
+
+def _keep_crash_dumps(tmp_dir: Path, out_dir: Path, index: int) -> None:
+    """Move Blender's crash backtraces out of the temp dir before it is deleted."""
+    for n, dump in enumerate(sorted(tmp_dir.glob("*.crash.txt"))):
+        suffix = "" if n == 0 else f"-{n}"
+        shutil.move(str(dump), out_dir / f"crash-{index}{suffix}.txt")
 
 
 def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -> dict[str, str]:
@@ -119,42 +128,48 @@ def _run(
         with log_file.open("ab") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
         current: int | None = None
-        deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
+        last_end: int | None = None
         timed_out = False
-        while True:
-            events, offset = _read_events(events_file, offset)
-            for ev in events:
-                if ev.get("event") == "start":
-                    current = ev["i"]
-                    limit = SLOW_TIMEOUT if cases[current].tool in SLOW_TOOLS else timeout
-                    deadline = time.monotonic() + limit
-                elif ev.get("event") == "end":
-                    outcomes[ev["i"]] = ev["outcome"]
-                    current = None
-                    deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
-            if proc.poll() is not None:
+        try:
+            deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
+            while True:
                 events, offset = _read_events(events_file, offset)
                 for ev in events:
                     if ev.get("event") == "start":
                         current = ev["i"]
+                        limit = SLOW_TIMEOUT if cases[current].tool in SLOW_TOOLS else timeout
+                        deadline = time.monotonic() + limit
                     elif ev.get("event") == "end":
                         outcomes[ev["i"]] = ev["outcome"]
-                        current = None
-                break
-            if time.monotonic() > deadline:
-                timed_out = True
-                break
-            time.sleep(POLL)
-        if timed_out:
-            _terminate(proc)
-        # A start without an end is the culprit; with no start, the next case never began.
-        if current is None:
-            current = nxt if nxt not in outcomes else None
-        if current is not None and current not in outcomes:
+                        current, last_end = None, ev["i"]
+                        deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
+                if proc.poll() is not None:
+                    events, offset = _read_events(events_file, offset)
+                    for ev in events:
+                        if ev.get("event") == "start":
+                            current = ev["i"]
+                        elif ev.get("event") == "end":
+                            outcomes[ev["i"]] = ev["outcome"]
+                            current, last_end = None, ev["i"]
+                    break
+                if time.monotonic() > deadline:
+                    timed_out = True
+                    break
+                time.sleep(POLL)
+        finally:
+            if proc.poll() is None:
+                _terminate(proc)
+        # A start without an end is the culprit. Otherwise, if the spawn ended badly
+        # (timeout, nonzero exit, or stopped before the last case), blame the last case
+        # that finished, or the next case when nothing ran at all.
+        reached_end = max(outcomes, default=-1) + 1 >= len(cases)
+        failed = timed_out or proc.returncode != 0 or not reached_end
+        if current is None and failed:
+            current = last_end if last_end is not None else nxt
+        if current is not None:
             outcomes[current] = {"status": "hang"} if timed_out else None
+        _keep_crash_dumps(tmp_dir, out_dir, current if current is not None else nxt)
         nxt = max(outcomes, default=-1) + 1
-        if proc.poll() is None:
-            _terminate(proc)
 
     return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
 
@@ -199,6 +214,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.only and (args.write_baseline or args.check_baseline):
         parser.error("--only cannot be combined with a baseline flag (partial run)")
 
+    named = args.write_baseline and re.fullmatch(
+        r"blender-(\d+\.\d+)\.json", args.write_baseline.name
+    )
+    if named:
+        from .socket_lane import _blender_series
+
+        got = _blender_series(args.blender)
+        if got != named.group(1):
+            parser.error(f"{args.write_baseline.name} is for Blender {named.group(1)}, got {got}")
+
     from .cases import build_cases
     from .catalog import load_tools
 
@@ -213,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
         diff = compare(json.loads(args.check_baseline.read_text()), result)
         for line in diff:
             print(line, file=sys.stderr)
+        if diff:
+            print(DIFF_HINT, file=sys.stderr)
         return 1 if diff else 0
     return 0
 

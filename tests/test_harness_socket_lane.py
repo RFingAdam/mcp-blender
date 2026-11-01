@@ -320,3 +320,14 @@ def test_sigterm_handler_raises_system_exit():
             os.kill(os.getpid(), signal.SIGTERM)
             time.sleep(1)
     assert signal.getsignal(signal.SIGTERM) == before
+
+
+def test_check_baseline_diff_points_at_contributing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(lane, "run_lane", lambda blender, out: ("4.5", {"a": "PASS"}))
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps({"4.5": {"a": "FAIL"}}))
+    code = lane.main(["--blender", "x", "--out", str(tmp_path), "--check-baseline", str(base)])
+    err = capsys.readouterr().err.strip().splitlines()
+    assert code == 1
+    assert err[0] == "improved: a FAIL -> PASS"
+    assert "CONTRIBUTING.md" in err[-1] and "Truth harness" in err[-1]
