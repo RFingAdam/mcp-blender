@@ -54,6 +54,13 @@ FAKE = textwrap.dedent(
         if mode == "hang":
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             time.sleep(60)
+        if mode == "late_end":
+            def finish_on_term(*_):
+                emit({"i": i, "event": "end", "outcome": {"status": "ok", "result": {}}})
+                os._exit(0)
+
+            signal.signal(signal.SIGTERM, finish_on_term)
+            time.sleep(60)
         emit({"i": i, "event": "end", "outcome": {"status": "ok", "result": {"n": i}}})
         if mode == "die_after":
             os._exit(1)
@@ -123,6 +130,11 @@ def test_tmp_dir_lives_under_out_and_is_removed(fake_blender, tmp_path):
 def test_death_between_cases_blames_last_finished(fake_blender, tmp_path):
     result = driver.run(fake_blender, make_cases("ok", "die_after", "ok"), tmp_path / "out")
     assert result == {"t0#minimal": "PASS", "t1#minimal": "CRASH", "t2#minimal": "PASS"}
+
+
+def test_end_written_during_the_kill_does_not_undo_a_hang(fake_blender, tmp_path):
+    result = driver.run(fake_blender, make_cases("late_end", "ok"), tmp_path / "out", timeout=1)
+    assert result == {"t0#minimal": "HANG", "t1#minimal": "PASS"}
 
 
 def test_hang_between_cases_blames_last_finished(fake_blender, tmp_path, monkeypatch):

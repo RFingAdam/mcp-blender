@@ -159,6 +159,10 @@ def _run(
         finally:
             if proc.poll() is None:
                 _terminate(proc)
+        if timed_out:
+            # The deadline decided this case. An end written during the kill must not reach
+            # the next spawn, where it would overwrite the HANG.
+            _, offset = _read_events(events_file, offset)
         # A start without an end is the culprit. Otherwise, if the spawn ended badly
         # (timeout, nonzero exit, or stopped before the last case), blame the last case
         # that finished, or the next case when nothing ran at all.
