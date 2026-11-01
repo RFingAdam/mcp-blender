@@ -20,7 +20,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
-      # PyPI never lets a version be reused, so stop here rather than publish a mistake.
+      # PyPI never lets a version be reused, so catch mistakes here. This check and the version
+      # check below are not a security boundary, because a tagged commit can edit this file. The
+      # repository's tag ruleset and the pypi environment's tag policy restrict publishing.
       - name: Refuse a tag that is not on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
@@ -28,15 +30,10 @@ jobs:
         run: uv run --locked --extra dev --python 3.12 pytest tests/ --ignore=tests/blender_integration_test.py -q
 
       - name: Build package
-        run: uv build
+        run: uv build --build-constraint build-constraints.txt --require-hashes
 
       - name: Refuse a tag that does not match the package version
         run: test -f "dist/meshwire-${GITHUB_REF_NAME#v}-py3-none-any.whl"
-
-      - name: Run the built wheel
-        run: |
-          actual="$(uvx --isolated --from "dist/meshwire-${GITHUB_REF_NAME#v}-py3-none-any.whl" meshwire --version)"
-          test "$actual" = "meshwire ${GITHUB_REF_NAME#v}"
 
       # Built outside dist/: the PyPI action uploads everything in that folder.
       - name: Build addon ZIP
@@ -59,8 +56,27 @@ jobs:
           path: addon-zip/
           if-no-files-found: error
 
-  publish:
+  # Installs unlocked dependencies, as a user would, so it stays out of the job that builds and
+  # uploads the package.
+  smoke:
     needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+
+      - name: Run the built wheel
+        run: |
+          actual="$(uvx --isolated --from "dist/meshwire-${GITHUB_REF_NAME#v}-py3-none-any.whl" meshwire --version)"
+          test "$actual" = "meshwire ${GITHUB_REF_NAME#v}"
+
+  publish:
+    needs: [build, smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
