@@ -160,5 +160,4 @@ strength: the agent generates, evaluates, fixes, and repeats. All
 inside the MCP protocol.
 
 - For more tools: [Tool reference](tools.md)
-- For how this fits in the suite: [Architecture](architecture.md)
-- For sibling MCPs: [eng-mcp-suite catalog](https://github.com/RFingAdam/eng-mcp-suite#whats-included)
+- For how it's built: [Architecture](architecture.md)
