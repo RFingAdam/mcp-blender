@@ -10,6 +10,7 @@ def build(path):
     scene = bpy.context.scene
     scene.frame_start = 1
     scene.frame_end = 10
+    _make_renders_cheap(scene)
 
     bpy.ops.mesh.primitive_cube_add(size=2)
     cube = bpy.context.active_object
@@ -57,6 +58,17 @@ def build(path):
     bpy.data.images.new("Image", 16, 16).use_fake_user = True
 
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
+
+
+def _make_renders_cheap(scene):
+    """The harness tests handlers, not render speed: keep every render tiny."""
+    scene.render.resolution_x = 64
+    scene.render.resolution_y = 64
+    scene.render.resolution_percentage = 100
+    if hasattr(scene, "cycles"):
+        scene.cycles.samples = 1
+    if hasattr(scene, "eevee") and hasattr(scene.eevee, "taa_render_samples"):
+        scene.eevee.taa_render_samples = 1
 
 
 def _add_state(scene, cube, sphere, arm):

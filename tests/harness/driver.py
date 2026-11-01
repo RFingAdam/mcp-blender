@@ -19,6 +19,7 @@ from .classify import classify
 
 SLOW_TOOLS = frozenset(
     {
+        "ai_refine",
         "ai_texture_from_render",
         "bake_curvature",
         "bake_from_multires",
