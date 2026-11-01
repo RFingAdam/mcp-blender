@@ -71,27 +71,7 @@
   "validator_calls": [
     "addon/blender_mcp_addon/handlers/ai.py::AIHandlersMixin._handle_ai_inpaint_texture: validate_filepath missing name: image_path",
     "addon/blender_mcp_addon/handlers/ai.py::AIHandlersMixin._handle_ai_inpaint_texture: validate_filepath missing name: mask_path",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_array_along_curve: validate_enum swapped: 'fit_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_curve_create: validate_enum swapped: 'type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_curve_from_mesh_edge: validate_enum swapped: 'curve_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_curve_to_mesh: validate_enum swapped: 'fill_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_measure: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_dissolve: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_extrude: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_fill: validate_enum swapped: 'fill_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_flatten: validate_enum swapped: 'plane'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_get_selection: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_merge: validate_enum swapped: 'merge_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_proportional_transform: validate_enum swapped: 'falloff'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_proportional_transform: validate_enum swapped: 'transform_type'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_select: validate_enum swapped: 'action'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_select: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_select_shortest_path: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_shrinkwrap: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_mesh_split: validate_enum swapped: 'mode'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_reference_image_setup: validate_enum swapped: 'axis'",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_reference_image_setup: validate_filepath missing name: image_path",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_silhouette_compare: validate_enum swapped: 'camera_angle'"
+    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_reference_image_setup: validate_filepath missing name: image_path"
   ],
   "schema_params": [
     "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_generate_texture: reads 'texture_types' not in schema",

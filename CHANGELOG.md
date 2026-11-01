@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`validate_enum()` called with swapped arguments in 20 handlers.** Every
   affected handler rejected all of its documented enum values, because the
   `allowed` list landed in the `name` slot and the parameter-name string landed
-  in `allowed` — iterating a `str` made the check compare against its individual
+  in `allowed`, so iterating a `str` made the check compare against its individual
   characters. `mesh_fill`, `curve_create`, `curve_to_mesh`, `mesh_extrude`,
   `mesh_select`, `mesh_select_shortest_path` and others were unusable as a
   result, and the error messages they raised named the wrong parameter.
@@ -24,9 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BLENDER_EEVEE`. It now queries the `engine` enum instead of mapping from the
   version number.
 
+Thanks to Muhammet Ali (`muhammetali`) for this fix.
+
 ### Added
 
-- `tests/test_handler_signatures.py` — Blender-free static checks that guard
+- `tests/test_handler_signatures.py`: Blender-free static checks that guard
   against `validate_enum` argument-order regressions and against calling
   Blender operators removed in 4.x.
 - Integration tests for the STL export/import round-trip and for `mesh_fill`
