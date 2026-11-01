@@ -213,24 +213,68 @@ def _call_arg(node: ast.Call, index: int, keyword: str) -> ast.expr | None:
     return None
 
 
+VALIDATORS = (
+    "require_param",
+    "optional_param",
+    "validate_vector3",
+    "validate_color",
+    "validate_enum",
+    "validate_filepath",
+)
+
+
+def _validator_signatures() -> dict[str, tuple[list[str], int]]:
+    """Helper name -> (parameter names in order, how many are required), from validation.py."""
+    out: dict[str, tuple[list[str], int]] = {}
+    for node in _parse(ADDON_DIR / "validation.py").body:
+        if isinstance(node, ast.FunctionDef) and node.name in VALIDATORS:
+            names = [a.arg for a in node.args.args]
+            out[node.name] = (names, len(names) - len(node.args.defaults))
+    return out
+
+
 def _validator_aliases(tree: ast.Module) -> dict[str, str]:
     """Local alias -> validator name for ``from x import validate_enum as ve``."""
     out: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                if alias.asname and alias.name in ("validate_enum", "validate_filepath"):
+                if alias.asname and alias.name in VALIDATORS:
                     out[alias.asname] = alias.name
     return out
 
 
-def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
-    """``validate_enum`` with name/allowed swapped, ``validate_filepath`` without name.
+def _signature_problems(node: ast.Call, names: list[str], required: int) -> list[str]:
+    """What is wrong with a call against a helper's signature (empty when it binds)."""
+    if any(isinstance(a, ast.Starred) for a in node.args) or any(
+        k.arg is None for k in node.keywords
+    ):
+        return []
+    problems = []
+    given = set(names[: len(node.args)])
+    if len(node.args) > len(names):
+        problems.append("too many arguments")
+    for kw in node.keywords:
+        if kw.arg not in names:
+            problems.append(f"unexpected keyword {kw.arg}")
+        elif kw.arg in given:
+            problems.append(f"repeated argument {kw.arg}")
+        else:
+            given.add(kw.arg)
+    problems += [f"missing {n}" for n in names[:required] if n not in given]
+    return problems
 
-    A string ``allowed`` makes the enum comprehension iterate characters, so
-    every real value is rejected. ``validate_filepath(value)`` without ``name``
-    raises TypeError.
+
+def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
+    """Validator helper calls that do not match their signatures in validation.py.
+
+    Covers ``require_param``, ``optional_param``, ``validate_vector3``,
+    ``validate_color``, ``validate_enum`` and ``validate_filepath``. Also flags
+    ``validate_enum`` with name/allowed swapped: a string ``allowed`` makes the
+    enum comprehension iterate characters, so every real value is rejected.
+    ``validate_filepath(value)`` without ``name`` raises TypeError.
     """
+    signatures = _validator_signatures()
     out: list[str] = []
     for path in _python_files(addon_dir):
         rel = _rel(path, addon_dir)
@@ -242,8 +286,14 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
             fname = _called_name(node)
             if isinstance(node.func, ast.Name):
                 fname = aliases.get(fname, fname)
+            if fname not in signatures:
+                continue
+            names, required = signatures[fname]
+            first = _call_arg(node, 0, names[0])
+            label = ast.unparse(first) if first is not None else "?"
+            for problem in _signature_problems(node, names, required):
+                out.append(f"{rel}::{symbol}: {fname} {problem}: {label}")
             if fname == "validate_enum":
-                value = _call_arg(node, 0, "value")
                 name_arg = _call_arg(node, 1, "name")
                 allowed_arg = _call_arg(node, 2, "allowed")
                 if name_arg is None or allowed_arg is None:
@@ -251,25 +301,15 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
                 if isinstance(name_arg, (ast.List, ast.Tuple)) or (
                     _const_str(allowed_arg) is not None
                 ):
-                    label = next(
+                    swapped = next(
                         (
                             ast.unparse(a)
                             for a in (allowed_arg, name_arg)
                             if _const_str(a) is not None
                         ),
-                        ast.unparse(value) if value is not None else "?",
+                        label,
                     )
-                    out.append(f"{rel}::{symbol}: validate_enum swapped: {label}")
-            elif fname == "validate_filepath":
-                has_star = any(isinstance(a, ast.Starred) for a in node.args) or any(
-                    k.arg is None for k in node.keywords
-                )
-                if _call_arg(node, 1, "name") is None and not has_star:
-                    value = _call_arg(node, 0, "value")
-                    out.append(
-                        f"{rel}::{symbol}: validate_filepath missing name: "
-                        f"{ast.unparse(value) if value is not None else '?'}"
-                    )
+                    out.append(f"{rel}::{symbol}: validate_enum swapped: {swapped}")
     return sorted(out)
 
 
@@ -589,6 +629,39 @@ def test_fixture_validator_keyword_and_aliased_calls(tmp_path):
         "addon/pkg/a.py::f: validate_enum swapped: 'mode'",
         "addon/pkg/a.py::f: validate_enum swapped: 'size'",
         "addon/pkg/a.py::f: validate_filepath missing name: v",
+    ]
+
+
+def test_fixture_validator_signatures(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "a.py": "from ..validation import require_param as rp\n"
+            "def f(p):\n"
+            "    require_param(p, 'a')\n"
+            "    require_param(p)\n"
+            "    rp(p, 'a', int, 1)\n"
+            "    optional_param(p, 'a', 1, int)\n"
+            "    optional_param(p, 'a', default=1, param_type=int)\n"
+            "    optional_param(p, 'a', dflt=1)\n"
+            "    optional_param(p, 'a', 1, default=2)\n"
+            "    validate_vector3(p)\n"
+            "    validate_vector3(p, 'loc')\n"
+            "    validate_color(p, name='c')\n"
+            "    validate_color(p, 'c', True)\n"
+            "    validate_enum(p, 'mode')\n"
+            "    validate_filepath(p, 'x', True)\n"
+            "    validate_filepath(*p)\n",
+        },
+    )
+    assert check_validator_calls(addon) == [
+        "addon/pkg/a.py::f: optional_param repeated argument default: p",
+        "addon/pkg/a.py::f: optional_param unexpected keyword dflt: p",
+        "addon/pkg/a.py::f: require_param missing name: p",
+        "addon/pkg/a.py::f: require_param too many arguments: p",
+        "addon/pkg/a.py::f: validate_color too many arguments: p",
+        "addon/pkg/a.py::f: validate_enum missing allowed: p",
+        "addon/pkg/a.py::f: validate_vector3 missing name: p",
     ]
 
 
