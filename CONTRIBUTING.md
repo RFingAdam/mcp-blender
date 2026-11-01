@@ -51,7 +51,7 @@ agreement. Read CLA.md before you submit if you want the full terms.
 4. **Install the Blender addon:**
    ```bash
    # Symlink the addon to Blender's addons folder
-   ln -s $(pwd)/addon/blender_mcp_addon ~/.config/blender/4.2/scripts/addons/
+   ln -s $(pwd)/addon/blender_mcp_addon ~/.config/blender/4.5/scripts/addons/
    ```
 
 ## Code Style
@@ -113,7 +113,8 @@ required argument left out. Each case ends up in one class:
   argument raised a validation error.
 - `SOFT_FAIL`: the tool returned an error result instead of raising. Often benign, such as no
   AI backend offline. Sometimes a real defect.
-- `BUG`: the tool raised an exception it should not have raised.
+- `BUG`: the tool raised an exception it should not have raised, or an `#invalid` case did not
+  raise a validation error.
 - `CRASH`: Blender died during the case.
 - `HANG`: the case ran past its time limit and was killed.
 - `FAIL`: used only by the socket lane, when a check did not hold.
@@ -139,6 +140,9 @@ python -m tests.harness.driver --blender "$BIN" --out runs/4.5 \
     --check-baseline tests/harness/baselines/blender-4.5.json
 ```
 
+CI runs this under `xvfb-run -a`. On a Linux machine with no display, do the same. `runs/` is
+git-ignored.
+
 To record new results, use `--write-baseline tests/harness/baselines/blender-4.5.json` in place
 of `--check-baseline`. The driver refuses to write `blender-X.Y.json` from a different Blender
 series. A run takes several minutes. Run it with the dev dependencies installed
@@ -146,13 +150,13 @@ series. A run takes several minutes. Run it with the dev dependencies installed
 
 ### Without Linux
 
-Download the `harness-<version>` artifact from the failed CI run. Its `results.json` has the
-same shape as a baseline. Copy it over the baseline file, sorted by key, indented by two
+Download the `harness-<version>` artifact from the failed CI run. `driver-<series>/results.json`
+has the same shape as a baseline. Copy it over the baseline file, sorted by key, indented by two
 spaces, with a trailing newline. This is what `write_baseline` writes:
 
 ```bash
 python -c "import json,sys; d=json.load(open(sys.argv[1])); open(sys.argv[2],'w').write(json.dumps(d,indent=2,sort_keys=True)+'\n')" \
-    results.json tests/harness/baselines/blender-4.5.json
+    driver-4.5/results.json tests/harness/baselines/blender-4.5.json
 ```
 
 ### The socket lane
@@ -190,7 +194,7 @@ mcp-blender/
 ├── addon/blender_mcp_addon/   # Blender addon
 │   ├── __init__.py            # Addon registration
 │   ├── socket_server.py       # TCP server
-│   ├── handlers.py            # Command handlers
+│   ├── handlers/              # Command handlers, one file per domain
 │   ├── compat.py              # Version compatibility
 │   ├── utils.py               # Shared utility functions
 │   └── external/              # External integrations
@@ -225,7 +229,7 @@ Tool(
 
 ### 2. Add the Handler
 
-In `addon/blender_mcp_addon/handlers.py`:
+In the matching file under `addon/blender_mcp_addon/handlers/`:
 
 1. Register the handler in `_register_handlers()`:
    ```python
@@ -261,7 +265,7 @@ from .compat import IS_5_0_OR_LATER
 if IS_5_0_OR_LATER:
     # Blender 5.x code path
 else:
-    # Blender 4.2 code path
+    # Blender 4.x code path
 ```
 
 ## Pull Request Process
