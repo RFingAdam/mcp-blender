@@ -1,4 +1,4 @@
-"""TCP socket server for Blender MCP addon using bpy.app.timers."""
+"""TCP socket server for the Meshwire addon using bpy.app.timers."""
 
 import json
 import socket

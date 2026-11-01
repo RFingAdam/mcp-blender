@@ -23,7 +23,7 @@ from .blender_client import BlenderClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("mcp-blender")
+logger = logging.getLogger("meshwire")
 
 # Global client instance
 _client: BlenderClient | None = None
@@ -5673,7 +5673,7 @@ TOOLS: list[Tool] = [
 
 def create_server(host: str, port: int) -> Server:
     """Create and configure the MCP server."""
-    server = Server("mcp-blender")
+    server = Server("meshwire")
     async def handle_list_tools(
         ctx: ServerRequestContext,
         params: ListToolsRequest,

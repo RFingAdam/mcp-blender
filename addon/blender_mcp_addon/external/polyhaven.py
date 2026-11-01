@@ -32,7 +32,7 @@ def _api_request(endpoint: str, timeout: int = POLYHAVEN_TIMEOUT) -> dict:
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "Blender-MCP-Addon/1.0"},
+            headers={"User-Agent": "Meshwire-Addon/1.0"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode())
@@ -49,7 +49,7 @@ def _download_file(url: str, filepath: str, timeout: int = POLYHAVEN_TIMEOUT) ->
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "Blender-MCP-Addon/1.0"},
+            headers={"User-Agent": "Meshwire-Addon/1.0"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as response:
             with open(filepath, "wb") as f:

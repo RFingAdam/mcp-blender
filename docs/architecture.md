@@ -1,6 +1,6 @@
 # Architecture
 
-How `mcp-blender` is built.
+How `meshwire` is built.
 
 ## Internal layout
 
@@ -38,7 +38,7 @@ long-running work, such as renders and bakes, does not.
 ## Source layout
 
 ```
-mcp-blender/
+meshwire/
 ├── src/mcp_blender/             ← MCP server package
 │   ├── server.py                 ← tool definitions + MCP handlers
 │   ├── blender_client.py         ← TCP client for Blender comms

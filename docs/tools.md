@@ -1,42 +1,42 @@
 # Tools
 
-`mcp-blender` exposes **218 MCP tools** across every Blender pipeline
+`meshwire` exposes **218 MCP tools** across every Blender pipeline
 stage. Rather than enumerate all 218 here, this page groups them by
 category and links to the source. Each tool's argument schema is
 available at runtime through the MCP protocol (`tools/list`).
 
 Server-side dispatch:
-[`src/mcp_blender/`](https://github.com/RFingAdam/mcp-blender/tree/main/src/mcp_blender).
+[`src/mcp_blender/`](https://github.com/RFingAdam/meshwire/tree/main/src/mcp_blender).
 Blender-side handlers (the actual `bpy` calls):
-[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon).
+[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon).
 
 ## Tool counts by category
 
 | Category                       | Tools | Source |
 | ------------------------------ | ----: | ------ |
-| Scene                          |   5 | [`addon/.../handlers/scene.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Object                         |  10 | [`addon/.../handlers/object_ops.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Mesh editing                   |  24 | [`addon/.../handlers/mesh.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Materials + nodes              |  13 | [`addon/.../handlers/materials.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Modifiers                      |   5 | [`addon/.../handlers/modifiers.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Animation + keyframes          |   7 | [`addon/.../handlers/animation.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Render                         |   5 | [`addon/.../handlers/render.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Export / import                |   6 | [`addon/.../handlers/io.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Measurement + validation       |   7 | [`addon/.../handlers/measurement.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Baking                         |   6 | [`addon/.../handlers/baking.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Geometry nodes                 |   7 | [`addon/.../handlers/geonode.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Sculpting                      |   8 | [`addon/.../handlers/sculpting.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Rigging + armature             |   8 | [`addon/.../handlers/rigging.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Physics                        |   6 | [`addon/.../handlers/physics.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Collections + system           |   8 | [`addon/.../handlers/system.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| Annotations + grease pencil    |   6 | [`addon/.../handlers/annotation.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/handlers) |
-| MSFS content                   |  20 | [`addon/.../msfs/`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/msfs) |
-| MSFS livery                    |  18 | [`addon/.../msfs/livery/`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/msfs/livery) |
-| AI 3D generation               |  21 | [`addon/.../external/ai_models.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/external) |
-| AI texture generation          |   5 | [`addon/.../external/ai_backends/comfyui.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/external/ai_backends) |
-| AI evaluation                  |   2 | [`addon/.../external/refinement.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/external) |
-| AI self-refinement             |   7 | [`addon/.../external/refinement.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/external) |
-| Poly Haven                     |   2 | [`addon/.../external/polyhaven.py`](https://github.com/RFingAdam/mcp-blender/tree/main/addon/blender_mcp_addon/external) |
+| Scene                          |   5 | [`addon/.../handlers/scene.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Object                         |  10 | [`addon/.../handlers/object_ops.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Mesh editing                   |  24 | [`addon/.../handlers/mesh.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Materials + nodes              |  13 | [`addon/.../handlers/materials.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Modifiers                      |   5 | [`addon/.../handlers/modifiers.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Animation + keyframes          |   7 | [`addon/.../handlers/animation.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Render                         |   5 | [`addon/.../handlers/render.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Export / import                |   6 | [`addon/.../handlers/io.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Measurement + validation       |   7 | [`addon/.../handlers/measurement.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Baking                         |   6 | [`addon/.../handlers/baking.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Geometry nodes                 |   7 | [`addon/.../handlers/geonode.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Sculpting                      |   8 | [`addon/.../handlers/sculpting.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Rigging + armature             |   8 | [`addon/.../handlers/rigging.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Physics                        |   6 | [`addon/.../handlers/physics.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Collections + system           |   8 | [`addon/.../handlers/system.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| Annotations + grease pencil    |   6 | [`addon/.../handlers/annotation.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/handlers) |
+| MSFS content                   |  20 | [`addon/.../msfs/`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/msfs) |
+| MSFS livery                    |  18 | [`addon/.../msfs/livery/`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/msfs/livery) |
+| AI 3D generation               |  21 | [`addon/.../external/ai_models.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/external) |
+| AI texture generation          |   5 | [`addon/.../external/ai_backends/comfyui.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/external/ai_backends) |
+| AI evaluation                  |   2 | [`addon/.../external/refinement.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/external) |
+| AI self-refinement             |   7 | [`addon/.../external/refinement.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/external) |
+| Poly Haven                     |   2 | [`addon/.../external/polyhaven.py`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon/external) |
 | **Total**                      | **218** |    |
 
 ---
@@ -211,7 +211,7 @@ Mesh processing (7): `ai_mesh_cleanup`, `ai_mesh_decimate`,
 `ai_fix_mesh_issues`, `ai_mesh_stats`.
 
 Queue + control (4): `ai_evaluate`, `ai_refine`, `ai_set_backend`, etc.
-(See [`ai_models.py`](https://github.com/RFingAdam/mcp-blender/blob/main/addon/blender_mcp_addon/external/ai_models.py)
+(See [`ai_models.py`](https://github.com/RFingAdam/meshwire/blob/main/addon/blender_mcp_addon/external/ai_models.py)
 for the full list and arguments.)
 
 ## AI texture generation (5)

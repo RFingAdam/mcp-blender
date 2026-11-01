@@ -474,7 +474,7 @@ def test_compat_principled_inputs(runner: TestRunner):
 def main():
     """Run all integration tests."""
     print("\n" + "=" * 60)
-    print("Blender MCP Addon Integration Tests")
+    print("Meshwire Addon Integration Tests")
     print(f"Blender Version: {bpy.app.version_string}")
     print("=" * 60 + "\n")
 

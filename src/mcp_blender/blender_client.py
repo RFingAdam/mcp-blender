@@ -1,4 +1,4 @@
-"""Async TCP client for communicating with the Blender MCP addon."""
+"""Async TCP client for communicating with the Meshwire addon."""
 
 import asyncio
 import json
@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-logger = logging.getLogger("mcp-blender.client")
+logger = logging.getLogger("meshwire.client")
 
 
 class BlenderConnectionError(Exception):
@@ -23,7 +23,7 @@ class BlenderCommandError(Exception):
 
 class BlenderClient:
     """
-    Async TCP client for communicating with the Blender MCP addon.
+    Async TCP client for communicating with the Meshwire addon.
 
     Uses JSON-RPC 2.0 protocol over TCP with newline-delimited messages.
     """
