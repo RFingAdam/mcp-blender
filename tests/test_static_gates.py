@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -100,7 +101,7 @@ def check_relative_imports(addon_dir: Path = ADDON_DIR) -> list[str]:
     the sibling ``msfs`` package, so the name is undefined and the import fails
     when the handler runs.
     """
-    out: set[str] = set()
+    out: list[str] = []
     for path in _python_files(addon_dir):
         tree = _parse(path)
         own_names = _module_defined_names(tree)
@@ -111,11 +112,11 @@ def check_relative_imports(addon_dir: Path = ADDON_DIR) -> list[str]:
             target = _resolve_relative(path, node, addon_dir)
             dots = "." * node.level
             if target is None:
-                out.add(f"{rel}::{symbol}: unresolved import {dots}{node.module}")
+                out.append(f"{rel}::{symbol}: unresolved import {dots}{node.module}")
             elif target == path:
                 for alias in node.names:
                     if alias.name not in own_names:
-                        out.add(f"{rel}::{symbol}: self-import {dots}{node.module}.{alias.name}")
+                        out.append(f"{rel}::{symbol}: self-import {dots}{node.module}.{alias.name}")
     return sorted(out)
 
 
@@ -162,10 +163,10 @@ def check_self_attributes(addon_dir: Path = ADDON_DIR) -> list[str]:
     for _, cls in classes:
         defined |= _class_member_names(cls)
 
-    out: set[str] = set()
-    for path, cls in classes:
+    out: list[str] = []
+    for path in sorted({path for path, _ in classes}):
         rel = _rel(path, addon_dir)
-        for node in ast.walk(cls):
+        for node, symbol in _enclosing_symbols(_parse(path)):
             if (
                 isinstance(node, ast.Attribute)
                 and isinstance(node.ctx, ast.Load)
@@ -175,7 +176,7 @@ def check_self_attributes(addon_dir: Path = ADDON_DIR) -> list[str]:
                 and not node.attr.startswith("__")
                 and node.attr not in defined
             ):
-                out.add(f"{rel}: self.{node.attr}")
+                out.append(f"{rel}::{symbol}: self.{node.attr}")
     return sorted(out)
 
 
@@ -213,7 +214,7 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
     every real value is rejected. ``validate_filepath(value)`` without ``name``
     raises TypeError.
     """
-    out: set[str] = set()
+    out: list[str] = []
     for path in _python_files(addon_dir):
         rel = _rel(path, addon_dir)
         for node, symbol in _enclosing_symbols(_parse(path)):
@@ -226,11 +227,22 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
                 if isinstance(name_arg, (ast.List, ast.Tuple)) or (
                     _const_str(allowed_arg) is not None
                 ):
-                    out.add(f"{rel}::{symbol}: validate_enum arguments swapped")
+                    label = next(
+                        (
+                            ast.unparse(a)
+                            for a in (allowed_arg, name_arg)
+                            if _const_str(a) is not None
+                        ),
+                        ast.unparse(node.args[0]),
+                    )
+                    out.append(f"{rel}::{symbol}: validate_enum swapped: {label}")
             elif fname == "validate_filepath":
                 has_star = any(isinstance(a, ast.Starred) for a in node.args)
                 if len(node.args) < 2 and "name" not in kwargs and not has_star:
-                    out.add(f"{rel}::{symbol}: validate_filepath missing name")
+                    out.append(
+                        f"{rel}::{symbol}: validate_filepath missing name: "
+                        f"{ast.unparse(node.args[0]) if node.args else '?'}"
+                    )
     return sorted(out)
 
 
@@ -385,13 +397,13 @@ def _write_baseline() -> None:
 
 @pytest.mark.parametrize("name", sorted(CHECKS))
 def test_against_baseline(name):
-    expected = set(_load_baseline()[name])
-    actual = set(CHECKS[name]())
-    new = sorted(actual - expected)
-    stale = sorted(expected - actual)
+    expected = Counter(_load_baseline()[name])
+    actual = Counter(CHECKS[name]())
+    new = sorted((actual - expected).elements())
+    stale = sorted((expected - actual).elements())
     assert not new, f"{name}: new violations (fix them):\n  " + "\n  ".join(new)
     assert not stale, (
-        f"{name}: baseline entries no longer occur (remove them from "
+        f"{name}: baseline entries no longer occur or occur fewer times (remove them from "
         f"static_gate_baseline.json):\n  " + "\n  ".join(stale)
     )
 
@@ -444,7 +456,7 @@ def test_fixture_missing_self_attribute(tmp_path):
             "handlers/_helpers.py": "def _missing():\n    pass\n",
         },
     )
-    assert check_self_attributes(addon) == ["addon/pkg/handlers/a.py: self._missing"]
+    assert check_self_attributes(addon) == ["addon/pkg/handlers/a.py::A.run: self._missing"]
 
 
 def test_fixture_validator_calls(tmp_path):
@@ -461,9 +473,24 @@ def test_fixture_validator_calls(tmp_path):
         },
     )
     assert check_validator_calls(addon) == [
-        "addon/pkg/a.py::f: validate_enum arguments swapped",
-        "addon/pkg/a.py::f: validate_filepath missing name",
+        "addon/pkg/a.py::f: validate_enum swapped: 'ABC'",
+        "addon/pkg/a.py::f: validate_enum swapped: 'name'",
+        "addon/pkg/a.py::f: validate_filepath missing name: v",
     ]
+
+
+def test_fixture_two_swapped_calls_are_two_entries_and_a_third_fails(tmp_path):
+    two = "def f(v):\n    validate_enum(v, ['A'], 'mode')\n    validate_enum(v, ['A'], 'size')\n"
+    addon = _make_addon(tmp_path, {"a.py": two})
+    baseline = check_validator_calls(addon)
+    assert len(baseline) == 2
+    assert baseline[0] != baseline[1]
+
+    # A third call, identical to an existing one, must change the count.
+    addon = _make_addon(tmp_path, {"a.py": two + "    validate_enum(v, ['A'], 'mode')\n"})
+    grown = check_validator_calls(addon)
+    assert len(grown) == 3
+    assert (Counter(grown) - Counter(baseline)).total() == 1
 
 
 _REGISTRY = (
