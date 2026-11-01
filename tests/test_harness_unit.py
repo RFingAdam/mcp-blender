@@ -1,5 +1,6 @@
 """Unit tests for the pure-Python harness layer (no Blender)."""
 
+import jsonschema
 import pytest
 
 from mcp_blender.server import TOOLS
@@ -63,6 +64,8 @@ def _exc(t, msg=""):
         ("minimal", {"status": "ok", "result": {"x": 1}}, "PASS"),
         ("minimal", {"status": "ok", "result": {"error": "x"}}, "SOFT_FAIL"),
         ("minimal", {"status": "ok", "result": {"success": False}}, "SOFT_FAIL"),
+        ("minimal", {"status": "ok", "result": {"success": True, "error": None}}, "PASS"),
+        ("minimal", {"status": "ok", "result": {"error": ""}}, "PASS"),
         ("minimal", _exc("ValidationError"), "BUG"),
         ("invalid", _exc("ValidationError"), "EXPECTED"),
         ("invalid", _exc("KeyError"), "BUG"),
@@ -82,3 +85,29 @@ def _exc(t, msg=""):
 )
 def test_classify_table(case_pass, outcome, expected):
     assert classify(case_pass, outcome) == expected
+
+
+def _strings(v):
+    if isinstance(v, str):
+        yield v
+    elif isinstance(v, dict):
+        for x in v.values():
+            yield from _strings(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _strings(x)
+
+
+def test_generated_args_satisfy_schema():
+    import re
+
+    tools = load_tools()
+    for c in build_cases(tools):
+        if c.pass_name == "invalid":
+            continue
+        try:
+            jsonschema.validate(c.params, tools[c.tool])
+        except jsonschema.ValidationError as e:
+            pytest.fail(f"{c.id}: {e.message}")
+        for s in _strings(c.params):
+            assert set(re.findall(r"\{[^}]*\}", s)) <= {"{TMP}"}, (c.id, s)

@@ -7,7 +7,7 @@ CODE_BUG_TYPES = {"ImportError", "AttributeError", "TypeError", "NameError"}
 
 
 def _soft_fail(result) -> bool:
-    return isinstance(result, dict) and ("error" in result or result.get("success") is False)
+    return isinstance(result, dict) and (result.get("error") or result.get("success") is False)
 
 
 def classify(case_pass: str, outcome: dict | None) -> str:
