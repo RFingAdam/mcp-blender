@@ -64,7 +64,7 @@ def test_crash_resumes(fake_blender, tmp_path):
     assert result == {"t0#minimal": "PASS", "t1#minimal": "CRASH", "t2#minimal": "PASS"}
 
 
-def test_sys_exit_is_crash(fake_blender, tmp_path):
+def test_fake_blender_exit_is_crash(fake_blender, tmp_path):
     result = driver.run(fake_blender, make_cases("exit", "ok"), tmp_path / "out")
     assert result == {"t0#minimal": "CRASH", "t1#minimal": "PASS"}
 

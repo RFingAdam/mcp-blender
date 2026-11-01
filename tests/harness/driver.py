@@ -86,6 +86,7 @@ def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -
     log_file = out_dir / "blender.log"
     scene_file = out_dir / "scene.blend"
     cases_file.write_text(json.dumps([dataclasses.asdict(c) for c in cases]))
+    scene_file.unlink(missing_ok=True)
     events_file.write_bytes(b"")
     log_file.write_bytes(b"")
 

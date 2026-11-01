@@ -20,6 +20,8 @@ def classify(case_pass: str, outcome: dict | None) -> str:
         if case_pass == "invalid":
             return "BUG"
         return "SOFT_FAIL" if _soft_fail(outcome.get("result")) else "PASS"
+    if outcome.get("type") == "SystemExit":
+        return "CRASH"
     if NETWORK_SENTINEL in str(outcome.get("message", "")):
         return "EXPECTED"
     exc = outcome.get("type")

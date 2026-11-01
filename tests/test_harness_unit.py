@@ -79,6 +79,8 @@ def _exc(t, msg=""):
         ("minimal", _exc("RuntimeError", "context is incorrect"), "BUG"),
         ("enum", _exc("ValueError"), "BUG"),
         ("enum", {"status": "ok", "result": {"x": 1}}, "PASS"),
+        ("minimal", _exc("SystemExit", "1"), "CRASH"),
+        ("invalid", _exc("SystemExit"), "CRASH"),
         ("minimal", {"status": "hang"}, "HANG"),
         ("minimal", None, "CRASH"),
     ],

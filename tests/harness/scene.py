@@ -46,7 +46,7 @@ def build(path):
     bpy.ops.object.empty_add(location=(0, -4, 0))
     bpy.context.active_object.name = "Empty"
 
-    bpy.data.collections.new("Collection")
-    bpy.data.images.new("Image", 16, 16)
+    scene.collection.children.link(bpy.data.collections.new("Collection"))
+    bpy.data.images.new("Image", 16, 16).use_fake_user = True
 
     bpy.ops.wm.save_as_mainfile(filepath=str(path))

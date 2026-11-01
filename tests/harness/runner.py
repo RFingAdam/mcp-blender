@@ -18,6 +18,7 @@ def _block_network():
 
     socket.socket.connect = blocked
     socket.socket.connect_ex = blocked
+    socket.getaddrinfo = blocked
 
 
 def _expand(value, tmp):
