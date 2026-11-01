@@ -53,8 +53,12 @@ def main(argv):
         return
 
     try:
+        import blender_mcp_addon
         from blender_mcp_addon.socket_server import MCPSocketServer
 
+        # Register first, as Blender does when the addon is enabled, so a break in
+        # class or property registration turns the lane red.
+        blender_mcp_addon.register()
         server = MCPSocketServer(host="127.0.0.1", port=args.port)
         _install_harness_handlers(server, args.scene)
         if not server.start():
