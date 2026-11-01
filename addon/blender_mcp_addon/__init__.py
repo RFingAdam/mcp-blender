@@ -5,7 +5,7 @@ bl_info = {
     "author": "Meshwire contributors",
     "version": (0, 5, 0),
     "blender": (4, 2, 0),
-    "location": "View3D > Sidebar > MCP Server",
+    "location": "View3D > Sidebar > Meshwire",
     "description": "Socket server for Model Context Protocol integration with AI assistants",
     "category": "Interface",
 }
