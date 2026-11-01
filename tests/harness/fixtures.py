@@ -159,6 +159,7 @@ OVERRIDES.update(
 )
 
 # Cases the harness cannot reach, keyed by tool name, with the reason.
+# Informational only: baselines record each case's true class regardless.
 KNOWN_UNREACHED: dict[str, str] = {
     "undo": "Blender disables undo in background mode",
     "redo": "Blender disables undo in background mode",

@@ -158,11 +158,39 @@ def _run(
     return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
 
 
+SEVERITY = {"PASS": 0, "EXPECTED": 0, "SOFT_FAIL": 1, "BUG": 2, "CRASH": 3, "HANG": 3}
+
+
+def compare(baseline: dict[str, str], results: dict[str, str]) -> list[str]:
+    """One line per difference between a baseline and a fresh run."""
+    lines = []
+    for case_id in sorted(baseline.keys() | results.keys()):
+        old, new = baseline.get(case_id), results.get(case_id)
+        if old == new:
+            continue
+        if old is None:
+            lines.append(f"added: {case_id} {new}")
+        elif new is None:
+            lines.append(f"removed: {case_id} (was {old})")
+        else:
+            kind = "worse" if SEVERITY.get(new, 0) > SEVERITY.get(old, 0) else "improved"
+            if SEVERITY.get(new, 0) == SEVERITY.get(old, 0):
+                kind = "changed"
+            lines.append(f"{kind}: {case_id} {old} -> {new}")
+    return lines
+
+
+def write_baseline(path: Path, results: dict[str, str]) -> None:
+    Path(path).write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--blender", required=True)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--only", action="append", default=[], metavar="TOOL")
+    parser.add_argument("--write-baseline", type=Path, metavar="FILE")
+    parser.add_argument("--check-baseline", type=Path, metavar="FILE")
     args = parser.parse_args(argv)
 
     from .cases import build_cases
@@ -173,6 +201,13 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / "results.json").write_text(json.dumps(result, indent=2, sort_keys=True))
     for case_id in sorted(result):
         print(f"{case_id} {result[case_id]}")
+    if args.write_baseline:
+        write_baseline(args.write_baseline, result)
+    if args.check_baseline:
+        diff = compare(json.loads(args.check_baseline.read_text()), result)
+        for line in diff:
+            print(line, file=sys.stderr)
+        return 1 if diff else 0
     return 0
 
 

@@ -126,3 +126,32 @@ def test_generated_args_satisfy_schema():
             pytest.fail(f"{c.id}: {e.message}")
         for s in _strings(c.params):
             assert set(re.findall(r"\{[^}]*\}", s)) <= {"{TMP}"}, (c.id, s)
+
+
+def test_compare_identical_is_empty():
+    from tests.harness.driver import compare
+
+    assert compare({"a#minimal": "PASS"}, {"a#minimal": "PASS"}) == []
+
+
+def test_compare_reports_worse_improved_added_removed():
+    from tests.harness.driver import compare
+
+    base = {"a#m": "PASS", "b#m": "BUG", "gone#m": "PASS", "same#m": "BUG"}
+    now = {"a#m": "BUG", "b#m": "PASS", "new#m": "PASS", "same#m": "BUG"}
+    lines = compare(base, now)
+    assert len(lines) == 4
+    text = "\n".join(lines)
+    assert "a#m" in text and "worse" in text and "PASS -> BUG" in text
+    assert "b#m" in text and "improved" in text and "BUG -> PASS" in text
+    assert "new#m" in text and "added" in text
+    assert "gone#m" in text and "removed" in text
+    assert "same#m" not in text
+
+
+def test_baseline_file_is_sorted_with_trailing_newline(tmp_path):
+    from tests.harness.driver import write_baseline
+
+    path = tmp_path / "b.json"
+    write_baseline(path, {"z#m": "BUG", "a#m": "PASS"})
+    assert path.read_text() == '{\n  "a#m": "PASS",\n  "z#m": "BUG"\n}\n'
