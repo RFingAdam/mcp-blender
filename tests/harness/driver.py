@@ -158,7 +158,7 @@ def _run(
     return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
 
 
-SEVERITY = {"PASS": 0, "EXPECTED": 0, "SOFT_FAIL": 1, "BUG": 2, "CRASH": 3, "HANG": 3}
+SEVERITY = {"PASS": 0, "EXPECTED": 0, "SOFT_FAIL": 1, "BUG": 2, "FAIL": 2, "CRASH": 3, "HANG": 3}
 
 
 def compare(baseline: dict[str, str], results: dict[str, str]) -> list[str]:

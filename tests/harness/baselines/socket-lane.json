@@ -1,0 +1,20 @@
+{
+  "4.5": {
+    "execute_script_stdout": "PASS",
+    "malformed_json_error_reply": "PASS",
+    "mesh_knife_project_keeps_outside": "FAIL",
+    "object_create_listed": "PASS",
+    "render_image_writes_file": "PASS",
+    "reply_16mb_complete": "FAIL",
+    "undo_reverts": "FAIL"
+  },
+  "5.2": {
+    "execute_script_stdout": "PASS",
+    "malformed_json_error_reply": "PASS",
+    "mesh_knife_project_keeps_outside": "FAIL",
+    "object_create_listed": "PASS",
+    "render_image_writes_file": "PASS",
+    "reply_16mb_complete": "FAIL",
+    "undo_reverts": "FAIL"
+  }
+}
