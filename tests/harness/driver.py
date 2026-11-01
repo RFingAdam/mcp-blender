@@ -1,0 +1,164 @@
+"""Drive Blender through the harness cases, resuming after crashes and hangs."""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from .cases import Case
+from .classify import classify
+
+SLOW_TOOLS = frozenset(
+    {
+        "ai_texture_from_render",
+        "bake_curvature",
+        "bake_from_multires",
+        "bake_highpoly_to_lowpoly",
+        "bake_id_map",
+        "bake_pbr_batch",
+        "bake_to_vertex_colors",
+        "material_preview_render",
+        "physics_cloth_add",
+        "physics_fluid_quick",
+        "physics_simulate",
+        "render_animation",
+        "render_image",
+        "render_multi_angle",
+        "render_screenshot",
+    }
+)
+SLOW_TIMEOUT = 180.0
+STARTUP_TIMEOUT = 120.0
+KILL_GRACE = 3.0
+POLL = 0.05
+RUNNER = Path(__file__).with_name("runner.py")
+
+
+def select(cases: list[Case], only: list[str]) -> list[Case]:
+    return [c for c in cases if c.tool in only] if only else cases
+
+
+def _read_events(path: Path, offset: int) -> tuple[list[dict], int]:
+    """Parse complete JSONL lines after offset; leave a partial last line unread."""
+    with path.open("rb") as fh:
+        fh.seek(offset)
+        data = fh.read()
+    events = []
+    consumed = 0
+    for raw in data.splitlines(keepends=True):
+        if not raw.endswith(b"\n"):
+            break
+        consumed += len(raw)
+        try:
+            events.append(json.loads(raw))
+        except ValueError:
+            pass
+    return events, offset + consumed
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    """SIGTERM the process group, escalate to SIGKILL after a grace period."""
+    for sig, wait in ((signal.SIGTERM, KILL_GRACE), (signal.SIGKILL, None)):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            proc.wait(timeout=wait)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    proc.wait()
+
+
+def run(blender: str, cases: list[Case], out_dir: Path, timeout: float = 30.0) -> dict[str, str]:
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cases_file = out_dir / "cases.json"
+    events_file = out_dir / "events.jsonl"
+    log_file = out_dir / "blender.log"
+    scene_file = out_dir / "scene.blend"
+    cases_file.write_text(json.dumps([dataclasses.asdict(c) for c in cases]))
+    events_file.write_bytes(b"")
+    log_file.write_bytes(b"")
+
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    outcomes: dict[int, dict | None] = {}
+    offset = 0
+    nxt = 0
+    while nxt < len(cases):
+        cmd = [
+            blender, "-b", "--factory-startup", "--python", str(RUNNER), "--",
+            "--cases", str(cases_file), "--out", str(events_file),
+            "--scene", str(scene_file), "--start", str(nxt),
+        ]  # fmt: skip
+        with log_file.open("ab") as log:
+            proc = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
+        current: int | None = None
+        deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
+        timed_out = False
+        while True:
+            events, offset = _read_events(events_file, offset)
+            for ev in events:
+                if ev.get("event") == "start":
+                    current = ev["i"]
+                    limit = SLOW_TIMEOUT if cases[current].tool in SLOW_TOOLS else timeout
+                    deadline = time.monotonic() + limit
+                elif ev.get("event") == "end":
+                    outcomes[ev["i"]] = ev["outcome"]
+                    current = None
+                    deadline = time.monotonic() + max(timeout, STARTUP_TIMEOUT)
+            if proc.poll() is not None:
+                events, offset = _read_events(events_file, offset)
+                for ev in events:
+                    if ev.get("event") == "start":
+                        current = ev["i"]
+                    elif ev.get("event") == "end":
+                        outcomes[ev["i"]] = ev["outcome"]
+                        current = None
+                break
+            if time.monotonic() > deadline:
+                timed_out = True
+                break
+            time.sleep(POLL)
+        if timed_out:
+            _terminate(proc)
+        # A start without an end is the culprit; with no start, the next case never began.
+        if current is None:
+            current = nxt if nxt not in outcomes else None
+        if current is not None and current not in outcomes:
+            outcomes[current] = {"status": "hang"} if timed_out else None
+        nxt = max(outcomes, default=-1) + 1
+        if proc.poll() is None:
+            _terminate(proc)
+
+    return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--blender", required=True)
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--only", action="append", default=[], metavar="TOOL")
+    args = parser.parse_args(argv)
+
+    from .cases import build_cases
+    from .catalog import load_tools
+
+    cases = select(build_cases(load_tools()), args.only)
+    result = run(args.blender, cases, args.out)
+    (args.out / "results.json").write_text(json.dumps(result, indent=2, sort_keys=True))
+    for case_id in sorted(result):
+        print(f"{case_id} {result[case_id]}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
