@@ -52,6 +52,7 @@ def build(path):
     bpy.ops.object.empty_add(location=(0, -4, 0))
     bpy.context.active_object.name = "Empty"
 
+    _add_lods()
     _add_state(scene, cube, sphere, arm)
 
     scene.collection.children.link(bpy.data.collections.new("Collection"))
@@ -69,6 +70,13 @@ def _make_renders_cheap(scene):
         scene.cycles.samples = 1
     if hasattr(scene, "eevee") and hasattr(scene.eevee, "taa_render_samples"):
         scene.eevee.taa_render_samples = 1
+
+
+def _add_lods():
+    """A two-level LOD set, Hull_LOD0 and Hull_LOD1, for the msfs_*_lod* tools."""
+    for level in range(2):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(8, 4 * level, 0))
+        bpy.context.active_object.name = f"Hull_LOD{level}"
 
 
 def _add_state(scene, cube, sphere, arm):

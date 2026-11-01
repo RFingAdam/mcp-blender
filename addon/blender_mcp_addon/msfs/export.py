@@ -5,6 +5,8 @@ from typing import Any
 
 import bpy
 
+from ..validation import validate_enum
+
 # Default export settings for MSFS-compatible glTF
 DEFAULT_EXPORT_SETTINGS = {
     "export_format": "GLB",
@@ -16,7 +18,7 @@ DEFAULT_EXPORT_SETTINGS = {
     "export_normals": True,
     "export_tangents": True,
     "export_materials": "EXPORT",
-    "export_colors": True,
+    "export_vertex_color": "MATERIAL",
     "export_cameras": False,
     "export_lights": False,
     "export_extras": True,  # Required for MSFS custom properties
@@ -30,6 +32,9 @@ DEFAULT_EXPORT_SETTINGS = {
     "export_morph_normal": True,
     "export_morph_tangent": False,
 }
+
+# The exporter has no plain "GLTF" format: separate files is GLTF_SEPARATE.
+_EXPORTER_FORMATS = {"GLB": "GLB", "GLTF": "GLTF_SEPARATE"}
 
 
 def export_msfs_model(
@@ -53,12 +58,13 @@ def export_msfs_model(
     Returns:
         Dictionary with export results
     """
+    export_format = validate_enum(export_format, "export_format", list(_EXPORTER_FORMATS))
     path = Path(filepath)
 
     # Ensure correct extension
-    if export_format.upper() == "GLB" and path.suffix.lower() != ".glb":
+    if export_format == "GLB" and path.suffix.lower() != ".glb":
         path = path.with_suffix(".glb")
-    elif export_format.upper() == "GLTF" and path.suffix.lower() != ".gltf":
+    elif export_format == "GLTF" and path.suffix.lower() != ".gltf":
         path = path.with_suffix(".gltf")
 
     # Build list of objects to export
@@ -111,7 +117,7 @@ def export_msfs_model(
     # Build export settings
     settings = DEFAULT_EXPORT_SETTINGS.copy()
     settings["filepath"] = str(path)
-    settings["export_format"] = export_format.upper()
+    settings["export_format"] = _EXPORTER_FORMATS[export_format]
     settings["use_selection"] = True
     settings["export_animations"] = include_animations
 
@@ -135,7 +141,7 @@ def export_msfs_model(
     # Collect export info
     exported_info = {
         "filepath": str(path),
-        "format": export_format.upper(),
+        "format": export_format,
         "object_count": len(export_objects),
         "objects": [obj.name for obj in export_objects],
     }

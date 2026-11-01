@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **All 38 `msfs_*` tools failed on every call.** `handlers/msfs.py` imported
+  `from .msfs`, which resolves to the handler module itself, so each call raised an
+  ImportError or "not a package". It now imports the `msfs` package. These tools
+  now run; their output is not yet verified. Five more defects behind the import:
+  `msfs_create_glass_material` set `Material.shadow_method`, absent from Blender
+  4.5 and later; `msfs_export_model` passed the removed `export_colors` option and
+  the format `GLTF`, which the exporter spells `GLTF_SEPARATE`;
+  `msfs_livery_extract_colors`, `msfs_livery_transfer` and
+  `msfs_livery_map_elements` did not accept the parameters their schemas offer;
+  and `msfs_livery_export_uv_layout` now says it needs a GPU context in background
+  mode instead of raising, and no longer leaves the object in Edit mode.
 - **`ai_auto_uv` read freed memory.** It held a UV layer reference across a mode change, then
   read its name. The outcome depended on what was left in that memory: it crashed Blender 5.2
   every time and failed unpredictably on 4.5.

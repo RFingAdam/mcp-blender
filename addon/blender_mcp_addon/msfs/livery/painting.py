@@ -359,24 +359,32 @@ def export_uv_layout(
     if not mesh.uv_layers:
         return {"error": "Object has no UV map"}
 
+    # The exporter draws into a GPU offscreen buffer, which background mode lacks.
+    if bpy.app.background:
+        return {
+            "error": "msfs_livery_export_uv_layout needs a GPU context, "
+            "which is not available in background mode"
+        }
+
     # Select object and enter edit mode
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
+    try:
+        bpy.ops.mesh.select_all(action="SELECT")
 
-    # Export UV layout
-    width, height = resolution
-    bpy.ops.uv.export_layout(
-        filepath=output_path,
-        size=(width, height),
-        opacity=fill_opacity,
-        export_all=True,
-    )
-
-    # Return to object mode
-    bpy.ops.object.mode_set(mode="OBJECT")
+        # Export UV layout
+        width, height = resolution
+        bpy.ops.uv.export_layout(
+            filepath=output_path,
+            size=(width, height),
+            opacity=fill_opacity,
+            export_all=True,
+        )
+    finally:
+        # Return to object mode, also when the export fails
+        bpy.ops.object.mode_set(mode="OBJECT")
 
     return {
         "object": object_name,

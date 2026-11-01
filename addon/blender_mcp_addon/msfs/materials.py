@@ -4,6 +4,8 @@ from typing import Any
 
 import bpy
 
+from .. import compat
+
 # MSFS material type tags (stored as custom properties, exported to glTF extras)
 MSFS_MATERIAL_TYPES = {
     "standard": "ASOBO_material_standard",
@@ -158,7 +160,7 @@ def setup_msfs_material(
     if alpha < 1.0:
         principled.inputs["Alpha"].default_value = alpha
         mat.blend_method = "BLEND"
-        mat.shadow_method = "HASHED"
+        compat.set_material_shadow_hashed(mat)
     else:
         mat.blend_method = "OPAQUE"
 
@@ -235,7 +237,7 @@ def create_glass_material(
 
     # Material settings
     mat.blend_method = "BLEND"
-    mat.shadow_method = "HASHED"
+    compat.set_material_shadow_hashed(mat)
     mat.use_backface_culling = False
 
     # MSFS type
