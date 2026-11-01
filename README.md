@@ -1,11 +1,11 @@
-<p align="center"><img src="assets/logo.svg" width="140" alt="Meshwire logo"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/RFingAdam/meshwire/main/assets/logo.svg" width="140" alt="Meshwire logo"></p>
 
 # Meshwire
 
 An independent MCP server for Blender. Control Blender from any MCP client, with tools for
 modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Flight Simulator content.
 
-[![License](https://img.shields.io/badge/License-AGPL--3.0-1E40AF.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-1E40AF.svg)](https://github.com/RFingAdam/meshwire/blob/main/LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg)](https://www.python.org/downloads/)
 [![Blender 4.5 | 5.2 LTS](https://img.shields.io/badge/blender-4.5%20%7C%205.2%20LTS-F5792A.svg)](https://www.blender.org/)
 [![MCP](https://img.shields.io/badge/MCP-server-A78BFA.svg)](https://modelcontextprotocol.io)
@@ -52,22 +52,23 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 
 ### 1. Run the MCP server
 
-Meshwire is not on PyPI yet, so install it from GitHub.
+Meshwire is in alpha, so ask for pre-releases.
 With [uv](https://docs.astral.sh/uv/) there is nothing to install up front:
 
 ```bash
-uvx --from git+https://github.com/RFingAdam/meshwire meshwire --help
+uvx --prerelease allow meshwire --help
 ```
 
 Or with pip:
 
 ```bash
-pip install "meshwire @ git+https://github.com/RFingAdam/meshwire.git"
+pip install --pre meshwire
 ```
 
 ### 2. Install the Blender addon
 
-Build the addon ZIP from source. Recent releases don't include one yet.
+Download `blender_mcp_addon-<version>.zip` from [Releases](https://github.com/RFingAdam/meshwire/releases),
+or build it from source:
 
 ```bash
 git clone https://github.com/RFingAdam/meshwire
@@ -77,7 +78,7 @@ python scripts/package_addon.py
 ```
 
 In Blender, open **Edit > Preferences > Add-ons**, choose **Install from Disk** from the menu at
-the top right, select the ZIP, and enable **MCP Server Addon**.
+the top right, select the ZIP, and enable **Meshwire**.
 
 ### 3. Configure your MCP client
 
@@ -86,11 +87,7 @@ the top right, select the ZIP, and enable **MCP Server Addon**.
   "mcpServers": {
     "blender": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/RFingAdam/meshwire",
-        "meshwire"
-      ]
+      "args": ["--prerelease", "allow", "meshwire"]
     }
   }
 }
@@ -114,7 +111,7 @@ Then try:
 ## Tools
 
 The server defines 218 tools. This table lists what exists, not what has been verified to work;
-see the status note above. The tool list is in [`docs/tools.md`](docs/tools.md).
+see the status note above. The tool list is in [`docs/tools.md`](https://github.com/RFingAdam/meshwire/blob/main/docs/tools.md).
 
 | Category                     | Tools | Examples                                                 |
 | ---------------------------- | ----: | -------------------------------------------------------- |
@@ -180,7 +177,7 @@ blender_refine_iteration(object_name="Tree", iteration=1, previous_score=0.6)
 blender_refine_get_session(session_id="...")
 ```
 
-See [`docs/usage.md`](docs/usage.md) for a walkthrough.
+See [`docs/usage.md`](https://github.com/RFingAdam/meshwire/blob/main/docs/usage.md) for a walkthrough.
 
 ---
 
@@ -263,7 +260,7 @@ meshwire [--host HOST] [--port PORT]
   --port PORT   Blender addon port (default: 9876)
 ```
 
-The **MCP Server** tab in Blender's sidebar sets the socket port and starts or stops the server.
+The **Meshwire** tab in Blender's sidebar sets the socket port and starts or stops the server.
 
 ---
 
@@ -296,11 +293,11 @@ for cloud backends, or your models and VRAM for local ones. Follow a job with
 
 ## Documentation
 
-- **[Quick start](docs/index.md):** install through first call.
-- **[Tool reference](docs/tools.md):** tools grouped by stage.
-- **[Usage examples](docs/usage.md):** self-refinement, MSFS, and livery walkthroughs.
-- **[Architecture](docs/architecture.md):** how the server and addon fit together.
-- **[MSFS roadmap](docs/MSFS_ROADMAP.md):** planned MSFS workflow.
+- **[Quick start](https://github.com/RFingAdam/meshwire/blob/main/docs/index.md):** install through first call.
+- **[Tool reference](https://github.com/RFingAdam/meshwire/blob/main/docs/tools.md):** tools grouped by stage.
+- **[Usage examples](https://github.com/RFingAdam/meshwire/blob/main/docs/usage.md):** self-refinement, MSFS, and livery walkthroughs.
+- **[Architecture](https://github.com/RFingAdam/meshwire/blob/main/docs/architecture.md):** how the server and addon fit together.
+- **[MSFS roadmap](https://github.com/RFingAdam/meshwire/blob/main/docs/MSFS_ROADMAP.md):** planned MSFS workflow.
 
 ---
 
@@ -322,13 +319,13 @@ ruff format .
 python scripts/package_addon.py   # builds the addon ZIP
 ```
 
-Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Contributions are welcome. See [`CONTRIBUTING.md`](https://github.com/RFingAdam/meshwire/blob/main/CONTRIBUTING.md).
 
 ---
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE).
+[AGPL-3.0-or-later](https://github.com/RFingAdam/meshwire/blob/main/LICENSE).
 
 ## Trademarks
 
