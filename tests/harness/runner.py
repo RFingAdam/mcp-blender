@@ -1,6 +1,7 @@
 """Run harness cases inside Blender. Imports only stdlib, bpy and the addon."""
 
 import argparse
+import ctypes
 import json
 import os
 import socket
@@ -98,6 +99,10 @@ def main(argv):
             )
     # Blender's own teardown is not under test, and on 4.2 it crashes inside
     # Py_FinalizeEx. The driver reads the exit code, so leave without running it.
+    # os._exit skips C stdio cleanup, and Blender logs through C stdio, so flush it first.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    ctypes.CDLL(None).fflush(None)
     os._exit(0)
 
 
