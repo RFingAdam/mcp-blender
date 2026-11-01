@@ -115,8 +115,17 @@ def _extract_dominant_colors(
     width: int,
     height: int,
     num_colors: int = 8,
+    exclude_white: bool = False,
 ) -> list[dict]:
-    """Extract dominant colors from pixel data."""
+    """Extract dominant colors from pixel data.
+
+    With exclude_white, near-white samples (every channel in the top
+    quantization bucket, 240 and up) are dropped before the top colors are
+    chosen, so the palette still holds num_colors entries when it can.
+
+    Each entry's "percentage" is its share of the samples that were kept, not
+    of the whole image: with exclude_white the white samples are not counted.
+    """
     from collections import Counter
 
     # Sample pixels (every 10th pixel for performance)
@@ -130,6 +139,8 @@ def _extract_dominant_colors(
             r = (r // 16) * 16
             g = (g // 16) * 16
             b = (b // 16) * 16
+            if exclude_white and min(r, g, b) >= 240:
+                continue
             sample_colors.append((r, g, b))
 
     # Count occurrences
@@ -311,12 +322,14 @@ def _get_region_average(
 def extract_color_palette(
     image_path: str,
     num_colors: int = 8,
+    exclude_white: bool = True,
 ) -> dict[str, Any]:
     """Extract color palette from a livery image.
 
     Args:
         image_path: Path to image
         num_colors: Number of colors to extract
+        exclude_white: Drop white and near-white colors from the palette
 
     Returns:
         Dictionary with color palette
@@ -329,28 +342,37 @@ def extract_color_palette(
     width, height = img.size
     pixels = list(img.pixels)
 
-    colors = _extract_dominant_colors(pixels, width, height, num_colors)
+    colors = _extract_dominant_colors(
+        pixels, width, height, num_colors, exclude_white=exclude_white
+    )
 
     bpy.data.images.remove(img)
 
-    return {
+    result = {
         "image": str(path),
         "palette": colors,
         "count": len(colors),
     }
+    if exclude_white and not colors:
+        result["note"] = (
+            "Every sampled color was white or near-white and exclude_white is on, "
+            "so the palette is empty. Pass exclude_white=false to include white."
+        )
+    return result
 
 
 def map_design_elements(
     source_aircraft: str,
     target_aircraft: str,
-    elements: list[dict],
+    elements: list[dict | str] | None = None,
 ) -> dict[str, Any]:
     """Map design elements from source to target aircraft UV layout.
 
     Args:
         source_aircraft: Source aircraft ID
         target_aircraft: Target aircraft ID
-        elements: List of design elements to map
+        elements: Design elements to map, either dicts with a "type" key or
+            bare type names such as "cheatline". None maps every known type.
 
     Returns:
         Dictionary with mapping information
@@ -366,6 +388,19 @@ def map_design_elements(
     target_info = SUPPORTED_AIRCRAFT[target_aircraft]
 
     mapped_elements = []
+
+    if elements is None:
+        elements = list(DESIGN_ELEMENTS)
+    bad = [e for e in elements if not isinstance(e, (dict, str))]
+    if bad:
+        return {"error": f"elements must be type names or dicts, got {bad!r}"}
+    unknown = [e for e in elements if isinstance(e, str) and e not in DESIGN_ELEMENTS]
+    if unknown:
+        return {
+            "error": f"Unknown design element types: {unknown}. "
+            f"Known types: {sorted(DESIGN_ELEMENTS)}"
+        }
+    elements = [{"type": e} if isinstance(e, str) else e for e in elements]
 
     for element in elements:
         element_type = element.get("type", "unknown")
@@ -400,10 +435,12 @@ def map_design_elements(
 
 
 def transfer_livery(
-    source_image_path: str,
+    source_image: str,
     source_aircraft: str,
     target_aircraft: str,
-    output_path: str,
+    output_dir: str,
+    preserve_colors: bool = True,
+    preserve_text: bool = True,
     airline_name: str | None = None,
     use_ai_generation: bool = True,
 ) -> dict[str, Any]:
@@ -416,10 +453,12 @@ def transfer_livery(
     4. Generates new texture using AI (if enabled)
 
     Args:
-        source_image_path: Path to source livery texture
+        source_image: Path to source livery texture
         source_aircraft: Source aircraft ID
         target_aircraft: Target aircraft ID
-        output_path: Output path for generated texture
+        output_dir: Output directory for the transferred livery
+        preserve_colors: Ask the generator to keep the original colors
+        preserve_text: Ask the generator to keep text elements
         airline_name: Optional airline name for context
         use_ai_generation: Use AI to generate adapted texture
 
@@ -429,9 +468,9 @@ def transfer_livery(
     from .templates import SUPPORTED_AIRCRAFT
 
     # Validate inputs
-    source_path = Path(source_image_path)
+    source_path = Path(source_image)
     if not source_path.exists():
-        return {"error": f"Source image not found: {source_image_path}"}
+        return {"error": f"Source image not found: {source_image}"}
 
     if source_aircraft not in SUPPORTED_AIRCRAFT:
         return {"error": f"Unknown source aircraft: {source_aircraft}"}
@@ -439,7 +478,7 @@ def transfer_livery(
         return {"error": f"Unknown target aircraft: {target_aircraft}"}
 
     # Analyze source livery
-    analysis = analyze_livery(source_image_path, source_aircraft)
+    analysis = analyze_livery(source_image, source_aircraft)
     if "error" in analysis:
         return analysis
 
@@ -454,7 +493,9 @@ def transfer_livery(
         "source_image": str(source_path),
         "source_aircraft": source_aircraft,
         "target_aircraft": target_aircraft,
-        "output_path": output_path,
+        "output_dir": output_dir,
+        "preserve_colors": preserve_colors,
+        "preserve_text": preserve_text,
         "analysis": {
             "color_palette": analysis.get("color_palette", []),
             "detected_elements": analysis.get("detected_elements", []),
@@ -486,6 +527,11 @@ def transfer_livery(
         elements_desc = [e["type"] for e in analysis.get("detected_elements", [])]
         if elements_desc:
             ai_prompt += f"Design elements: {', '.join(elements_desc)}. "
+
+        if preserve_colors:
+            ai_prompt += "Keep the original colors. "
+        if preserve_text:
+            ai_prompt += "Keep text elements legible. "
 
         ai_prompt += "UV-mapped aircraft texture, professional airline livery."
 

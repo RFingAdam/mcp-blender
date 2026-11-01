@@ -242,6 +242,17 @@ def get_eevee_engine_name():
     return "BLENDER_EEVEE_NEXT" if IS_4_2_OR_LATER else "BLENDER_EEVEE"
 
 
+def set_material_shadow_hashed(mat) -> None:
+    """Use hashed shadows on a transparent material where Blender offers the setting.
+
+    ``Material.shadow_method`` survives in 4.2 but is gone from 4.5, where
+    shadow behaviour follows the material's render method instead. Detect the
+    property rather than compare versions.
+    """
+    if hasattr(mat, "shadow_method"):
+        mat.shadow_method = "HASHED"
+
+
 def get_compositor_node_mapping():
     """
     Get node type mappings for compositor nodes that changed between versions.

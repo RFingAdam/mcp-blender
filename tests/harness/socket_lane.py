@@ -455,6 +455,60 @@ def check_render_image_writes_file(ctx: Ctx) -> str:
     return f"wrote a {len(data)} byte {width}x{height} PNG"
 
 
+def check_msfs_uv_layout_writes_file(ctx: Ctx) -> str:
+    out = ctx.out_dir / "uv" / "lane_uv_layout.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.unlink(missing_ok=True)
+    ctx.conn.exec(MAKE_CUBE + "ob = make('LaneUvCube', 2.0, (30, 0, 0))\nob.data.uv_layers.new(name='UVMap')\n")
+    reply = ctx.conn.call(
+        "msfs_livery_export_uv_layout",
+        {"object_name": "LaneUvCube", "output_path": str(out), "resolution": [64, 64]},
+    )
+    if isinstance(reply, dict) and "error" in reply:
+        raise CheckFailed(f"export_uv_layout failed: {str(reply['error'])[:160]}")
+    if not out.exists():
+        raise CheckFailed("export_uv_layout replied but wrote no file")
+    try:
+        width, height = png_size(out.read_bytes())
+    except ValueError:
+        raise CheckFailed("export_uv_layout output is not a PNG") from None
+    if width != 64:
+        raise CheckFailed(f"PNG is {width}x{height}, asked for 64 px wide")
+    return f"wrote a {width}x{height} PNG"
+
+
+def check_msfs_paint_brush_after_setup(ctx: Ctx) -> str:
+    ctx.conn.exec(
+        MAKE_CUBE + "ob = make('LanePaintCube', 2.0, (40, 0, 0))\nob.data.uv_layers.new(name='UVMap')\n"
+    )
+    probe = (
+        "b = bpy.context.tool_settings.image_paint.brush\n"
+        "result = {'mode': bpy.context.mode, 'size': b.size, 'strength': b.strength,"
+        " 'color': list(b.color)} if b else {'mode': bpy.context.mode}\n"
+    )
+    try:
+        setup = ctx.conn.call(
+            "msfs_livery_setup_paint_mode",
+            {"object_name": "LanePaintCube", "texture_resolution": [64, 64]},
+        )
+        if isinstance(setup, dict) and "error" in setup:
+            raise CheckFailed(f"setup_paint_mode failed: {str(setup['error'])[:160]}")
+        reply = ctx.conn.call(
+            "msfs_livery_set_paint_brush",
+            {"size": 37, "strength": 0.42, "color": [0.1, 0.2, 0.3]},
+        )
+        if isinstance(reply, dict) and "error" in reply:
+            raise CheckFailed(f"set_paint_brush failed: {str(reply['error'])[:160]}")
+        got = ctx.conn.exec(probe)
+        if got.get("size") != 37 or abs(got.get("strength", -1) - 0.42) > 1e-4:
+            raise CheckFailed(f"brush did not change: {got}")
+        if [round(c, 3) for c in got["color"]] != [0.1, 0.2, 0.3]:
+            raise CheckFailed(f"brush colour did not change: {got}")
+    finally:
+        ctx.conn.exec("bpy.ops.object.mode_set(mode='OBJECT')\n")
+    return "brush size, strength and colour read back as set"
+
+
 def check_undo_reverts(ctx: Ctx) -> str:
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoA"})
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoB"})
@@ -516,6 +570,8 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
     ("mesh_knife_project_keeps_outside", check_mesh_knife_project_keeps_outside, CHECK_TIMEOUT),
     ("render_image_writes_file", check_render_image_writes_file, 120.0),
+    ("msfs_uv_layout_writes_file", check_msfs_uv_layout_writes_file, 60.0),
+    ("msfs_paint_brush_after_setup", check_msfs_paint_brush_after_setup, 60.0),
     ("undo_reverts", check_undo_reverts, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
     ("reply_16mb_complete", check_reply_16mb_complete, CHECK_TIMEOUT),

@@ -154,6 +154,9 @@ OVERRIDES.update(
         "export_stl": _over(filepath="{TMP}/out.stl"),
         "export_usd": _over(filepath="{TMP}/out.usd"),
         "msfs_export_model": _over(filepath="{TMP}/out.glb"),
+        "msfs_batch_export_lods": _over(base_name="Hull", output_dir="{TMP}/lods"),
+        "msfs_get_lod_info": _over(base_name="Hull"),
+        "msfs_setup_lod_distances": _over(base_name="Hull"),
         "boolean_op": _over(target="Cube", tool="Sphere", operation="UNION"),
     }
 )
@@ -179,6 +182,9 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "ai_generate_reference_image": "no AI backend is reachable offline",
     "ai_generate_texture": "no AI backend is reachable offline",
     "ai_generate_texture_sync": "no AI backend is reachable offline",
+    "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
+    "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the lane checks it in a GUI",
+    "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the lane check msfs_paint_brush_after_setup runs both",
     "sculpt_multires_reshape": "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
 }
 
