@@ -79,5 +79,4 @@ Maintainer may introduce a signature-tracking step (e.g. a CLA-assistant
 bot) later without changing these terms retroactively for Contributions
 already accepted.
 
-Questions about this Agreement: open an issue, or see the licensing summary at
-https://github.com/RFingAdam/eng-mcp-suite/blob/main/LICENSE_SUMMARY.md
+Questions about this Agreement: open an issue.

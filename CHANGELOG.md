@@ -8,12 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0]: 2026-05-13
 
 ### Changed
-- **License: MIT → AGPL-3.0-or-later.** Aligns with the eng-mcp-suite
-  toolkit-wide AGPL move. The underlying Blender application is GPL-3.0+
-  and is invoked at runtime by this wrapper without redistribution; the
-  wrapper's AGPL license is independent of Blender's GPL. See the
-  [LICENSE_SUMMARY](https://github.com/RFingAdam/eng-mcp-suite/blob/main/LICENSE_SUMMARY.md)
-  for the toolkit-wide rationale.
+- **License: MIT to AGPL-3.0-or-later.**
 
 ## [0.3.0] - 2026-03-25
 
@@ -116,7 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Total tool count increased from 97 to 100
-- Blend model files moved to `assets/generated/mototok/` and removed from git tracking
+- Blend model files removed from git tracking
 - Updated `.gitignore` to exclude generated assets and blend files
 
 ## [0.2.0] - 2025-02-05
