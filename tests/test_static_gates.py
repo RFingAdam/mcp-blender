@@ -25,10 +25,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ADDON_DIR = REPO_ROOT / "addon" / "blender_mcp_addon"
 BASELINE_PATH = Path(__file__).resolve().parent / "static_gate_baseline.json"
 
-# Attributes every handler object has that no mixin defines by name.
-_INHERITED_SELF_ATTRS = {"_handlers"}
-
-
 # ---------------------------------------------------------------------------
 # AST helpers
 # ---------------------------------------------------------------------------
@@ -159,7 +155,7 @@ def check_self_attributes(addon_dir: Path = ADDON_DIR) -> list[str]:
     ``self._bake_x()`` still raises AttributeError.
     """
     classes = _handler_classes(addon_dir)
-    defined = set(_INHERITED_SELF_ATTRS)
+    defined: set[str] = set()
     for _, cls in classes:
         defined |= _class_member_names(cls)
 
@@ -207,6 +203,27 @@ def _enclosing_symbols(tree: ast.Module):
     yield from visit(tree, ())
 
 
+def _call_arg(node: ast.Call, index: int, keyword: str) -> ast.expr | None:
+    """The argument at a position, or passed by keyword, or None."""
+    if index < len(node.args) and not isinstance(node.args[index], ast.Starred):
+        return node.args[index]
+    for kw in node.keywords:
+        if kw.arg == keyword:
+            return kw.value
+    return None
+
+
+def _validator_aliases(tree: ast.Module) -> dict[str, str]:
+    """Local alias -> validator name for ``from x import validate_enum as ve``."""
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.asname and alias.name in ("validate_enum", "validate_filepath"):
+                    out[alias.asname] = alias.name
+    return out
+
+
 def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
     """``validate_enum`` with name/allowed swapped, ``validate_filepath`` without name.
 
@@ -217,13 +234,20 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
     out: list[str] = []
     for path in _python_files(addon_dir):
         rel = _rel(path, addon_dir)
-        for node, symbol in _enclosing_symbols(_parse(path)):
+        tree = _parse(path)
+        aliases = _validator_aliases(tree)
+        for node, symbol in _enclosing_symbols(tree):
             if not isinstance(node, ast.Call):
                 continue
             fname = _called_name(node)
-            kwargs = {k.arg for k in node.keywords if k.arg}
-            if fname == "validate_enum" and len(node.args) >= 3:
-                name_arg, allowed_arg = node.args[1], node.args[2]
+            if isinstance(node.func, ast.Name):
+                fname = aliases.get(fname, fname)
+            if fname == "validate_enum":
+                value = _call_arg(node, 0, "value")
+                name_arg = _call_arg(node, 1, "name")
+                allowed_arg = _call_arg(node, 2, "allowed")
+                if name_arg is None or allowed_arg is None:
+                    continue
                 if isinstance(name_arg, (ast.List, ast.Tuple)) or (
                     _const_str(allowed_arg) is not None
                 ):
@@ -233,15 +257,18 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
                             for a in (allowed_arg, name_arg)
                             if _const_str(a) is not None
                         ),
-                        ast.unparse(node.args[0]),
+                        ast.unparse(value) if value is not None else "?",
                     )
                     out.append(f"{rel}::{symbol}: validate_enum swapped: {label}")
             elif fname == "validate_filepath":
-                has_star = any(isinstance(a, ast.Starred) for a in node.args)
-                if len(node.args) < 2 and "name" not in kwargs and not has_star:
+                has_star = any(isinstance(a, ast.Starred) for a in node.args) or any(
+                    k.arg is None for k in node.keywords
+                )
+                if _call_arg(node, 1, "name") is None and not has_star:
+                    value = _call_arg(node, 0, "value")
                     out.append(
                         f"{rel}::{symbol}: validate_filepath missing name: "
-                        f"{ast.unparse(node.args[0]) if node.args else '?'}"
+                        f"{ast.unparse(value) if value is not None else '?'}"
                     )
     return sorted(out)
 
@@ -395,16 +422,19 @@ def _write_baseline() -> None:
         print(f"{name}: {len(found)}")
 
 
+def _diff(expected: list[str], actual: list[str]) -> tuple[list[str], list[str]]:
+    """Return (new, stale) entries as multisets, so count changes show up."""
+    exp, act = Counter(expected), Counter(actual)
+    return sorted((act - exp).elements()), sorted((exp - act).elements())
+
+
 @pytest.mark.parametrize("name", sorted(CHECKS))
 def test_against_baseline(name):
-    expected = Counter(_load_baseline()[name])
-    actual = Counter(CHECKS[name]())
-    new = sorted((actual - expected).elements())
-    stale = sorted((expected - actual).elements())
+    new, stale = _diff(_load_baseline()[name], CHECKS[name]())
     assert not new, f"{name}: new violations (fix them):\n  " + "\n  ".join(new)
     assert not stale, (
-        f"{name}: baseline entries no longer occur or occur fewer times (remove them from "
-        f"static_gate_baseline.json):\n  " + "\n  ".join(stale)
+        f"{name}: baseline entries no longer occur or occur fewer times "
+        f"(remove them from static_gate_baseline.json):\n  " + "\n  ".join(stale)
     )
 
 
@@ -538,10 +568,52 @@ def test_fixture_tool_handler_parity(tmp_path):
     ]
 
 
-def test_parity_baseline_has_expected_toolless_handlers():
-    """ping and the ai_* handlers are the only ones without a tool."""
-    found = [v for v in check_tool_handler_parity() if v.startswith("handler without")]
-    assert len(found) == 8
+def test_fixture_validator_keyword_and_aliased_calls(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "a.py": "from ..validation import validate_enum as ve, validate_filepath as vf\n"
+            "from ..validation import validate_enum\n"
+            "def f(v):\n"
+            "    validate_enum(v, name='mode', allowed='ABC')\n"
+            "    validate_enum(v, allowed='mode', name=['A'])\n"
+            "    validate_enum(v, name='mode', allowed=['A'])\n"
+            "    ve(v, ['A'], 'size')\n"
+            "    ve(v, 'size', ['A'])\n"
+            "    vf(v)\n"
+            "    vf(v, name='path')\n",
+        },
+    )
+    assert check_validator_calls(addon) == [
+        "addon/pkg/a.py::f: validate_enum swapped: 'ABC'",
+        "addon/pkg/a.py::f: validate_enum swapped: 'mode'",
+        "addon/pkg/a.py::f: validate_enum swapped: 'size'",
+        "addon/pkg/a.py::f: validate_filepath missing name: v",
+    ]
+
+
+def test_fixture_self_attributes_accepts_defined_members(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": "",
+            "handlers/a.py": "class A:\n"
+            "    def __init__(self):\n        self._made = 1\n"
+            "    @property\n    def _prop(self):\n        return 1\n"
+            "    def run(self):\n"
+            "        return self._made, self._prop, self._other()\n",
+            "handlers/b.py": "class B:\n    def _other(self):\n        pass\n",
+        },
+    )
+    assert check_self_attributes(addon) == []
+
+
+def test_diff_reports_new_stale_and_count_changes():
+    assert _diff(["a", "b"], ["a", "b"]) == ([], [])
+    assert _diff(["a"], ["a", "b"]) == (["b"], [])
+    assert _diff(["a", "b"], ["a"]) == ([], ["b"])
+    assert _diff(["a"], ["a", "a"]) == (["a"], [])
+    assert _diff(["a", "a"], ["a"]) == ([], ["a"])
 
 
 if __name__ == "__main__":
