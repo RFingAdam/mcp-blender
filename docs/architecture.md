@@ -47,7 +47,7 @@ mcp-blender/
 │   ├── __init__.py               ← addon registration + UI
 │   ├── socket_server.py          ← TCP server (bpy.app.timers)
 │   ├── handlers/                 ← 218 command dispatchers (20-file pkg)
-│   ├── compat.py                 ← Blender 4.2 / 5.0 compatibility
+│   ├── compat.py                 ← Blender version compatibility
 │   ├── validation.py             ← parameter validation
 │   ├── utils.py                  ← shared utilities
 │   ├── external/                 ← integrations
