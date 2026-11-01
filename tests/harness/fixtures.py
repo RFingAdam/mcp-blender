@@ -189,7 +189,6 @@ SOFT_FAIL_DEFECTS: dict[str, str] = {
     "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects; SMART fails to decode a file on 4.5",
     "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
     "mesh_knife_project": "the modifier is disabled, so the apply is skipped",
-    "material_preview_render": "5.2 has no BLENDER_EEVEE_NEXT engine enum",
     "ai_texture_from_render": "5.2 fails to render the depth and normal passes",
 }
 

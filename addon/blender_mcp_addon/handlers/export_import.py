@@ -157,7 +157,7 @@ class ExportImportHandlersMixin:
             ".glb": lambda: bpy.ops.import_scene.gltf(filepath=filepath),
             ".fbx": lambda: bpy.ops.import_scene.fbx(filepath=filepath),
             ".obj": lambda: bpy.ops.wm.obj_import(filepath=filepath),
-            ".stl": lambda: bpy.ops.import_mesh.stl(filepath=filepath),
+            ".stl": lambda: bpy.ops.wm.stl_import(filepath=filepath),
             ".dae": lambda: bpy.ops.wm.collada_import(filepath=filepath),
             ".abc": lambda: bpy.ops.wm.alembic_import(filepath=filepath),
             ".usd": lambda: bpy.ops.wm.usd_import(filepath=filepath),
