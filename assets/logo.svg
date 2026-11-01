@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Meshwire logo: a wireframe cube with one wire leading to a node">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M196 124V304M196 304H376M196 304L124 376" stroke="#2DD4BF" stroke-width="10" stroke-dasharray="4 20" opacity=".55"/>
+    <path d="M124 196H304V376H124Z" stroke="#2DD4BF" stroke-width="16"/>
+    <path d="M124 196L196 124H376L304 196M376 124V304L304 376" stroke="#2DD4BF" stroke-width="16"/>
+    <path d="M304 376C352 376 366 432 420 432" stroke="#FBBF24" stroke-width="16"/>
+  </g>
+  <g fill="#F8FAFC">
+    <circle cx="124" cy="196" r="17"/>
+    <circle cx="304" cy="196" r="17"/>
+    <circle cx="124" cy="376" r="17"/>
+    <circle cx="304" cy="376" r="17"/>
+    <circle cx="196" cy="124" r="17"/>
+    <circle cx="376" cy="124" r="17"/>
+    <circle cx="376" cy="304" r="17"/>
+  </g>
+  <circle cx="432" cy="432" r="26" fill="#FBBF24"/>
+</svg>
