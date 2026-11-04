@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Five of the six baking tools never worked.** `bake_pbr_batch`, `bake_highpoly_to_lowpoly`,
+  `bake_from_multires`, `bake_to_vertex_colors` and `bake_id_map` called eight `_bake_*`
+  helpers that were never written, so each raised `AttributeError` once past argument
+  checks. The helpers now exist. The target image node and the emission wiring that
+  `METALLIC` and `DISPLACEMENT` bake through are tracked as they are added and removed
+  in a `finally`, including when the bake raises. A material is left with the same
+  nodes, links, socket values, selection, active node and active Material Output
+  (including a Cycles-only output) it had; this is checked on a linked and an unlinked
+  Metallic socket, a displacement chain, a shared material and a multi-slot object, on
+  Blender 4.2, 4.5 and 5.2. The render engine, the bake settings and the object
+  selection are also put back after each bake, which they were not. A setting that cannot be
+  put back, such as an add-on render engine that is no longer installed, is named in
+  `warnings`. `bake_id_map` now
+  restores material slots and face material indices in every colour mode. An object
+  with no node material gets a clear error from `bake_pbr_batch`; the other tools add a
+  temporary material and remove it again. A bake that writes no file, including
+  `channels: []`, returns an error rather than `success`, and empty material slots are
+  named in a `warnings` entry. `bake_from_multires` called an operator that rejects its
+  map types; it now uses the multires baker, and bakes to level 0 when the modifier is
+  at its top level, since a level baked to itself carries no displacement.
+  `bake_highpoly_to_lowpoly` now lists the `normal_space` parameter it already read.
+  `bake_curvature` never called the helpers and is unchanged.
 - **All 38 `msfs_*` tools failed on every call.** `handlers/msfs.py` imported
   `from .msfs`, which resolves to the handler module itself, so each call raised an
   ImportError or "not a package". It now imports the `msfs` package. These tools

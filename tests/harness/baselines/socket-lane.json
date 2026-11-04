@@ -1,5 +1,12 @@
 {
   "4.5": {
+    "bake_id_map_restores_slots": "PASS",
+    "bake_leaves_material_clean": "PASS",
+    "bake_multires_writes_image": "PASS",
+    "bake_odd_materials": "PASS",
+    "bake_pbr_writes_image": "PASS",
+    "bake_tricks_leave_material_clean": "PASS",
+    "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
     "malformed_json_error_reply": "PASS",
     "mesh_knife_project_keeps_outside": "FAIL",
@@ -11,6 +18,13 @@
     "undo_reverts": "FAIL"
   },
   "5.2": {
+    "bake_id_map_restores_slots": "PASS",
+    "bake_leaves_material_clean": "PASS",
+    "bake_multires_writes_image": "PASS",
+    "bake_odd_materials": "PASS",
+    "bake_pbr_writes_image": "PASS",
+    "bake_tricks_leave_material_clean": "PASS",
+    "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
     "malformed_json_error_reply": "PASS",
     "mesh_knife_project_keeps_outside": "FAIL",

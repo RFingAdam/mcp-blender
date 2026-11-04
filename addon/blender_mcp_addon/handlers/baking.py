@@ -1,9 +1,11 @@
 """Texture baking command handlers."""
 
+import functools
 import os
 
 import bpy
 
+from .. import compat
 from ..validation import (
     require_param,
 )
@@ -14,10 +16,515 @@ from ._helpers import (
     _bake_ensure_cycles,
 )
 
+_BAKE_FORMATS = ("PNG", "TARGA", "OPEN_EXR")
+
+
+def _restores_scene(handler):
+    """Put back the scene settings a bake handler changes, and report any that could not be.
+
+    The restore runs after the handler returns or raises, so after its own material cleanup.
+    A setting that cannot be put back, such as an add-on render engine that is no longer
+    available, is named in the result's ``warnings`` instead of being left changed silently.
+    """
+
+    @functools.wraps(handler)
+    def wrapper(self, params):
+        state = self._bake_capture_scene()
+        try:
+            result = handler(self, params)
+        except BaseException:
+            unrestored = self._bake_restore_scene(state)
+            if unrestored:
+                print(f"Meshwire: bake could not restore {', '.join(unrestored)}")
+            raise
+        unrestored = self._bake_restore_scene(state)
+        if unrestored and isinstance(result, dict):
+            result.setdefault("warnings", []).append(
+                "Could not restore scene settings after the bake: " + ", ".join(unrestored)
+            )
+        return result
+
+    return wrapper
+
 
 class BakingHandlersMixin:
     """Mixin for texture baking handlers."""
 
+    # =================================================================
+    # Bake helpers
+    #
+    # Baking needs a target Image Texture node in every material on the object, and
+    # the metallic and displacement channels bake through a temporary emission
+    # output. Both rewire the user's material, so every helper records exactly what
+    # it added or flipped and undoes only that. Nothing is found by a name a user
+    # could also use.
+    # =================================================================
+
+    def _bake_materials(self, obj) -> list:
+        """Unique materials on ``obj`` that have a node tree, in slot order.
+
+        Empty slots and materials without nodes are skipped, and a material shared
+        by several slots is listed once.
+        """
+        found = []
+        seen = set()
+        for slot in obj.material_slots:
+            mat = slot.material
+            if mat is None or mat.node_tree is None:
+                continue
+            if mat.as_pointer() in seen:
+                continue
+            seen.add(mat.as_pointer())
+            found.append(mat)
+        return found
+
+    def _bake_material_problem(self, obj) -> str | None:
+        """Why ``obj`` cannot be baked, or None when at least one material can take a target."""
+        if not obj.material_slots:
+            return f"Object '{obj.name}' has no material. Add a material before baking."
+        if not self._bake_materials(obj):
+            return (
+                f"Object '{obj.name}' has no material with nodes (empty slots or "
+                "materials that do not use nodes). Assign a node material before baking."
+            )
+        return None
+
+    def _bake_ensure_target_material(self, obj):
+        """Give ``obj`` a throwaway material if it has no usable one.
+
+        Returns an opaque token for ``_bake_drop_target_material``, or None when
+        the object already had a node material and nothing was changed.
+        """
+        if self._bake_materials(obj):
+            return None
+        if any(slot.material is not None for slot in obj.material_slots):
+            # A material exists but has no node tree: do not rewrite it.
+            return None
+        mat = bpy.data.materials.new(name=f"{obj.name}_BakeMat")
+        try:
+            mat.use_nodes = True
+            if len(obj.material_slots) == 0:
+                obj.data.materials.append(mat)
+                return (mat, 0, True)
+            obj.material_slots[0].material = mat
+            return (mat, 0, False)
+        except BaseException:
+            # No token will reach the caller, so nothing else would remove it.
+            bpy.data.materials.remove(mat)
+            raise
+
+    def _bake_drop_target_material(self, obj, token) -> None:
+        """Undo ``_bake_ensure_target_material``."""
+        if token is None:
+            return
+        mat, index, appended = token
+        try:
+            if appended:
+                # The object had no slots at all, so clearing restores it exactly.
+                obj.data.materials.clear()
+            else:
+                obj.material_slots[index].material = None
+        finally:
+            bpy.data.materials.remove(mat)
+
+    @staticmethod
+    def _bake_empty_slot_warnings(obj) -> list:
+        """Warn about slots that cannot take a bake target, so a blank region is explained."""
+        empty = [
+            i
+            for i, slot in enumerate(obj.material_slots)
+            if slot.material is None or slot.material.node_tree is None
+        ]
+        if not empty:
+            return []
+        return [
+            f"Material slots {empty} on '{obj.name}' have no material with nodes, "
+            "so faces using them are blank in the baked maps."
+        ]
+
+    @staticmethod
+    def _bake_settable(owner, only=None) -> list:
+        """Names of plain (non-pointer) writable properties on ``owner``."""
+        return [
+            prop.identifier
+            for prop in owner.bl_rna.properties
+            if not prop.is_readonly
+            and prop.type != "POINTER"
+            and prop.identifier != "rna_type"
+            and (only is None or only(prop.identifier))
+        ]
+
+    def _bake_capture_scene(self) -> dict:
+        """Record what baking changes outside materials: engine, every bake setting, selection.
+
+        Handlers get this through ``_restores_scene``, which passes it to ``_bake_restore_scene``.
+        """
+        scene = bpy.context.scene
+        owners = [
+            ("render", scene.render, self._bake_settable(scene.render, lambda n: n == "engine" or "bake" in n)),
+            ("render.bake", scene.render.bake, self._bake_settable(scene.render.bake)),
+        ]
+        if hasattr(scene, "cycles"):
+            owners.append(("cycles", scene.cycles, ["samples"]))
+        values = []
+        for label, owner, names in owners:
+            for name in names:
+                value = getattr(owner, name)
+                if isinstance(value, set):
+                    value = set(value)
+                elif hasattr(value, "__len__") and not isinstance(value, str):
+                    value = tuple(value)
+                values.append((owner, label, name, value))
+        layer = bpy.context.view_layer
+        return {
+            "values": values,
+            "selected": [o for o in layer.objects if o.select_get()],
+            "active": layer.objects.active,
+        }
+
+    def _bake_restore_scene(self, state: dict) -> list:
+        """Put back what ``_bake_capture_scene`` recorded. One failure does not skip the rest.
+
+        Returns each setting that could not be put back, as ``"render.engine (LUXCORE)"``.
+        """
+        unrestored = []
+        for owner, label, name, value in state["values"]:
+            try:
+                setattr(owner, name, value)
+            except (AttributeError, TypeError, ValueError, RuntimeError, ReferenceError):
+                unrestored.append(f"{label}.{name} ({value})")
+        layer = bpy.context.view_layer
+        keep = state["selected"]
+        for obj in layer.objects:
+            try:
+                obj.select_set(obj in keep)
+            except (RuntimeError, ReferenceError):
+                pass
+        try:
+            layer.objects.active = state["active"]
+        except (RuntimeError, ReferenceError):
+            pass
+        return unrestored
+
+    def _bake_release(self, obj, image) -> None:
+        """Remove this tool's image nodes from ``obj``, then the image, even if the first step raises."""
+        try:
+            self._bake_cleanup_image_nodes(obj)
+        finally:
+            if image is not None:
+                bpy.data.images.remove(image)
+
+    def _bake_finish_channel(self, obj, image, config: dict, restore_info) -> None:
+        """Undo one channel's trick, image nodes and image. Every step runs even if an earlier one raises."""
+        try:
+            if restore_info is not None:
+                if config.get("metallic_trick"):
+                    self._bake_restore_metallic_trick(restore_info)
+                elif config.get("displacement_trick"):
+                    self._bake_restore_displacement_trick(restore_info)
+        finally:
+            self._bake_release(obj, image)
+
+    def _bake_snapshot_slots(self, obj) -> dict:
+        """Record material slots and face material indices so they can be put back."""
+        mesh = obj.data
+        slots = list(obj.material_slots)
+        return {
+            "data": list(mesh.materials),
+            "links": [s.link for s in slots],
+            "object": [s.material if s.link == "OBJECT" else None for s in slots],
+            "indices": [p.material_index for p in mesh.polygons],
+        }
+
+    def _bake_restore_slots(self, obj, snap: dict) -> None:
+        mesh = obj.data
+        mesh.materials.clear()
+        for mat in snap["data"]:
+            mesh.materials.append(mat)
+        for slot, link, mat in zip(obj.material_slots, snap["links"], snap["object"]):
+            if link == "OBJECT":
+                slot.link = "OBJECT"
+                slot.material = mat
+        indices = snap["indices"]
+        if len(indices) == len(mesh.polygons):
+            for poly, index in zip(mesh.polygons, indices):
+                poly.material_index = index
+        mesh.update()
+
+    def _bake_create_image(self, name: str, resolution: int, color_space: str):
+        """Create the bake target image. The caller removes it."""
+        image = bpy.data.images.new(name, int(resolution), int(resolution), alpha=False)
+        try:
+            image.colorspace_settings.name = color_space
+        except TypeError:
+            bpy.data.images.remove(image)
+            raise ValueError(f"Unknown color space '{color_space}'") from None
+        return image
+
+    def _bake_tracked(self) -> list:
+        if not hasattr(self, "_bake_added_nodes"):
+            self._bake_added_nodes = []
+        return self._bake_added_nodes
+
+    def _bake_set_active_image_node(self, obj, image) -> None:
+        """Add an Image Texture node showing ``image`` to each material on ``obj``.
+
+        The node is selected and active, as Cycles requires. What was selected and
+        active before is recorded so ``_bake_cleanup_image_nodes`` can put it back.
+        """
+        mats = self._bake_materials(obj)
+        if not mats:
+            raise ValueError(
+                self._bake_material_problem(obj) or f"Object '{obj.name}' has no material to bake onto"
+            )
+        for mat in mats:
+            nodes = mat.node_tree.nodes
+            entry = {
+                "obj": obj.as_pointer(),
+                "tree": mat.node_tree,
+                "node": None,
+                "active": nodes.active,
+                "selected": [(n, n.select) for n in nodes],
+                "outputs": self._bake_output_states(mat.node_tree),
+            }
+            self._bake_tracked().append(entry)
+            node = nodes.new("ShaderNodeTexImage")
+            entry["node"] = node
+            node.image = image
+            for other in nodes:
+                other.select = False
+            node.select = True
+            nodes.active = node
+
+    def _bake_cleanup_image_nodes(self, obj) -> None:
+        """Remove the nodes ``_bake_set_active_image_node`` added for ``obj`` and restore selection."""
+        tracked = self._bake_tracked()
+        mine = [e for e in tracked if e["obj"] == obj.as_pointer()]
+        tracked[:] = [e for e in tracked if e["obj"] != obj.as_pointer()]
+        first = None
+        for entry in reversed(mine):
+            try:
+                self._bake_undo_entry(entry)
+            except Exception as exc:  # finish the rest, then report the first
+                first = first or exc
+        if first is not None:
+            raise first
+
+    @staticmethod
+    def _bake_output_states(tree) -> list:
+        """Each Material Output in ``tree`` with whether it is the active one."""
+        return [(n, n.is_active_output) for n in tree.nodes if n.type == "OUTPUT_MATERIAL"]
+
+    @staticmethod
+    def _bake_reactivate(outputs: list) -> None:
+        """Re-activate the outputs that were active.
+
+        Activating an output deactivates the ones it conflicts with, so only the
+        active ones are set. Every one is tried; the first error is re-raised.
+        """
+        first = None
+        for node, active in outputs:
+            if not active:
+                continue
+            try:
+                node.is_active_output = True
+            except ReferenceError:
+                pass
+            except Exception as exc:
+                first = first or exc
+        if first is not None:
+            raise first
+
+    @staticmethod
+    def _bake_undo_entry(entry: dict) -> None:
+        """Remove the node, then restore selection and the active node. Each step runs regardless."""
+        first = None
+        tree = entry["tree"]
+        try:
+            nodes = tree.nodes
+            node = entry["node"]
+            if node is not None:
+                try:
+                    nodes.remove(node)
+                except (ReferenceError, RuntimeError):
+                    pass  # already gone
+            for other, selected in entry["selected"]:
+                try:
+                    other.select = selected
+                except ReferenceError:
+                    pass
+                except Exception as exc:
+                    first = first or exc
+            try:
+                nodes.active = entry["active"]
+            except ReferenceError:
+                pass
+            except Exception as exc:
+                first = first or exc
+            # Removing a node makes Blender re-pick the active Material Output, which
+            # can switch a Cycles-only output off. Put the original choice back.
+            try:
+                BakingHandlersMixin._bake_reactivate(entry["outputs"])
+            except Exception as exc:
+                first = first or exc
+        except ReferenceError:
+            return  # the material itself is gone, nothing left to restore
+        except Exception as exc:
+            first = first or exc
+        if first is not None:
+            raise first
+
+    def _bake_save_image(self, image, filepath: str, output_format: str) -> None:
+        """Write ``image`` to ``filepath``. Raises if no file results."""
+        if output_format not in _BAKE_FORMATS:
+            raise ValueError(f"Unsupported output format '{output_format}'")
+        image.file_format = output_format
+        image.filepath_raw = filepath
+        image.save()
+        if not os.path.isfile(filepath):
+            raise RuntimeError(f"Image was not written to {filepath}")
+
+    # --- metallic and displacement tricks ------------------------------------
+    #
+    # Metallic and displacement have no bake pass of their own, so they are baked
+    # as emission. Each trick adds an Emission node and a second Material Output
+    # (target Cycles) that is made active, so the material's own links and socket
+    # values are never touched. Restoring removes the added nodes and re-activates
+    # the outputs that were active. If applying fails partway it undoes itself before raising.
+
+    def _bake_emission_trick(self, obj, source) -> list:
+        mats = self._bake_materials(obj)
+        if not mats:
+            raise ValueError(
+                self._bake_material_problem(obj) or f"Object '{obj.name}' has no material with nodes"
+            )
+        info = []
+        try:
+            for mat in mats:
+                tree = mat.node_tree
+                entry = {
+                    "tree": tree,
+                    "added": [],
+                    "outputs": self._bake_output_states(tree),
+                }
+                info.append(entry)
+                emit = tree.nodes.new("ShaderNodeEmission")
+                entry["added"].append(emit)
+                # Read the user's wiring before our own output exists.
+                source(tree, emit)
+                out = tree.nodes.new("ShaderNodeOutputMaterial")
+                entry["added"].append(out)
+                # Baking always runs Cycles, which prefers an active output aimed at it
+                # over one aimed at all renderers, so aim ours at Cycles.
+                out.target = "CYCLES"
+                tree.links.new(emit.outputs[0], out.inputs["Surface"])
+                out.is_active_output = True
+            return info
+        except Exception:
+            self._bake_undo_trick(info)
+            raise
+
+    @staticmethod
+    def _bake_undo_trick(info: list) -> None:
+        """Remove the added nodes and re-activate the outputs that were active.
+
+        Every entry is finished even if one step raises; the first error is re-raised.
+        """
+        first = None
+        for entry in reversed(info):
+            tree = entry["tree"]
+            for node in reversed(entry["added"]):
+                try:
+                    tree.nodes.remove(node)
+                except (ReferenceError, RuntimeError):
+                    pass  # already gone
+                except Exception as exc:
+                    first = first or exc
+            try:
+                BakingHandlersMixin._bake_reactivate(entry["outputs"])
+            except Exception as exc:
+                first = first or exc
+        if first is not None:
+            raise first
+
+    @staticmethod
+    def _bake_feed_emission(tree, emit, socket, fallback: float) -> None:
+        """Drive the emission colour from ``socket``'s link or default, else ``fallback``."""
+        if socket is not None and socket.is_linked:
+            tree.links.new(socket.links[0].from_socket, emit.inputs["Color"])
+            return
+        value = fallback
+        if socket is not None:
+            value = socket.default_value
+        emit.inputs["Color"].default_value = (value, value, value, 1.0)
+
+    @staticmethod
+    def _bake_active_output(tree):
+        """The Material Output Cycles would use: an active Cycles-target one, else any active one."""
+        active = [n for n in tree.nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output]
+        for target in ("CYCLES", "ALL"):
+            for node in active:
+                if node.target == target:
+                    return node
+        return active[0] if active else None
+
+    def _bake_surface_node(self, tree, node_type: str):
+        """The node feeding the active output's Surface if it is ``node_type``, else the first of that type."""
+        out = self._bake_active_output(tree)
+        if out is not None and out.inputs["Surface"].is_linked:
+            node = out.inputs["Surface"].links[0].from_node
+            if node.type == node_type:
+                return node
+        return next((n for n in tree.nodes if n.type == node_type), None)
+
+    def _bake_apply_metallic_trick(self, obj) -> list:
+        """Make the Metallic value bake as emission. Returns the info for the restore."""
+        socket_name = compat.get_principled_bsdf_inputs()["metallic"]
+
+        def source(tree, emit):
+            bsdf = self._bake_surface_node(tree, "BSDF_PRINCIPLED")
+            socket = bsdf.inputs.get(socket_name) if bsdf is not None else None
+            self._bake_feed_emission(tree, emit, socket, 0.0)
+
+        return self._bake_emission_trick(obj, source)
+
+    def _bake_restore_metallic_trick(self, restore_info: list) -> None:
+        self._bake_undo_trick(restore_info)
+
+    def _bake_apply_displacement_trick(self, obj) -> list:
+        """Make the Displacement height bake as emission. Returns the info for the restore.
+
+        A material with no displacement bakes the neutral height, 0.5.
+        """
+
+        def source(tree, emit):
+            socket = None
+            out = self._bake_active_output(tree)
+            link_in = out.inputs.get("Displacement") if out is not None else None
+            if link_in is not None and link_in.is_linked:
+                node = link_in.links[0].from_node
+                if node.type == "DISPLACEMENT":
+                    socket = node.inputs["Height"]
+                else:
+                    tree.links.new(link_in.links[0].from_socket, emit.inputs["Color"])
+                    return
+            self._bake_feed_emission(tree, emit, socket, 0.5)
+
+        return self._bake_emission_trick(obj, source)
+
+    def _bake_restore_displacement_trick(self, restore_info: list) -> None:
+        self._bake_undo_trick(restore_info)
+
+    @staticmethod
+    def _bake_nothing_written(channels, errors: dict) -> dict:
+        """The error for a bake that produced no file, whatever the reason."""
+        if errors:
+            return {"error": "No channel was baked", "errors": errors}
+        if not channels:
+            return {"error": "No channels were requested, so nothing was baked"}
+        return {"error": "Nothing was baked"}
+
+    @_restores_scene
     def _handle_bake_pbr_batch(self, params: dict) -> dict:
         """Bake all requested PBR channels in one call."""
 
@@ -45,6 +552,10 @@ class BakingHandlersMixin:
         if not obj.data.uv_layers:
             return {"error": f"Object '{object_name}' has no UV map. Unwrap first."}
 
+        problem = self._bake_material_problem(obj)
+        if problem:
+            return {"error": problem}
+
         # Ensure output dir exists
         os.makedirs(output_dir, exist_ok=True)
 
@@ -71,10 +582,11 @@ class BakingHandlersMixin:
             color_space = config.get("color_space", "sRGB")
             img_name = f"__bake_{channel}__"
             image = self._bake_create_image(img_name, resolution, color_space)
-            self._bake_set_active_image_node(obj, image)
 
             restore_info = None
             try:
+                self._bake_set_active_image_node(obj, image)
+
                 # Apply tricks if needed
                 if config.get("metallic_trick"):
                     restore_info = self._bake_apply_metallic_trick(obj)
@@ -109,16 +621,10 @@ class BakingHandlersMixin:
             except Exception as e:
                 errors[channel] = str(e)
             finally:
-                # Restore tricks
-                if restore_info is not None:
-                    if config.get("metallic_trick"):
-                        self._bake_restore_metallic_trick(restore_info)
-                    elif config.get("displacement_trick"):
-                        self._bake_restore_displacement_trick(restore_info)
+                self._bake_finish_channel(obj, image, config, restore_info)
 
-                # Cleanup
-                self._bake_cleanup_image_nodes(obj)
-                bpy.data.images.remove(image)
+        if not baked_files:
+            return self._bake_nothing_written(channels, errors)
 
         result = {
             "success": True,
@@ -129,6 +635,9 @@ class BakingHandlersMixin:
         }
         if errors:
             result["errors"] = errors
+        warnings = self._bake_empty_slot_warnings(obj)
+        if warnings:
+            result["warnings"] = warnings
         return result
 
     # =================================================================
@@ -137,6 +646,7 @@ class BakingHandlersMixin:
     # =================================================================
 
 
+    @_restores_scene
     def _handle_bake_highpoly_to_lowpoly(self, params: dict) -> dict:
         """Bake detail from high-poly onto low-poly using selected_to_active."""
 
@@ -151,6 +661,7 @@ class BakingHandlersMixin:
         output_format = params.get("output_format", "PNG")
         margin = int(params.get("margin", 16))
         samples = int(params.get("samples", 128))
+        normal_space = params.get("normal_space", "TANGENT")
 
         # Validate objects
         lowpoly = bpy.data.objects.get(lowpoly_name)
@@ -168,14 +679,47 @@ class BakingHandlersMixin:
         if not lowpoly.data.uv_layers:
             return {"error": f"Low-poly object '{lowpoly_name}' has no UV map. Unwrap first."}
 
-        # Ensure lowpoly has at least one material (needed for bake target node)
-        if len(lowpoly.material_slots) == 0:
-            mat = bpy.data.materials.new(name=f"{lowpoly_name}_BakeMat")
-            mat.use_nodes = True
-            lowpoly.data.materials.append(mat)
-
         os.makedirs(output_dir, exist_ok=True)
 
+        # The low-poly needs a material to hold the bake target node. One that is
+        # added here is removed again before returning.
+        target_token = None
+        try:
+            target_token = self._bake_ensure_target_material(lowpoly)
+            problem = self._bake_material_problem(lowpoly)
+            if problem:
+                return {"error": problem}
+            return self._bake_highpoly_channels(
+                lowpoly=lowpoly,
+                highpoly=highpoly,
+                output_dir=output_dir,
+                channels=channels,
+                resolution=resolution,
+                cage_extrusion=cage_extrusion,
+                output_prefix=output_prefix,
+                output_format=output_format,
+                margin=margin,
+                samples=samples,
+                normal_space=normal_space,
+            )
+        finally:
+            self._bake_drop_target_material(lowpoly, target_token)
+
+    def _bake_highpoly_channels(
+        self,
+        *,
+        lowpoly,
+        highpoly,
+        output_dir,
+        channels,
+        resolution,
+        cage_extrusion,
+        output_prefix,
+        output_format,
+        margin,
+        samples,
+        normal_space,
+    ) -> dict:
         # Switch to Cycles
         _bake_ensure_cycles()
         bpy.context.scene.cycles.samples = samples
@@ -205,10 +749,11 @@ class BakingHandlersMixin:
             color_space = config.get("color_space", "sRGB")
             img_name = f"__bake_hp2lp_{channel}__"
             image = self._bake_create_image(img_name, resolution, color_space)
-            self._bake_set_active_image_node(lowpoly, image)
 
             restore_info = None
             try:
+                self._bake_set_active_image_node(lowpoly, image)
+
                 if config.get("metallic_trick"):
                     restore_info = self._bake_apply_metallic_trick(highpoly)
                 elif config.get("displacement_trick"):
@@ -222,7 +767,7 @@ class BakingHandlersMixin:
                     bpy.context.scene.render.bake.use_pass_color = True
 
                 if channel == "NORMAL":
-                    bpy.context.scene.render.bake.normal_space = params.get("normal_space", "TANGENT")
+                    bpy.context.scene.render.bake.normal_space = normal_space
 
                 bpy.ops.object.bake(type=bake_type)
 
@@ -233,28 +778,24 @@ class BakingHandlersMixin:
             except Exception as e:
                 errors[channel] = str(e)
             finally:
-                if restore_info is not None:
-                    if config.get("metallic_trick"):
-                        self._bake_restore_metallic_trick(restore_info)
-                    elif config.get("displacement_trick"):
-                        self._bake_restore_displacement_trick(restore_info)
+                self._bake_finish_channel(lowpoly, image, config, restore_info)
 
-                self._bake_cleanup_image_nodes(lowpoly)
-                bpy.data.images.remove(image)
-
-        # Reset selected_to_active
-        bpy.context.scene.render.bake.use_selected_to_active = False
+        if not baked_files:
+            return self._bake_nothing_written(channels, errors)
 
         result = {
             "success": True,
-            "lowpoly": lowpoly_name,
-            "highpoly": highpoly_name,
+            "lowpoly": lowpoly.name,
+            "highpoly": highpoly.name,
             "resolution": resolution,
             "output_format": output_format,
             "baked_files": baked_files,
         }
         if errors:
             result["errors"] = errors
+        warnings = self._bake_empty_slot_warnings(lowpoly)
+        if warnings:
+            result["warnings"] = warnings
         return result
 
     # =================================================================
@@ -263,6 +804,7 @@ class BakingHandlersMixin:
     # =================================================================
 
 
+    @_restores_scene
     def _handle_bake_from_multires(self, params: dict) -> dict:
         """Bake normals or displacement from a Multiresolution modifier."""
 
@@ -298,56 +840,88 @@ class BakingHandlersMixin:
         if multires_mod.total_levels < 1:
             return {"error": "Multiresolution modifier has no subdivision levels"}
 
-        # Ensure at least one material for bake target
-        if len(obj.material_slots) == 0:
-            mat = bpy.data.materials.new(name=f"{object_name}_BakeMat")
-            mat.use_nodes = True
-            obj.data.materials.append(mat)
-
-        # Ensure output dir exists
-        out_dir = os.path.dirname(output_path)
-        if out_dir:
-            os.makedirs(out_dir, exist_ok=True)
-
-        # Switch to Cycles
-        _bake_ensure_cycles()
-
-        # Select and activate
-        bpy.ops.object.select_all(action="DESELECT")
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-
-        # Create bake target image
-        color_space = "Non-Color"
-        img_name = f"__bake_multires_{map_type}__"
-        image = self._bake_create_image(img_name, resolution, color_space)
-        self._bake_set_active_image_node(obj, image)
-
+        # Ensure at least one material for bake target. One added here is removed
+        # again before returning.
+        target_token = None
+        image = None
+        restore_level = None
         try:
-            # Configure multires bake
-            bpy.context.scene.render.bake.margin = margin
+            target_token = self._bake_ensure_target_material(obj)
+            problem = self._bake_material_problem(obj)
+            if problem:
+                return {"error": problem}
 
-            # Bake with multires
-            bpy.ops.object.bake(
-                type=map_type,
-                use_clear=True,
-            )
+            # Ensure output dir exists
+            out_dir = os.path.dirname(output_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+
+            # Switch to Cycles
+            _bake_ensure_cycles()
+
+            # Select and activate
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+
+            # The bake transfers detail from the top level down to the modifier's
+            # viewport level. At the top level there is nothing to transfer (a
+            # displacement map comes out flat), so bake to level 0 in that case and
+            # put the user's level back afterwards.
+            bake_level = multires_mod.levels
+            if bake_level >= multires_mod.total_levels:
+                restore_level = bake_level
+                bake_level = 0
+                multires_mod.levels = bake_level
+
+            # Create bake target image
+            color_space = "Non-Color"
+            img_name = f"__bake_multires_{map_type}__"
+            image = self._bake_create_image(img_name, resolution, color_space)
+            self._bake_set_active_image_node(obj, image)
+
+            # Multires baking is its own operator, switched on by scene settings that
+            # live in different places across Blender versions. The scene state
+            # captured above is restored afterwards: left on, use_multires would turn
+            # every later bake into a multires bake.
+            bake_settings = bpy.context.scene.render.bake
+            if hasattr(bake_settings, "use_multires"):
+                owner, names = bake_settings, ("use_multires", "type", "margin", "use_clear")
+            else:
+                owner = bpy.context.scene.render
+                names = ("use_bake_multires", "bake_type", "bake_margin", "use_bake_clear")
+            setattr(owner, names[0], True)
+            setattr(owner, names[1], map_type)
+            setattr(owner, names[2], margin)
+            setattr(owner, names[3], True)
+            bpy.ops.object.bake_image()
 
             self._bake_save_image(image, output_path, "PNG")
 
-            return {
+            result = {
                 "success": True,
                 "object": object_name,
                 "map_type": map_type,
                 "resolution": resolution,
                 "output_path": output_path,
                 "multires_levels": multires_mod.total_levels,
+                "bake_level": bake_level,
             }
+            warnings = self._bake_empty_slot_warnings(obj)
+            if warnings:
+                result["warnings"] = warnings
+            return result
         except Exception as e:
             return {"error": f"Multires bake failed: {e}"}
         finally:
-            self._bake_cleanup_image_nodes(obj)
-            bpy.data.images.remove(image)
+            try:
+                if restore_level is not None:
+                    multires_mod.levels = restore_level
+            finally:
+                try:
+                    self._bake_release(obj, image)
+                finally:
+                    self._bake_drop_target_material(obj, target_token)
 
     # =================================================================
     # 4. bake_to_vertex_colors
@@ -355,6 +929,7 @@ class BakingHandlersMixin:
     # =================================================================
 
 
+    @_restores_scene
     def _handle_bake_to_vertex_colors(self, params: dict) -> dict:
         """Bake to a temporary image then transfer pixel data to vertex colors."""
         import numpy as np
@@ -378,28 +953,30 @@ class BakingHandlersMixin:
         if not mesh.uv_layers:
             return {"error": f"Object '{object_name}' has no UV map. Unwrap first."}
 
-        # Ensure at least one material
-        if len(obj.material_slots) == 0:
-            mat = bpy.data.materials.new(name=f"{object_name}_BakeMat")
-            mat.use_nodes = True
-            mesh.materials.append(mat)
-
-        # Switch to Cycles
-        _bake_ensure_cycles()
-        bpy.context.scene.cycles.samples = samples
-
-        # Select and activate
-        bpy.ops.object.select_all(action="DESELECT")
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-
-        # Use a moderate resolution for vertex color transfer
-        temp_res = 1024
-        img_name = "__bake_vertex_color_temp__"
-        image = self._bake_create_image(img_name, temp_res, "sRGB")
-        self._bake_set_active_image_node(obj, image)
-
+        # Ensure at least one material. One added here is removed again before returning.
+        target_token = None
+        image = None
         try:
+            target_token = self._bake_ensure_target_material(obj)
+            problem = self._bake_material_problem(obj)
+            if problem:
+                return {"error": problem}
+
+            # Switch to Cycles
+            _bake_ensure_cycles()
+            bpy.context.scene.cycles.samples = samples
+
+            # Select and activate
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+
+            # Use a moderate resolution for vertex color transfer
+            temp_res = 1024
+            img_name = "__bake_vertex_color_temp__"
+            image = self._bake_create_image(img_name, temp_res, "sRGB")
+            self._bake_set_active_image_node(obj, image)
+
             # Configure and bake
             if bake_type == "DIFFUSE":
                 bpy.context.scene.render.bake.use_pass_direct = False
@@ -446,21 +1023,27 @@ class BakingHandlersMixin:
                         float(color[3]),
                     )
 
-            return {
+            result = {
                 "success": True,
                 "object": object_name,
                 "bake_type": bake_type,
                 "vertex_color_layer": vertex_color_name,
                 "loop_count": len(mesh.loops),
             }
+            warnings = self._bake_empty_slot_warnings(obj)
+            if warnings:
+                result["warnings"] = warnings
+            return result
         except ImportError:
             # numpy not available -- fallback without numpy
             return {"error": "numpy is required for vertex color baking but is not available"}
         except Exception as e:
             return {"error": f"Vertex color bake failed: {e}"}
         finally:
-            self._bake_cleanup_image_nodes(obj)
-            bpy.data.images.remove(image)
+            try:
+                self._bake_release(obj, image)
+            finally:
+                self._bake_drop_target_material(obj, target_token)
 
     # =================================================================
     # 5. bake_curvature
@@ -671,6 +1254,7 @@ class BakingHandlersMixin:
     # =================================================================
 
 
+    @_restores_scene
     def _handle_bake_id_map(self, params: dict) -> dict:
         """Bake a color ID map with distinct colors per material/object/face set."""
         import random
@@ -699,15 +1283,6 @@ class BakingHandlersMixin:
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
-        # Switch to Cycles
-        _bake_ensure_cycles()
-        bpy.context.scene.cycles.samples = 1  # Emission needs minimal samples
-
-        # Select and activate
-        bpy.ops.object.select_all(action="DESELECT")
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-
         # Generate a palette of visually distinct colors
         def generate_distinct_colors(n):
             """Generate n visually distinct colors using golden ratio hue spacing."""
@@ -722,167 +1297,131 @@ class BakingHandlersMixin:
                 colors.append((r, g, b, 1.0))
             return colors
 
-        # Save original materials
-        original_materials = []
-        for slot in obj.material_slots:
-            original_materials.append(slot.material)
+        # Record slots and face material indices. They are put back in the finally
+        # block below, on success and on failure alike.
+        snap = self._bake_snapshot_slots(obj)
+        original_materials = [slot.material for slot in obj.material_slots]
+
+        def emission_material(name, color):
+            mat = bpy.data.materials.new(name=name)
+            temp_materials.append(mat)
+            mat.use_nodes = True
+            tree = mat.node_tree
+            tree.nodes.clear()
+            emit = tree.nodes.new("ShaderNodeEmission")
+            emit.inputs["Color"].default_value = color
+            emit.inputs["Strength"].default_value = 1.0
+            output = tree.nodes.new("ShaderNodeOutputMaterial")
+            tree.links.new(emit.outputs["Emission"], output.inputs["Surface"])
+            return mat
+
+        def assign_groups(groups, label_for):
+            """Give each group of faces its own colour.
+
+            ``groups`` maps a key to face indices; ``label_for`` names a key in the result.
+            """
+            import bmesh
+
+            keys = sorted(groups)
+            palette = generate_distinct_colors(len(keys))
+            mats = []
+            for i, key in enumerate(keys):
+                mats.append(emission_material(f"__id_{i}__", palette[i]))
+                id_colors[label_for(key)] = list(palette[i][:3])
+            mesh.materials.clear()
+            for mat in mats:
+                mesh.materials.append(mat)
+            bm = bmesh.new()
+            try:
+                bm.from_mesh(mesh)
+                bm.faces.ensure_lookup_table()
+                for i, key in enumerate(keys):
+                    for face_idx in groups[key]:
+                        bm.faces[face_idx].material_index = i
+                bm.to_mesh(mesh)
+            finally:
+                bm.free()
 
         # Build color assignments depending on mode
         id_colors = {}
+        temp_materials = []
+        image = None
 
         try:
+            # Switch to Cycles
+            _bake_ensure_cycles()
+            bpy.context.scene.cycles.samples = 1  # Emission needs minimal samples
+
+            # Select and activate
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+
             if color_mode == "PER_MATERIAL":
                 num_slots = max(len(obj.material_slots), 1)
                 palette = generate_distinct_colors(num_slots)
 
                 # For each material slot, create a temp emission material
-                temp_materials = []
+                mats = []
                 for i in range(num_slots):
-                    mat_name = f"__id_mat_{i}__"
-                    mat = bpy.data.materials.new(name=mat_name)
-                    mat.use_nodes = True
-                    tree = mat.node_tree
-                    tree.nodes.clear()
-
-                    emit = tree.nodes.new("ShaderNodeEmission")
-                    emit.inputs["Color"].default_value = palette[i]
-                    emit.inputs["Strength"].default_value = 1.0
-
-                    output = tree.nodes.new("ShaderNodeOutputMaterial")
-                    tree.links.new(emit.outputs["Emission"], output.inputs["Surface"])
-
-                    temp_materials.append(mat)
-
-                    orig_name = original_materials[i].name if i < len(original_materials) and original_materials[i] else f"Slot_{i}"
+                    mats.append(emission_material(f"__id_mat_{i}__", palette[i]))
+                    orig = original_materials[i] if i < len(original_materials) else None
+                    orig_name = orig.name if orig else f"Slot_{i}"
                     id_colors[orig_name] = list(palette[i][:3])
 
-                # Assign temp materials
-                # Ensure enough slots
+                # Ensure enough slots, then assign the temp materials
                 while len(obj.material_slots) < num_slots:
                     obj.data.materials.append(None)
                 for i in range(num_slots):
-                    obj.material_slots[i].material = temp_materials[i]
+                    obj.material_slots[i].material = mats[i]
 
             elif color_mode == "PER_OBJECT":
-                # For a single object, assign one color. If the mesh was joined
-                # from multiple objects, we use loose parts as a proxy.
+                # For a single object, assign one color per loose part: connected
+                # components of faces.
                 import bmesh
+
                 bm = bmesh.new()
-                bm.from_mesh(mesh)
-                bm.faces.ensure_lookup_table()
-
-                # Find connected components (loose parts)
-                visited = set()
-                components = []
-                for face in bm.faces:
-                    if face.index in visited:
-                        continue
-                    component = set()
-                    stack = [face]
-                    while stack:
-                        f = stack.pop()
-                        if f.index in visited:
-                            continue
-                        visited.add(f.index)
-                        component.add(f.index)
-                        for edge in f.edges:
-                            for linked_face in edge.link_faces:
-                                if linked_face.index not in visited:
-                                    stack.append(linked_face)
-                    components.append(component)
-
-                palette = generate_distinct_colors(len(components))
-
-                # Assign each component to a material slot
-                # Clear existing materials and create new ones
-                temp_materials = []
-                for i, comp in enumerate(components):
-                    mat_name = f"__id_obj_{i}__"
-                    mat = bpy.data.materials.new(name=mat_name)
-                    mat.use_nodes = True
-                    tree = mat.node_tree
-                    tree.nodes.clear()
-
-                    emit = tree.nodes.new("ShaderNodeEmission")
-                    emit.inputs["Color"].default_value = palette[i]
-                    emit.inputs["Strength"].default_value = 1.0
-
-                    output = tree.nodes.new("ShaderNodeOutputMaterial")
-                    tree.links.new(emit.outputs["Emission"], output.inputs["Surface"])
-
-                    temp_materials.append(mat)
-                    id_colors[f"Part_{i}"] = list(palette[i][:3])
-
-                # Set materials on the mesh
-                mesh.materials.clear()
-                for mat in temp_materials:
-                    mesh.materials.append(mat)
-
-                # Assign material indices to faces
-                for i, comp in enumerate(components):
+                try:
+                    bm.from_mesh(mesh)
+                    bm.faces.ensure_lookup_table()
+                    visited = set()
+                    components = {}
                     for face in bm.faces:
-                        if face.index in comp:
-                            face.material_index = i
-
-                bm.to_mesh(mesh)
-                bm.free()
+                        if face.index in visited:
+                            continue
+                        component = []
+                        stack = [face]
+                        while stack:
+                            f = stack.pop()
+                            if f.index in visited:
+                                continue
+                            visited.add(f.index)
+                            component.append(f.index)
+                            for edge in f.edges:
+                                for linked_face in edge.link_faces:
+                                    if linked_face.index not in visited:
+                                        stack.append(linked_face)
+                        components[len(components)] = component
+                finally:
+                    bm.free()
+                assign_groups(components, lambda key: f"Part_{key}")
 
             elif color_mode == "PER_FACE_SET":
-                # Use face map attributes or sculpt face sets if available
+                # Use sculpt face sets if available, else material index as the proxy.
                 import bmesh
+
                 bm = bmesh.new()
-                bm.from_mesh(mesh)
-                bm.faces.ensure_lookup_table()
-
-                # Check for sculpt face sets
-                face_set_layer = bm.faces.layers.int.get(".sculpt_face_set")
-                if face_set_layer is None:
-                    # Fall back: use material index as face set proxy
+                try:
+                    bm.from_mesh(mesh)
+                    bm.faces.ensure_lookup_table()
+                    face_set_layer = bm.faces.layers.int.get(".sculpt_face_set")
                     face_sets = {}
                     for face in bm.faces:
-                        fs = face.material_index
-                        if fs not in face_sets:
-                            face_sets[fs] = []
-                        face_sets[fs].append(face.index)
-                else:
-                    face_sets = {}
-                    for face in bm.faces:
-                        fs = face[face_set_layer]
-                        if fs not in face_sets:
-                            face_sets[fs] = []
-                        face_sets[fs].append(face.index)
-
-                palette = generate_distinct_colors(len(face_sets))
-                sorted_keys = sorted(face_sets.keys())
-
-                temp_materials = []
-                for i, key in enumerate(sorted_keys):
-                    mat_name = f"__id_fs_{key}__"
-                    mat = bpy.data.materials.new(name=mat_name)
-                    mat.use_nodes = True
-                    tree = mat.node_tree
-                    tree.nodes.clear()
-
-                    emit = tree.nodes.new("ShaderNodeEmission")
-                    emit.inputs["Color"].default_value = palette[i]
-                    emit.inputs["Strength"].default_value = 1.0
-
-                    output = tree.nodes.new("ShaderNodeOutputMaterial")
-                    tree.links.new(emit.outputs["Emission"], output.inputs["Surface"])
-
-                    temp_materials.append(mat)
-                    id_colors[f"FaceSet_{key}"] = list(palette[i][:3])
-
-                mesh.materials.clear()
-                for mat in temp_materials:
-                    mesh.materials.append(mat)
-
-                for i, key in enumerate(sorted_keys):
-                    for face_idx in face_sets[key]:
-                        bm.faces[face_idx].material_index = i
-
-                bm.to_mesh(mesh)
-                bm.free()
+                        key = face.material_index if face_set_layer is None else face[face_set_layer]
+                        face_sets.setdefault(key, []).append(face.index)
+                finally:
+                    bm.free()
+                assign_groups(face_sets, lambda key: f"FaceSet_{key}")
 
             # Create bake target image
             img_name = "__bake_id_map__"
@@ -896,31 +1435,6 @@ class BakingHandlersMixin:
             # Save
             self._bake_save_image(image, output_path, "PNG")
 
-            # Cleanup
-            self._bake_cleanup_image_nodes(obj)
-            bpy.data.images.remove(image)
-
-            # Remove temp materials
-            if color_mode == "PER_MATERIAL":
-                # Restore original materials
-                for i, orig_mat in enumerate(original_materials):
-                    if i < len(obj.material_slots):
-                        obj.material_slots[i].material = orig_mat
-                for mat in temp_materials:
-                    bpy.data.materials.remove(mat)
-            else:
-                # For PER_OBJECT and PER_FACE_SET we replaced all materials;
-                # restore the originals
-                mesh.materials.clear()
-                for orig_mat in original_materials:
-                    mesh.materials.append(orig_mat)
-
-                # Restore original material indices (they were overwritten)
-                # Re-read original face material assignments -- since we changed
-                # them, we cannot fully restore without a backup. We log a note.
-                for mat in temp_materials:
-                    bpy.data.materials.remove(mat)
-
             return {
                 "success": True,
                 "object": object_name,
@@ -928,21 +1442,20 @@ class BakingHandlersMixin:
                 "resolution": resolution,
                 "output_path": output_path,
                 "id_colors": id_colors,
-                "note": (
-                    "For PER_OBJECT/PER_FACE_SET modes, face material indices "
-                    "were modified during baking. If original material assignments "
-                    "are important, consider using Undo after inspecting the result."
-                ) if color_mode != "PER_MATERIAL" else None,
             }
         except Exception as e:
-            # Attempt to restore materials on error
-            try:
-                mesh.materials.clear()
-                for orig_mat in original_materials:
-                    mesh.materials.append(orig_mat)
-            except Exception:
-                pass
             return {"error": f"ID map bake failed: {e}"}
+        finally:
+            # Put the original materials, slots and face indices back before the temp
+            # materials are removed, so nothing still points at them.
+            try:
+                self._bake_release(obj, image)
+            finally:
+                try:
+                    self._bake_restore_slots(obj, snap)
+                finally:
+                    for mat in temp_materials:
+                        bpy.data.materials.remove(mat)
 
 
     # ========== Geometry Nodes Handlers ==========
