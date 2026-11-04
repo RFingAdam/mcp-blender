@@ -159,6 +159,10 @@ python -c "import json,sys; d=json.load(open(sys.argv[1])); open(sys.argv[2],'w'
     driver-4.5/results.json tests/harness/baselines/blender-4.5.json
 ```
 
+Either way, after a 4.5, 5.2 or socket lane baseline changes, run `python scripts/tool_status.py`.
+It rewrites the tool counts in `README.md` from the baselines, and `tests/test_readme.py` fails
+until they match.
+
 ### The socket lane
 
 The socket lane starts a GUI Blender (under `xvfb-run`) with the real addon socket and checks
