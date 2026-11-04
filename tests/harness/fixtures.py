@@ -137,7 +137,25 @@ OVERRIDES.update(
             },
         ),
         "geonode_inspect": _over(object_name="Sphere"),
-        "bake_from_multires": _over(object_name="Sphere", output_path="{TMP}/out.png"),
+        # Baking is slow at its production defaults (2048 px, 128 samples). The cases
+        # test the handlers, so keep each bake tiny; the defaults stay as they are.
+        "bake_pbr_batch": _over(
+            object_name="Cube", output_dir="{TMP}", resolution=32, samples=1, margin=2
+        ),
+        "bake_highpoly_to_lowpoly": _over(
+            lowpoly_name="Cube",
+            highpoly_name="Sphere",
+            output_dir="{TMP}",
+            resolution=32,
+            samples=1,
+            margin=2,
+        ),
+        "bake_from_multires": _over(
+            object_name="MultiresSphere", output_path="{TMP}/out.png", resolution=32, margin=2
+        ),
+        "bake_to_vertex_colors": _over(object_name="Cube", samples=1),
+        "bake_curvature": _over(object_name="Cube", output_path="{TMP}/out.png", resolution=32),
+        "bake_id_map": _over(object_name="Cube", output_path="{TMP}/out.png", resolution=32),
         "sculpt_multires_reshape": _over(object_name="Sphere", action="SUBDIVIDE"),
         "modifier_apply": _over(object_name="Sphere", modifier_name="Bevel"),
         "modifier_remove": _over(object_name="Sphere", modifier_name="Bevel"),
@@ -191,7 +209,6 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
 # Tools whose SOFT_FAIL hides a real defect. A tool with both benign and
 # defective cases belongs here.
 SOFT_FAIL_DEFECTS: dict[str, str] = {
-    "bake_id_map": "handler calls a helper, _bake_create_image, that does not exist",
     "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects",
     "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
     "mesh_knife_project": "the modifier is disabled, so the apply is skipped",

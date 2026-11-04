@@ -53,6 +53,7 @@ def build(path):
     bpy.context.active_object.name = "Empty"
 
     _add_lods()
+    _add_multires_sphere()
     _add_state(scene, cube, sphere, arm)
 
     scene.collection.children.link(bpy.data.collections.new("Collection"))
@@ -77,6 +78,20 @@ def _add_lods():
     for level in range(2):
         bpy.ops.mesh.primitive_cube_add(size=1, location=(8, 4 * level, 0))
         bpy.context.active_object.name = f"Hull_LOD{level}"
+
+
+def _add_multires_sphere():
+    """A sphere whose only modifier is a Multires, for bake_from_multires.
+
+    Blender's multires baker refuses an object with another modifier ahead of the
+    Multires, which the shared Sphere has.
+    """
+    bpy.ops.mesh.primitive_uv_sphere_add(location=(4, 4, 0))
+    ob = bpy.context.active_object
+    ob.name = "MultiresSphere"
+    mod = ob.modifiers.new("Multires", "MULTIRES")
+    bpy.ops.object.multires_subdivide(modifier=mod.name, mode="CATMULL_CLARK")
+    bpy.ops.object.multires_subdivide(modifier=mod.name, mode="CATMULL_CLARK")
 
 
 def _add_state(scene, cube, sphere, arm):

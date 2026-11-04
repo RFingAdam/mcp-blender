@@ -5175,6 +5175,11 @@ TOOLS: list[Tool] = [
                     "type": "number",
                     "description": "Cycles render samples (default 128)",
                 },
+                "normal_space": {
+                    "type": "string",
+                    "enum": ["TANGENT", "OBJECT"],
+                    "description": "Normal map space (default TANGENT)",
+                },
             },
             "required": ["lowpoly_name", "highpoly_name", "output_dir"],
         },

@@ -14,6 +14,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import struct
@@ -565,6 +566,475 @@ def check_malformed_json_error_reply(ctx: Ctx) -> str:
     return "parse error reply, connection still usable"
 
 
+BAKE_SIZE = 32
+BAKE_ARGS = {"resolution": BAKE_SIZE, "samples": 1, "margin": 2}
+
+# Shared Blender-side helpers for the bake checks. ``snapshot`` records everything a
+# bake could disturb in a material: node set, link endpoints, every socket default,
+# selection, the active node and active output, plus slots and face material indices.
+BAKE_SETUP = """
+import bmesh
+
+def _val(v):
+    try:
+        return round(float(v), 5)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return [round(float(x), 5) for x in v]
+    except (TypeError, ValueError):
+        return None
+
+def principled(tree):
+    return next(n for n in tree.nodes if n.type == 'BSDF_PRINCIPLED')
+
+def _plain(v):
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, set):
+        return sorted(v)
+    try:
+        return [_plain(x) for x in v]
+    except TypeError:
+        return str(v)
+
+def scene_state():
+    sc = bpy.context.scene
+    state = {}
+    owners = [
+        ('render', sc.render, lambda n: n == 'engine' or 'bake' in n),
+        ('bake', sc.render.bake, lambda n: True),
+        ('cycles', sc.cycles, lambda n: n == 'samples'),
+    ]
+    for label, owner, pick in owners:
+        for prop in owner.bl_rna.properties:
+            if prop.type == 'POINTER' or prop.identifier == 'rna_type' or not pick(prop.identifier):
+                continue
+            state[label + '.' + prop.identifier] = _plain(getattr(owner, prop.identifier))
+    layer = bpy.context.view_layer
+    state['selected'] = sorted(o.name for o in layer.objects if o.select_get())
+    state['active'] = layer.objects.active.name if layer.objects.active else None
+    return state
+
+def make_material(name, metallic_linked=False, displacement=False, cycles_output=False):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    t = mat.node_tree
+    bsdf = principled(t)
+    out = next(n for n in t.nodes if n.type == 'OUTPUT_MATERIAL')
+    chk = t.nodes.new('ShaderNodeTexChecker')
+    chk.inputs['Color1'].default_value = (1, 0, 0, 1)
+    chk.inputs['Color2'].default_value = (0, 1, 0, 1)
+    chk.inputs['Scale'].default_value = 2.0
+    t.links.new(chk.outputs['Color'], bsdf.inputs['Base Color'])
+    bsdf.inputs['Metallic'].default_value = 0.8
+    if metallic_linked:
+        val = t.nodes.new('ShaderNodeValue')
+        val.outputs[0].default_value = 0.8
+        t.links.new(val.outputs[0], bsdf.inputs['Metallic'])
+        bsdf.inputs['Metallic'].default_value = 0.1
+    if displacement:
+        val = t.nodes.new('ShaderNodeValue')
+        val.outputs[0].default_value = 0.9
+        disp = t.nodes.new('ShaderNodeDisplacement')
+        t.links.new(val.outputs[0], disp.inputs['Height'])
+        t.links.new(disp.outputs['Displacement'], out.inputs['Displacement'])
+    if cycles_output:
+        # A Cycles-only output that wins over the default one, feeding a plain diffuse.
+        alt = t.nodes.new('ShaderNodeOutputMaterial')
+        alt.target = 'CYCLES'
+        diff = t.nodes.new('ShaderNodeBsdfDiffuse')
+        t.links.new(diff.outputs[0], alt.inputs['Surface'])
+        alt.is_active_output = True
+    return mat
+
+def make_grid(name, loc, mats=(), uvs=True):
+    bpy.ops.mesh.primitive_grid_add(x_subdivisions=3, y_subdivisions=3, size=2,
+                                    location=loc, calc_uvs=uvs)
+    ob = bpy.context.active_object
+    ob.name = name
+    if not uvs:
+        while ob.data.uv_layers:
+            ob.data.uv_layers.remove(ob.data.uv_layers[0])
+    for m in mats:
+        ob.data.materials.append(m)
+    if len(mats) > 1:
+        for i, poly in enumerate(ob.data.polygons):
+            poly.material_index = i % len(mats)
+    return ob
+
+def snapshot(names):
+    out = {}
+    for name in names:
+        ob = bpy.data.objects[name]
+        out['obj:' + name] = {
+            'slots': [(s.link, s.material.name if s.material else None) for s in ob.material_slots],
+            'data_mats': [m.name if m else None for m in ob.data.materials],
+            'indices': [p.material_index for p in ob.data.polygons],
+        }
+    for mat in bpy.data.materials:
+        t = mat.node_tree
+        if t is None:
+            out['mat:' + mat.name] = None
+            continue
+        nodes = {}
+        for n in t.nodes:
+            nodes[n.name] = {
+                'type': n.bl_idname, 'loc': _val(n.location), 'select': n.select, 'mute': n.mute,
+                'active_output': getattr(n, 'is_active_output', None),
+                'inputs': {s.identifier: _val(getattr(s, 'default_value', None)) for s in n.inputs},
+            }
+        links = sorted(
+            (l.from_node.name, l.from_socket.identifier, l.to_node.name, l.to_socket.identifier,
+             l.is_muted) for l in t.links)
+        out['mat:' + mat.name] = {
+            'nodes': nodes, 'links': links,
+            'active': t.nodes.active.name if t.nodes.active else None,
+        }
+    out['images'] = sorted(i.name for i in bpy.data.images)
+    out['scene'] = scene_state()
+    return out
+
+def image_mean(path):
+    img = bpy.data.images.load(path, check_existing=False)
+    px = list(img.pixels)
+    bpy.data.images.remove(img)
+    rgb = [px[i] for i in range(len(px)) if i % 4 != 3]
+    pixels = {tuple(round(px[i + k], 2) for k in range(3)) for i in range(0, len(px), 4)}
+    return {'mean': sum(rgb) / len(rgb), 'distinct': len(pixels)}
+"""
+
+
+def _diff_snapshots(before: dict, after: dict) -> str | None:
+    """Name the first thing that differs between two bake snapshots, or None."""
+    for key in sorted(set(before) | set(after)):
+        if before.get(key) == after.get(key):
+            continue
+        b, a = before.get(key), after.get(key)
+        if isinstance(b, dict) and isinstance(a, dict):
+            for sub in sorted(set(b) | set(a)):
+                if b.get(sub) != a.get(sub):
+                    return f"{key}/{sub}: {str(b.get(sub))[:140]} -> {str(a.get(sub))[:140]}"
+        return f"{key}: {str(b)[:140]} -> {str(a)[:140]}"
+    return None
+
+
+def _bake_dir(ctx: Ctx, name: str) -> Path:
+    path = ctx.out_dir / "bake" / name
+    shutil.rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True)
+    return path
+
+
+def check_bake_pbr_writes_image(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "pbr")
+    ctx.conn.exec(BAKE_SETUP + "make_grid('LaneBake', (50, 0, 0), [make_material('LaneBakeMat')])\n")
+    reply = ctx.conn.call(
+        "bake_pbr_batch",
+        {"object_name": "LaneBake", "output_dir": str(out), "channels": ["DIFFUSE"], **BAKE_ARGS},
+    )
+    if "error" in reply or reply.get("errors"):
+        raise CheckFailed(f"bake_pbr_batch failed: {str(reply)[:200]}")
+    path = Path(reply.get("baked_files", {}).get("DIFFUSE", ""))
+    if not path.is_file():
+        raise CheckFailed(f"bake replied {str(reply)[:160]} but wrote no DIFFUSE file")
+    got = ctx.conn.exec(BAKE_SETUP + f"result = image_mean({str(path)!r})\n")
+    if got["distinct"] < 2 or got["mean"] < 0.01:
+        raise CheckFailed(f"baked image is uniform ({got})")
+    return f"wrote {path.name}, {got['distinct']} distinct values"
+
+
+def check_bake_leaves_material_clean(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "clean")
+    ctx.conn.exec(BAKE_SETUP + "make_grid('LaneClean', (50, 0, 0), [make_material('LaneCleanMat')])\n")
+    probe = BAKE_SETUP + "result = snapshot(['LaneClean'])\n"
+    (out / "blocked_DIFFUSE.png").mkdir()
+    before = ctx.conn.exec(probe)
+    ran = []
+    # A directory where the output file should go makes the save fail after the image
+    # node is added; a bogus normal space
+    # raises inside the bake setup. Both must leave the material as found.
+    for label, extra in (
+        ("unwritable path", {"channels": ["DIFFUSE"], "output_prefix": "blocked"}),
+        ("raising bake", {"channels": ["NORMAL"], "normal_space": "BOGUS"}),
+        ("no channels", {"channels": []}),
+    ):
+        reply = ctx.conn.call(
+            "bake_pbr_batch",
+            {"object_name": "LaneClean", "output_dir": str(out), **BAKE_ARGS, **extra},
+        )
+        if "error" not in reply or reply.get("success"):
+            raise CheckFailed(f"{label}: expected an error reply, got {str(reply)[:160]}")
+        if any(p.is_file() for p in out.iterdir()):
+            raise CheckFailed(f"{label}: files were written")
+        moved = _diff_snapshots(before, ctx.conn.exec(probe))
+        if moved:
+            raise CheckFailed(f"{label}: material changed: {moved}")
+        ran.append(label)
+    reply = ctx.conn.call(
+        "bake_pbr_batch",
+        {"object_name": "LaneClean", "output_dir": str(out), "channels": ["DIFFUSE"], **BAKE_ARGS},
+    )
+    if "error" in reply or reply.get("errors"):
+        raise CheckFailed(f"successful bake failed: {str(reply)[:160]}")
+    moved = _diff_snapshots(before, ctx.conn.exec(probe))
+    if moved:
+        raise CheckFailed(f"material changed after a successful bake: {moved}")
+    return "nodes, links, defaults, selection and images unchanged after " + ", ".join(ran) + ", success"
+
+
+def check_bake_tricks_leave_material_clean(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "tricks")
+    ctx.conn.exec(
+        BAKE_SETUP
+        + "make_grid('LaneMetLink', (50, 0, 0), [make_material('LaneMetLinkMat', metallic_linked=True)])\n"
+        "make_grid('LaneMetDef', (52, 0, 0), [make_material('LaneMetDefMat')])\n"
+        "make_grid('LaneDispLink', (54, 0, 0), [make_material('LaneDispLinkMat', displacement=True)])\n"
+        "make_grid('LaneDispNone', (56, 0, 0), [make_material('LaneDispNoneMat')])\n"
+        "make_grid('LaneMetCycles', (58, 0, 0), [make_material('LaneMetCyclesMat', cycles_output=True)])\n"
+    )
+    names = ["LaneMetLink", "LaneMetDef", "LaneDispLink", "LaneDispNone", "LaneMetCycles"]
+    probe = BAKE_SETUP + f"result = snapshot({names!r})\n"
+    before = ctx.conn.exec(probe)
+    # (object, channel, expected mean of the baked map)
+    cases = [
+        ("LaneMetLink", "METALLIC", 0.8),
+        ("LaneMetDef", "METALLIC", 0.8),
+        ("LaneMetCycles", "METALLIC", 0.8),
+        ("LaneDispLink", "DISPLACEMENT", 0.9),
+        ("LaneDispNone", "DISPLACEMENT", 0.5),
+    ]
+    for obj, channel, want in cases:
+        (out / f"blocked_{channel}.png").mkdir(exist_ok=True)
+        bad = ctx.conn.call(
+            "bake_pbr_batch",
+            {"object_name": obj, "output_dir": str(out), "channels": [channel],
+             "output_prefix": "blocked", **BAKE_ARGS},
+        )
+        if "error" not in bad:
+            raise CheckFailed(f"{obj} {channel}: unwritable path gave no error: {str(bad)[:140]}")
+        moved = _diff_snapshots(before, ctx.conn.exec(probe))
+        if moved:
+            raise CheckFailed(f"{obj} {channel}: material changed after a failed bake: {moved}")
+        good = ctx.conn.call(
+            "bake_pbr_batch",
+            {"object_name": obj, "output_dir": str(out), "channels": [channel],
+             "output_prefix": obj, **BAKE_ARGS},
+        )
+        path = good.get("baked_files", {}).get(channel) if isinstance(good, dict) else None
+        if not path or not Path(path).is_file():
+            raise CheckFailed(f"{obj} {channel}: no file written: {str(good)[:160]}")
+        moved = _diff_snapshots(before, ctx.conn.exec(probe))
+        if moved:
+            raise CheckFailed(f"{obj} {channel}: material changed after a good bake: {moved}")
+        mean = ctx.conn.exec(BAKE_SETUP + f"result = image_mean({path!r})\n")["mean"]
+        if abs(mean - want) > 0.03:
+            raise CheckFailed(f"{obj} {channel}: baked mean {mean:.3f}, expected {want}")
+    return (
+        "metallic and displacement tricks baked the right value, also past a Cycles-only "
+        "output, and left linked and default sockets as found"
+    )
+
+
+def check_bake_odd_materials(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "odd")
+    ctx.conn.exec(
+        BAKE_SETUP
+        + "shared = make_material('LaneShared')\n"
+        "other = make_material('LaneOther')\n"
+        "make_grid('LaneShareA', (50, 0, 0), [shared, None, other])\n"
+        "make_grid('LaneShareB', (52, 0, 0), [shared])\n"
+        "make_grid('LaneNoMat', (54, 0, 0))\n"
+        "make_grid('LaneEmptySlot', (56, 0, 0), [None])\n"
+        "make_grid('LaneHigh', (58, 0, 0))\n"
+    )
+    names = ["LaneShareA", "LaneShareB", "LaneNoMat", "LaneEmptySlot", "LaneHigh"]
+    probe = BAKE_SETUP + f"result = snapshot({names!r})\n"
+    before = ctx.conn.exec(probe)
+
+    def pbr(obj):
+        return ctx.conn.call(
+            "bake_pbr_batch",
+            {"object_name": obj, "output_dir": str(out), "channels": ["DIFFUSE"],
+             "output_prefix": obj, **BAKE_ARGS},
+        )
+
+    for obj in ("LaneNoMat", "LaneEmptySlot"):
+        reply = pbr(obj)
+        if "error" not in reply or "material" not in str(reply["error"]).lower():
+            raise CheckFailed(f"{obj}: expected a clear material error, got {str(reply)[:160]}")
+    reply = pbr("LaneShareA")
+    if "error" in reply or reply.get("errors"):
+        raise CheckFailed(f"shared/multi-slot bake failed: {str(reply)[:160]}")
+    if "[1]" not in " ".join(reply.get("warnings", [])):
+        raise CheckFailed(f"empty slot 1 was not named in warnings: {str(reply)[:200]}")
+    reply = ctx.conn.call(
+        "bake_highpoly_to_lowpoly",
+        {"lowpoly_name": "LaneNoMat", "highpoly_name": "LaneHigh", "output_dir": str(out),
+         "channels": ["NORMAL"], "cage_extrusion": 0.5, **BAKE_ARGS},
+    )
+    if "error" in reply or reply.get("errors"):
+        raise CheckFailed(f"highpoly to lowpoly with no material failed: {str(reply)[:200]}")
+    reply = ctx.conn.call(
+        "bake_highpoly_to_lowpoly",
+        {"lowpoly_name": "LaneShareB", "highpoly_name": "LaneHigh", "output_dir": str(out),
+         "channels": ["METALLIC"], "cage_extrusion": 0.5, **BAKE_ARGS},
+    )
+    if "error" not in reply or "material" not in str(reply).lower():
+        raise CheckFailed(f"a metallic bake from a highpoly with no material gave: {str(reply)[:200]}")
+    moved = _diff_snapshots(before, ctx.conn.exec(probe))
+    if moved:
+        raise CheckFailed(f"scene changed: {moved}")
+    return (
+        "no/empty material gives an error; shared, multi-slot and no-material bakes leave the "
+        "scene as found; an empty slot is named in warnings"
+    )
+
+
+def check_bake_id_map_restores_slots(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "idmap")
+    ctx.conn.exec(
+        BAKE_SETUP
+        + "make_grid('LaneIds', (50, 0, 0), [make_material('LaneIdA'), make_material('LaneIdB')])\n"
+        "make_grid('LaneIdsBare', (52, 0, 0))\n"
+    )
+    probe = BAKE_SETUP + "result = snapshot(['LaneIds', 'LaneIdsBare'])\n"
+    before = ctx.conn.exec(probe)
+    for obj in ("LaneIds", "LaneIdsBare"):
+        for mode in ("PER_MATERIAL", "PER_OBJECT", "PER_FACE_SET"):
+            path = out / f"{obj}_{mode}.png"
+            reply = ctx.conn.call(
+                "bake_id_map",
+                {"object_name": obj, "output_path": str(path), "resolution": BAKE_SIZE,
+                 "color_mode": mode},
+            )
+            if "error" in reply or not path.is_file():
+                raise CheckFailed(f"{obj} {mode}: bake_id_map failed: {str(reply)[:160]}")
+            moved = _diff_snapshots(before, ctx.conn.exec(probe))
+            if moved:
+                raise CheckFailed(f"{obj} {mode}: slots, indices or materials changed: {moved}")
+    blocked = out / "blocked.png"
+    blocked.mkdir()
+    bad = ctx.conn.call(
+        "bake_id_map",
+        {"object_name": "LaneIds", "output_path": str(blocked),
+         "resolution": BAKE_SIZE, "color_mode": "PER_OBJECT"},
+    )
+    if "error" not in bad:
+        raise CheckFailed(f"unwritable id map path gave no error: {str(bad)[:140]}")
+    moved = _diff_snapshots(before, ctx.conn.exec(probe))
+    if moved:
+        raise CheckFailed(f"after a failed id map ({str(bad)[:80]}): {moved}")
+    return "all colour modes, and a failure, restored slots, face indices and materials"
+
+
+def check_bake_multires_writes_image(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "multires")
+    # A sphere whose top multires level is reshaped to a perturbed copy, so the top
+    # level really differs from the lower ones. An unsculpted multires has no
+    # displacement, and a level baked to itself carries nothing.
+    ctx.conn.exec(
+        BAKE_SETUP
+        + "import random\n"
+        "bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=6, location=(60, 0, 0))\n"
+        "ob = bpy.context.active_object\n"
+        "ob.name = 'LaneMultires'\n"
+        "src = ob.copy()\n"
+        "src.data = ob.data.copy()\n"
+        "bpy.context.collection.objects.link(src)\n"
+        "sub = src.modifiers.new('Sub', 'SUBSURF')\n"
+        "sub.levels = 2\n"
+        "bpy.context.view_layer.objects.active = src\n"
+        "bpy.ops.object.modifier_apply(modifier='Sub')\n"
+        "random.seed(1)\n"
+        "for v in src.data.vertices:\n"
+        "    v.co = v.co + v.normal * random.uniform(-0.15, 0.15)\n"
+        "mod = ob.modifiers.new('Multires', 'MULTIRES')\n"
+        "bpy.context.view_layer.objects.active = ob\n"
+        "for _ in range(2):\n"
+        "    bpy.ops.object.multires_subdivide(modifier=mod.name, mode='CATMULL_CLARK')\n"
+        "bpy.ops.object.select_all(action='DESELECT')\n"
+        "src.select_set(True)\n"
+        "ob.select_set(True)\n"
+        "bpy.context.view_layer.objects.active = ob\n"
+        "bpy.ops.object.multires_reshape(modifier=mod.name)\n"
+        "bpy.data.objects.remove(src)\n"
+        "ob.select_set(True)\n"
+        "bpy.context.view_layer.objects.active = ob\n"
+    )
+    probe = (
+        BAKE_SETUP
+        + "ob = bpy.data.objects['LaneMultires']\n"
+        "mod = ob.modifiers['Multires']\n"
+        "result = {'snapshot': snapshot(['LaneMultires']), 'levels': mod.levels,"
+        " 'total': mod.total_levels}\n"
+    )
+    before = ctx.conn.exec(probe)
+    if before["total"] != 2:
+        raise CheckFailed(f"setup: expected 2 multires levels, got {before['total']}")
+    done = []
+    # At the top level the tool bakes to level 0; below it, to the user's level.
+    for start_level, want_level in ((2, 0), (1, 1)):
+        ctx.conn.exec(f"bpy.data.objects['LaneMultires'].modifiers['Multires'].levels = {start_level}\n")
+        before = ctx.conn.exec(probe)
+        for map_type in ("NORMALS", "DISPLACEMENT"):
+            path = out / f"{map_type}_{start_level}.png"
+            reply = ctx.conn.call(
+                "bake_from_multires",
+                {"object_name": "LaneMultires", "output_path": str(path), "map_type": map_type,
+                 "resolution": BAKE_SIZE, "margin": 2},
+            )
+            if "error" in reply or not path.is_file():
+                raise CheckFailed(f"{map_type} from level {start_level}: {str(reply)[:200]}")
+            if reply.get("bake_level") != want_level:
+                raise CheckFailed(f"{map_type}: baked to level {reply.get('bake_level')}, want {want_level}")
+            after = ctx.conn.exec(probe)
+            moved = _diff_snapshots(before["snapshot"], after["snapshot"])
+            if moved or after["levels"] != before["levels"]:
+                raise CheckFailed(
+                    f"{map_type} from level {start_level}: state changed: {moved}, "
+                    f"levels {before['levels']} -> {after['levels']}"
+                )
+            got = ctx.conn.exec(BAKE_SETUP + f"result = image_mean({str(path)!r})\n")
+            if got["distinct"] < 8:
+                raise CheckFailed(f"{map_type} from level {start_level}: flat map ({got})")
+            done.append(f"{map_type[:4]}@{start_level}={got['distinct']}")
+    # A failing bake. At the top level the tool drops to level 0 before it bakes, and
+    # the save fails afterwards: the output path is an existing directory, so the
+    # parent exists and nothing fails before the level has been changed.
+    ctx.conn.exec("bpy.data.objects['LaneMultires'].modifiers['Multires'].levels = 2\n")
+    before = ctx.conn.exec(probe)
+    reply = ctx.conn.call(
+        "bake_from_multires",
+        {"object_name": "LaneMultires", "output_path": str(out), "map_type": "NORMALS",
+         "resolution": BAKE_SIZE, "margin": 2},
+    )
+    if not (isinstance(reply, dict) and "error" in reply):
+        raise CheckFailed(f"unwritable output_path: expected an error, got {str(reply)[:160]}")
+    after = ctx.conn.exec(probe)
+    moved = _diff_snapshots(before["snapshot"], after["snapshot"])
+    if after["levels"] != 2 or moved:
+        raise CheckFailed(
+            f"failed bake left state changed: levels {before['levels']} -> {after['levels']}, {moved}"
+        )
+    return "multires maps carry detail (distinct pixels " + ", ".join(done) + "); level, scene and material restored, also after a failed bake"
+
+
+def check_bake_without_uvs_errors(ctx: Ctx) -> str:
+    out = _bake_dir(ctx, "nouv")
+    ctx.conn.exec(BAKE_SETUP + "make_grid('LaneNoUv', (50, 0, 0), [make_material('LaneNoUvMat')], uvs=False)\n")
+    reply = ctx.conn.call(
+        "bake_pbr_batch", {"object_name": "LaneNoUv", "output_dir": str(out), **BAKE_ARGS}
+    )
+    if not (isinstance(reply, dict) and "error" in reply):
+        raise CheckFailed(f"expected an error, got {str(reply)[:160]}")
+    if "uv" not in str(reply["error"]).lower():
+        raise CheckFailed(f"error does not mention the missing UV map: {reply['error']}")
+    if any(out.iterdir()):
+        raise CheckFailed("files were written for a mesh with no UVs")
+    return "clear UV error, nothing written"
+
+
 # (name, function, seconds)
 CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
@@ -576,6 +1046,13 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
     ("reply_16mb_complete", check_reply_16mb_complete, CHECK_TIMEOUT),
     ("malformed_json_error_reply", check_malformed_json_error_reply, CHECK_TIMEOUT),
+    ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
+    ("bake_leaves_material_clean", check_bake_leaves_material_clean, 150.0),
+    ("bake_tricks_leave_material_clean", check_bake_tricks_leave_material_clean, 180.0),
+    ("bake_odd_materials", check_bake_odd_materials, 150.0),
+    ("bake_id_map_restores_slots", check_bake_id_map_restores_slots, 150.0),
+    ("bake_multires_writes_image", check_bake_multires_writes_image, 90.0),
+    ("bake_without_uvs_errors", check_bake_without_uvs_errors, 60.0),
 ]
 
 
