@@ -807,6 +807,8 @@ class AIHandlersMixin:
         """Render multi-angle views and analyze with Ollama vision model."""
         object_name = params.get("object_name")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "Analyze this 3D model render for quality and accuracy.")
         resolution = params.get("resolution", [512, 512])
 
@@ -868,6 +870,8 @@ class AIHandlersMixin:
         render_path = validate_filepath(require_param(params, "render_path", str), "render_path")
         category = params.get("category", "model")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "")
 
         if category not in ("model", "texture", "animation"):
@@ -921,6 +925,8 @@ class AIHandlersMixin:
         """Run one iteration of the refinement feedback loop."""
         object_name = params.get("object_name")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "Evaluate this 3D model for geometric accuracy and quality.")
         iteration = params.get("iteration", 0)
         previous_score = params.get("previous_score", 0.0)
@@ -973,10 +979,13 @@ class AIHandlersMixin:
         """Create a new refinement session."""
         from ..external.refinement import get_refinement_manager
 
+        reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         manager = get_refinement_manager()
         session = manager.create_session(
             object_name=require_param(params, "object_name", str),
-            reference_image=params.get("reference_image"),
+            reference_image=reference_image,
             prompt=params.get("prompt", ""),
         )
         return {

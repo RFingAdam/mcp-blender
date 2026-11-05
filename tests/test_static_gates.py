@@ -551,9 +551,14 @@ PATH_PARAM_EXEMPT: dict[tuple[str, str], str] = {
 
 
 def _is_path_param(name: str) -> bool:
-    return name in ("filepath", "output_path", "output_dir", "input_path") or name.endswith(
-        ("_path", "_dir", "_file")
-    )
+    return name in (
+        "filepath",
+        "output_path",
+        "output_dir",
+        "input_path",
+        "reference_image",
+        "source_image",
+    ) or name.endswith(("_path", "_dir", "_file"))
 
 
 def _reads_key(root: ast.AST, pname: str, key: str) -> bool:
@@ -844,6 +849,7 @@ def test_fixture_path_params_resolved(tmp_path):
             "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
             "        a = validate_filepath(require_param(params, 'out_dir', str), 'out_dir')\n"
             "        raw = params.get('in_path')\n"
+            "        ref = params.get('reference_image')\n"
             "        b = resolve_path(raw)\n"
             "        c = params['save_file']\n"
             "        return opener(params.get('data_path'))\n",
@@ -851,14 +857,19 @@ def test_fixture_path_params_resolved(tmp_path):
     )
     tools = {
         "x": {
-            "properties": {n: {} for n in ("out_dir", "in_path", "save_file", "data_path", "mode")}
+            "properties": {
+                n: {}
+                for n in ("out_dir", "in_path", "save_file", "data_path", "mode", "reference_image")
+            }
         }
     }
     assert check_path_params_resolved(addon, tools, exempt={}) == [
         "addon/pkg/handlers/a.py::_handle_x: path parameter 'data_path' not resolved",
+        "addon/pkg/handlers/a.py::_handle_x: path parameter 'reference_image' not resolved",
         "addon/pkg/handlers/a.py::_handle_x: path parameter 'save_file' not resolved",
     ]
     assert check_path_params_resolved(addon, tools, exempt={("x", "data_path"): "rna"}) == [
+        "addon/pkg/handlers/a.py::_handle_x: path parameter 'reference_image' not resolved",
         "addon/pkg/handlers/a.py::_handle_x: path parameter 'save_file' not resolved",
     ]
 
