@@ -444,6 +444,40 @@ def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
     return f"outer geometry kept and cut added ({before['verts']} -> {after['verts']} verts)"
 
 
+def check_mesh_knife_project_reports_no_cut(ctx: Ctx) -> str:
+    # A cutter that sits beside the target does not overlap it in the top view, so the
+    # operator cuts nothing and raises nothing. The reply must say so.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneMissTarget', 2.0, (80, 0, 0))\n"
+        + "me = bpy.data.meshes.new('LaneMissCutter')\n"
+        + "bm = bmesh.new()\n"
+        + "bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.25)\n"
+        + "bm.to_mesh(me)\n"
+        + "bm.free()\n"
+        + "cutter = bpy.data.objects.new('LaneMissCutter', me)\n"
+        + "cutter.location = (95, 0, 2)\n"
+        + "bpy.context.scene.collection.objects.link(cutter)\n"
+    )
+    probe = (
+        "me = bpy.data.objects['LaneMissTarget'].data\n"
+        "result = [len(me.vertices), len(me.edges), len(me.polygons)]\n"
+    )
+    before = ctx.conn.exec(probe)
+    reply = ctx.conn.call(
+        "mesh_knife_project",
+        {"target_object": "LaneMissTarget", "cutter_object": "LaneMissCutter"},
+    )
+    after = ctx.conn.exec(probe)
+    if not (isinstance(reply, dict) and reply.get("success") is False):
+        raise CheckFailed(f"a cut that changed nothing did not report failure: {str(reply)[:160]}")
+    if "does not overlap" not in str(reply.get("error", "")):
+        raise CheckFailed(f"the failure does not say why: {str(reply)[:160]}")
+    if before != after:
+        raise CheckFailed(f"the mesh changed although no cut was reported: {before} -> {after}")
+    return "no-overlap cut reported as a failure, mesh unchanged"
+
+
 def check_mesh_loop_cut_adds_edges(ctx: Ctx) -> str:
     ctx.conn.exec(MAKE_CUBE + "make('LaneLoopCube', 2.0, (60, 0, 0))\n")
     probe = "result = len(bpy.data.objects['LaneLoopCube'].data.edges)\n"
@@ -1801,6 +1835,7 @@ def check_bake_without_uvs_errors(ctx: Ctx) -> str:
 CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
     ("mesh_knife_project_keeps_outside", check_mesh_knife_project_keeps_outside, CHECK_TIMEOUT),
+    ("mesh_knife_project_reports_no_cut", check_mesh_knife_project_reports_no_cut, CHECK_TIMEOUT),
     ("mesh_loop_cut_adds_edges", check_mesh_loop_cut_adds_edges, CHECK_TIMEOUT),
     ("mesh_select_criteria_intersect", check_mesh_select_criteria_intersect, CHECK_TIMEOUT),
     ("mesh_edge_slide_moves_edge", check_mesh_edge_slide_moves_edge, CHECK_TIMEOUT),

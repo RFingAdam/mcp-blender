@@ -3583,6 +3583,12 @@ TOOLS: list[Tool] = [
                     "default": False,
                     "description": "Cut through entire mesh (not just front faces)",
                 },
+                "view_axis": {
+                    "type": "string",
+                    "enum": ["TOP", "BOTTOM", "FRONT", "BACK", "LEFT", "RIGHT"],
+                    "default": "TOP",
+                    "description": "Axis the cutter is projected along. The first 3D view is turned to it for the call and restored afterwards. The cutter must overlap the target in this view, or nothing is cut and the reply is a failure.",
+                },
             },
             "required": ["target_object", "cutter_object"],
         },

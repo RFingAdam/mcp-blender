@@ -20,6 +20,16 @@ from ..validation import (
 )
 from ._helpers import needs_view3d, restores_object_mode, view3d_override
 
+# View rotation quaternions (w, x, y, z) of Blender's numpad views.
+_VIEW_AXIS_ROTATIONS = {
+    "TOP": (1.0, 0.0, 0.0, 0.0),
+    "BOTTOM": (0.0, 1.0, 0.0, 0.0),
+    "FRONT": (0.7071068, 0.7071068, 0.0, 0.0),
+    "BACK": (0.0, 0.0, 0.7071068, 0.7071068),
+    "RIGHT": (0.5, 0.5, 0.5, 0.5),
+    "LEFT": (0.5, 0.5, -0.5, -0.5),
+}
+
 
 class MeshEditingHandlersMixin:
     """Mixin for mesh editing handlers."""
@@ -1730,24 +1740,52 @@ class MeshEditingHandlersMixin:
         if override is None:
             return needs_view3d("mesh_knife_project")
 
+        view_axis = validate_enum(
+            params.get("view_axis", "TOP"), "view_axis", list(_VIEW_AXIS_ROTATIONS)
+        )
+
         ensure_object_selected(target)
         bpy.context.view_layer.objects.active = target
 
+        def counts():
+            mesh = target.data
+            return (len(mesh.vertices), len(mesh.edges), len(mesh.polygons))
+
+        before = counts()
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="DESELECT")
         # The cutter is selected only now: selected before entering Edit mode it would enter
         # Edit mode too, and the operator ignores selected objects that are being edited.
         cutter.select_set(True)
+        # The operator projects along the view of the area it is given, which is the first
+        # 3D view found, so that view is turned to the requested axis for the call only.
+        rv3d = override["area"].spaces.active.region_3d
+        saved_rotation = rv3d.view_rotation.copy()
+        saved_perspective = rv3d.view_perspective
         try:
+            rv3d.view_perspective = "ORTHO"
+            rv3d.view_rotation = _VIEW_AXIS_ROTATIONS[view_axis]
             with bpy.context.temp_override(**override):
                 bpy.ops.mesh.knife_project(cut_through=cut_through)
         finally:
+            rv3d.view_rotation = saved_rotation
+            rv3d.view_perspective = saved_perspective
             bpy.ops.object.mode_set(mode="OBJECT")
+        if counts() == before:
+            return {
+                "success": False,
+                "error": (
+                    "mesh_knife_project cut nothing: the cutter does not overlap the target "
+                    f"in the {view_axis} view used. Pass another view_axis or move the cutter."
+                ),
+                "view_axis": view_axis,
+            }
         return {
             "success": True,
             "target": target_name,
             "cutter": cutter_name,
             "method": "knife_project",
+            "view_axis": view_axis,
         }
 
     def _handle_mesh_bisect(self, params: dict) -> dict:
