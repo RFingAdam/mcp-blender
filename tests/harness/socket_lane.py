@@ -703,6 +703,28 @@ def check_undo_reverts(ctx: Ctx) -> str:
     return "last change reverted, earlier change kept"
 
 
+def check_failed_call_adds_no_undo_step(ctx: Ctx) -> str:
+    # Count steps by effect: one undo must revert the last good change. If the
+    # failed call had pushed a step of its own, that undo would only consume it.
+    ctx.conn.call("object_create", {"type": "cube", "name": "LaneFailA"})
+    ctx.conn.call("object_create", {"type": "cube", "name": "LaneFailB"})
+    try:
+        reply = ctx.conn.call("object_delete", {"name": "LaneNoSuchObject"})
+    except RpcError:
+        pass  # the expected failure
+    else:
+        raise CheckFailed(f"setup: deleting a missing object did not fail: {reply}")
+    undo = ctx.conn.call("undo")
+    if isinstance(undo, dict) and undo.get("success") is False:
+        raise CheckFailed(f"undo reported failure: {undo.get('error')}")
+    names = _names(ctx.conn)
+    if "LaneFailB" in names:
+        raise CheckFailed("the failed call added an undo step: one undo did not revert LaneFailB")
+    if "LaneFailA" not in names:
+        raise CheckFailed("undo removed more than the last change (LaneFailA is gone)")
+    return "failed call left the undo stack alone"
+
+
 def check_execute_script_stdout(ctx: Ctx) -> str:
     # The expected text is computed inside Blender, so echoing the source cannot pass.
     expected = "lane-" + str(6 * 7 * 1000 + 1)
@@ -1225,6 +1247,7 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("msfs_uv_layout_writes_file", check_msfs_uv_layout_writes_file, 60.0),
     ("msfs_paint_brush_after_setup", check_msfs_paint_brush_after_setup, 60.0),
     ("undo_reverts", check_undo_reverts, CHECK_TIMEOUT),
+    ("failed_call_adds_no_undo_step", check_failed_call_adds_no_undo_step, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
     ("reply_16mb_complete", check_reply_16mb_complete, CHECK_TIMEOUT),
     ("malformed_json_error_reply", check_malformed_json_error_reply, CHECK_TIMEOUT),

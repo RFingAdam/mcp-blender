@@ -639,9 +639,6 @@ class AIHandlersMixin:
         """
         script = require_param(params, "script", str)
 
-        # Push undo so user can Ctrl+Z
-        bpy.ops.ed.undo_push(message="MCP Execute Script")
-
         # Capture stdout/stderr
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()

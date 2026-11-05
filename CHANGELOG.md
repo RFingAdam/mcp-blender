@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Each successful tool call is one undo step in the GUI.** Operators called from the socket
+  timer push no undo step, so `undo` reverted nothing or too much. `CommandHandlers.handle` now
+  calls `bpy.ops.ed.undo_push(message=<tool>)` after a tool that does not report an error or
+  `success: false`, after any rename the tool made. Read-only tools (`NON_MUTATING`), `undo`,
+  `redo` and `ping` never push, so redo keeps working. `execute_script` no longer pushes a step
+  of its own before running, which left an extra no-op step. Background mode has undo disabled
+  and is unchanged.
 - **Viewport-only tools no longer crash Blender, and work in a GUI session (closes #37).**
   `mesh_loop_cut`, `mesh_knife_project`, `sculpt_mesh_filter`, `sculpt_mask_by_topology`
   (`ALL`, `NONE` and `invert`) and `render_screenshot` call operators that need a 3D viewport.

@@ -759,6 +759,43 @@ def test_diff_reports_new_stale_and_count_changes():
     assert _diff(["a", "a"], ["a"]) == ([], ["a"])
 
 
+def _module_frozenset(name: str) -> set[str]:
+    """String members of a module-level ``name: frozenset[str] = frozenset({...})``."""
+    for node in _parse(ADDON_DIR / "handlers" / "__init__.py").body:
+        target = node.target if isinstance(node, ast.AnnAssign) else None
+        if isinstance(target, ast.Name) and target.id == name:
+            return {
+                n.value for n in ast.walk(node.value)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            }
+    raise AssertionError(f"{name} not found in handlers/__init__.py")
+
+
+def test_non_mutating_names_are_registered():
+    non_mutating = _module_frozenset("NON_MUTATING")
+    assert non_mutating
+    assert sorted(non_mutating - set(_registered_handlers(ADDON_DIR))) == []
+
+
+def test_undo_and_redo_never_push():
+    non_mutating = _module_frozenset("NON_MUTATING")
+    harness_only = _module_frozenset("HARNESS_ONLY")
+    assert {"undo", "redo", "ping"} <= non_mutating
+    assert {"harness_reset", "harness_exec"} <= harness_only
+
+
+def test_read_tools_are_non_mutating():
+    non_mutating = _module_frozenset("NON_MUTATING")
+    reads = [
+        name
+        for name in _registered_handlers(ADDON_DIR)
+        if name.endswith(("_get", "_list", "_info", "_status"))
+        or name.startswith(("get_", "list_"))
+    ]
+    assert reads
+    assert sorted(set(reads) - non_mutating) == []
+
+
 if __name__ == "__main__":
     if "--write-baseline" in sys.argv:
         _write_baseline()
