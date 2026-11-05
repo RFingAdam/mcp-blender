@@ -236,6 +236,51 @@ def test_both_baseline_flags_rejected(tmp_path):
         )
 
 
+def test_a_crash_that_passes_alone_is_recorded_as_a_session_crash(tmp_path):
+    from tests.harness import driver
+    from tests.harness.cases import Case
+
+    cases = [Case("a#m", "a", "minimal"), Case("b#m", "b", "minimal"), Case("c#m", "c", "minimal")]
+    result = {"a#m": "CRASH", "b#m": "CRASH", "c#m": "PASS"}
+    alone = {"a#m": "PASS", "b#m": "CRASH"}
+    calls = []
+
+    def fake_run(blender, cases, out_dir):
+        calls.append([c.id for c in cases])
+        return {c.id: alone[c.id] for c in cases}
+
+    session = driver.retry_crashes("x", cases, result, tmp_path, runner=fake_run)
+    assert calls == [["a#m"], ["b#m"]]
+    assert session == {"a#m": "PASS"}
+    assert result == {"a#m": "PASS", "b#m": "CRASH", "c#m": "PASS"}
+
+
+def test_retry_crashes_flag_keeps_a_session_crash_out_of_the_diff(monkeypatch, tmp_path, capsys):
+    import json
+
+    from tests.harness import driver
+    from tests.harness.cases import build_cases
+    from tests.harness.catalog import load_tools
+
+    ids = [c.id for c in build_cases(load_tools())]
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps(dict.fromkeys(ids, "PASS")))
+
+    def fake_run(blender, cases, out_dir):
+        if len(cases) == 1:
+            return {cases[0].id: "PASS"}
+        return {c.id: "CRASH" if i == 0 else "PASS" for i, c in enumerate(cases)}
+
+    monkeypatch.setattr(driver, "run", fake_run)
+    (tmp_path / "out").mkdir()
+    argv = ["--blender", "x", "--out", str(tmp_path / "out"), "--check-baseline", str(base)]
+    assert driver.main(argv) == 1
+    assert driver.main(argv + ["--retry-crashes"]) == 0
+    assert f"session crash: {ids[0]} CRASH in the full run, PASS alone" in capsys.readouterr().err
+    saved = json.loads((tmp_path / "out" / "session_crashes.json").read_text())
+    assert saved == {ids[0]: "PASS"}
+
+
 def _load_fetch():
     import importlib.util
     from pathlib import Path

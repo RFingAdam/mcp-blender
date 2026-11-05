@@ -106,8 +106,7 @@ The truth harness runs every tool in real headless Blender. See
 The truth harness runs every tool in real headless Blender and compares the results with
 committed baselines. It runs on Blender 4.5 and 5.2 on every pull request, and a difference there
 blocks the merge. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 run nightly and are best effort. Baselines live
-in `tests/harness/baselines/`. They hold case ids
-and result classes only, never messages or paths.
+in `tests/harness/baselines/`. They hold case ids and result classes only, never messages or paths.
 
 Each tool gets several cases: a minimal call, one call per enum value, and a call with a
 required argument left out. Each case ends up in one class:
@@ -115,8 +114,8 @@ required argument left out. Each case ends up in one class:
 - `PASS`: the tool returned a result with no error.
 - `EXPECTED`: the failure is the right one. The network was blocked on purpose, or a bad
   argument raised a validation error.
-- `SOFT_FAIL`: the tool returned an error result instead of raising. Often benign, such as no
-  AI backend offline. Sometimes a real defect.
+- `SOFT_FAIL`: the tool returned an error result instead of raising. Often benign, such as an
+  AI backend that is offline. Sometimes a real defect.
 - `BUG`: the tool raised an exception it should not have raised, or an `#invalid` case did not
   raise a validation error.
 - `CRASH`: Blender died during the case.
@@ -133,6 +132,16 @@ A failed check prints one line per difference from the baseline:
 - `changed: id OLD -> NEW`: the class changed with no change in severity.
 - `added: id NEW`: a case exists that the baseline does not know.
 - `removed: id (was OLD)`: the baseline has a case that no longer exists.
+
+### Session crashes
+
+Late in a full run, Blender 4.2 and 4.3 sometimes crash inside Blender itself. The crash lands
+on a different heavy case each time (an export, a preview render, `scene_new`), and that case
+passes when it runs alone. The nightly job passes `--retry-crashes`, which reruns each crashed
+case alone in a fresh Blender. A case that passes alone takes its solo class and is printed as
+`session crash: id CRASH in the full run, CLASS alone`. The list is also saved to
+`session_crashes.json`. A case that crashes alone too stays `CRASH`. The 4.5 and 5.2 jobs never
+retry, so any crash there fails the check.
 
 ### Reproduce locally
 
@@ -184,12 +193,13 @@ the lane replaces only the series it ran. An artifact's `results.json` is
 ### Adding a tool
 
 A new tool shows up as `added:` lines. That is expected. Record them in the 4.5 and 5.2
-baselines. Copy the same lines into every other `blender-*.json` baseline too, so the sync test passes. The nightly
-job flags any real difference there.
+baselines. Copy the same lines into every other `blender-*.json` baseline too, so the sync test
+passes. The nightly job flags any real difference there.
 
-If the new tool has a `SOFT_FAIL` case, add the tool to `SOFT_FAIL_ALLOWED` (benign) or
-`SOFT_FAIL_DEFECTS` (a real defect) in `tests/harness/fixtures.py`, with a reason. A test fails
-until you do.
+If the new tool has a benign `SOFT_FAIL` case, such as no AI backend, add the tool to
+`SOFT_FAIL_ALLOWED` in `tests/harness/fixtures.py`, with a reason. A test fails until you do. A
+`SOFT_FAIL` that hides a real defect needs a fix, not a table entry: `SOFT_FAIL_DEFECTS` must
+stay empty.
 
 ## Project Structure
 

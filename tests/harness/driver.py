@@ -178,6 +178,26 @@ def _run(
     return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
 
 
+def retry_crashes(
+    blender: str, cases: list[Case], result: dict[str, str], out_dir: Path, runner=None
+) -> dict[str, str]:
+    """Rerun each crashed case alone in a fresh Blender, and return the ones that pass alone.
+
+    Blender 4.2 and 4.3 sometimes crash inside Blender late in a full run, on a different heavy
+    case each time, and the case passes when run alone. A case that also crashes alone keeps
+    CRASH. The others take their class from the solo run, so ``result`` is updated in place.
+    """
+    runner = runner or run
+    session = {}
+    for case in cases:
+        if result.get(case.id) != "CRASH":
+            continue
+        alone = runner(blender, [case], Path(out_dir) / re.sub(r"[^\w.=-]", "_", case.id))
+        if alone[case.id] != "CRASH":
+            result[case.id] = session[case.id] = alone[case.id]
+    return session
+
+
 SEVERITY = {"PASS": 0, "EXPECTED": 0, "SOFT_FAIL": 1, "BUG": 2, "FAIL": 2, "CRASH": 3, "HANG": 3}
 
 
@@ -212,6 +232,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", action="append", default=[], metavar="TOOL")
     parser.add_argument("--write-baseline", type=Path, metavar="FILE")
     parser.add_argument("--check-baseline", type=Path, metavar="FILE")
+    parser.add_argument(
+        "--retry-crashes",
+        action="store_true",
+        help="rerun each crashed case alone; one that passes alone is a session crash",
+    )
     args = parser.parse_args(argv)
     if args.write_baseline and args.check_baseline:
         parser.error("--write-baseline and --check-baseline are mutually exclusive")
@@ -233,6 +258,11 @@ def main(argv: list[str] | None = None) -> int:
 
     cases = select(build_cases(load_tools()), args.only)
     result = run(args.blender, cases, args.out)
+    if args.retry_crashes:
+        session = retry_crashes(args.blender, cases, result, args.out / "retry")
+        (args.out / "session_crashes.json").write_text(json.dumps(session, indent=2))
+        for case_id, alone in sorted(session.items()):
+            print(f"session crash: {case_id} CRASH in the full run, {alone} alone", file=sys.stderr)
     (args.out / "results.json").write_text(json.dumps(result, indent=2, sort_keys=True))
     for case_id in sorted(result):
         print(f"{case_id} {result[case_id]}")
