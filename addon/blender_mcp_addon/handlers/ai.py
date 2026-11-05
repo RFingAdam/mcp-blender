@@ -51,7 +51,7 @@ class AIHandlersMixin:
         image_path = params.get("image_path")
         if image_path:
             return generate_model_from_image(
-                image_path=image_path,
+                image_path=validate_filepath(image_path, "image_path"),
                 prompt=params.get("prompt"),
                 style=params.get("style"),
                 quality=params.get("quality", "medium"),
@@ -86,7 +86,7 @@ class AIHandlersMixin:
         image_path = params.get("image_path")
         if image_path:
             result = generate_model_from_image(
-                image_path=image_path,
+                image_path=validate_filepath(image_path, "image_path"),
                 prompt=params.get("prompt"),
                 style=params.get("style"),
                 quality=params.get("quality", "medium"),
@@ -865,7 +865,7 @@ class AIHandlersMixin:
         """Evaluate any render/output using Ollama vision."""
         from ..external.ai_models import evaluate_output
 
-        render_path = require_param(params, "render_path", str)
+        render_path = validate_filepath(require_param(params, "render_path", str), "render_path")
         category = params.get("category", "model")
         reference_image = params.get("reference_image")
         prompt = params.get("prompt", "")
@@ -1042,6 +1042,13 @@ class AIHandlersMixin:
         """Run the full AI 3D generation pipeline."""
         from ..external.pipeline import run_pipeline
 
+        # The pipeline reads these from the dict it is given, so resolve them here.
+        image_path = params.get("image_path")
+        if image_path:
+            params = {**params, "image_path": validate_filepath(image_path, "image_path")}
+        output_dir = params.get("output_dir")
+        if output_dir:
+            params = {**params, "output_dir": validate_filepath(output_dir, "output_dir")}
         return run_pipeline(params, self)
 
     def _handle_ai_pipeline_status(self, params: dict) -> dict:

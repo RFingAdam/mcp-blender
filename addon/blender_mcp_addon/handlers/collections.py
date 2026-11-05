@@ -8,6 +8,7 @@ from ..validation import (
     ValidationError,
     require_param,
     validate_enum,
+    validate_filepath,
 )
 
 
@@ -320,7 +321,7 @@ class CollectionHandlersMixin:
 
     def _handle_save_as(self, params: dict) -> dict:
         """Save to a new file path."""
-        filepath = require_param(params, "filepath", str)
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
         compress = params.get("compress", False)
         copy = params.get("copy", False)
 

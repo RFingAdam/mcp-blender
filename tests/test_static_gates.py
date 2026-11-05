@@ -538,6 +538,109 @@ def check_schema_params(
 
 
 # ---------------------------------------------------------------------------
+# Check: path parameters go through the path resolver
+# ---------------------------------------------------------------------------
+
+PATH_RESOLVERS = ("validate_filepath", "resolve_path")
+
+# Schema parameters that look like paths, and are not filesystem paths. Each needs a reason.
+PATH_PARAM_EXEMPT: dict[tuple[str, str], str] = {
+    ("keyframe_insert", "data_path"): "an RNA property path such as 'location', not a file",
+    ("keyframe_delete", "data_path"): "an RNA property path such as 'location', not a file",
+}
+
+
+def _is_path_param(name: str) -> bool:
+    return name in ("filepath", "output_path", "output_dir", "input_path") or name.endswith(
+        ("_path", "_dir", "_file")
+    )
+
+
+def _reads_key(root: ast.AST, pname: str, key: str) -> bool:
+    """True when ``root`` contains a read of ``params[key]`` (get, subscript, require/optional)."""
+    for node in ast.walk(root):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("get", "pop")
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == pname
+            and node.args
+            and _const_str(node.args[0]) == key
+        ):
+            return True
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == pname
+            and _const_str(node.slice) == key
+        ):
+            return True
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("require_param", "optional_param")
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == pname
+            and _const_str(node.args[1]) == key
+        ):
+            return True
+    return False
+
+
+def _resolved_through_resolver(func: ast.FunctionDef, key: str) -> bool:
+    """Does the handler pass ``params[key]`` (or a name bound from it) to a path resolver?"""
+    args = func.args.args
+    if len(args) < 2:
+        return False
+    pname = args[1].arg
+    bound: set[str] = set()
+    for node in ast.walk(func):
+        if isinstance(node, ast.Assign) and _reads_key(node.value, pname, key):
+            for target in node.targets:
+                bound.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+    for node in ast.walk(func):
+        if not (isinstance(node, ast.Call) and _called_name(node) in PATH_RESOLVERS):
+            continue
+        first = _call_arg(node, 0, "value" if _called_name(node) == "validate_filepath" else "path")
+        if first is None:
+            continue
+        if _reads_key(first, pname, key):
+            return True
+        if any(isinstance(n, ast.Name) and n.id in bound for n in ast.walk(first)):
+            return True
+    return False
+
+
+def check_path_params_resolved(
+    addon_dir: Path = ADDON_DIR,
+    tools: dict[str, dict] | None = None,
+    exempt: dict[tuple[str, str], str] | None = None,
+) -> list[str]:
+    """Path-like schema parameters a handler reads without ``validate_filepath``/``resolve_path``.
+
+    A path from the user may start with ``~`` or ``//``. Python I/O sees neither
+    as the user meant, so the handler must take the resolved path.
+    """
+    tools = _tools() if tools is None else tools
+    exempt = PATH_PARAM_EXEMPT if exempt is None else exempt
+    methods = _method_index(addon_dir)
+    out: list[str] = []
+    for key, method_name in _registered_handlers(addon_dir).items():
+        if key not in tools or method_name not in methods:
+            continue
+        path, func = methods[method_name]
+        rel = _rel(path, addon_dir)
+        for name in sorted(tools[key].get("properties", {})):
+            if not _is_path_param(name) or (key, name) in exempt:
+                continue
+            if not _resolved_through_resolver(func, name):
+                out.append(f"{rel}::{method_name}: path parameter '{name}' not resolved")
+    return sorted(out)
+
+
+# ---------------------------------------------------------------------------
 # Baseline plumbing
 # ---------------------------------------------------------------------------
 
@@ -549,6 +652,7 @@ CHECKS = {
     "schema_params": check_schema_params,
     "tool_handler_parity": check_tool_handler_parity,
     "required_matches": check_required_matches,
+    "path_params_resolved": check_path_params_resolved,
 }
 
 
@@ -730,6 +834,37 @@ def test_fixture_schema_params_require_param_reads_one_key(tmp_path):
         "addon/pkg/handlers/a.py::_handle_x: reads 'bogus' not in schema",
         "addon/pkg/handlers/a.py::_handle_x: schema 'unused' never read",
     ]
+
+
+def test_fixture_path_params_resolved(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY,
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        a = validate_filepath(require_param(params, 'out_dir', str), 'out_dir')\n"
+            "        raw = params.get('in_path')\n"
+            "        b = resolve_path(raw)\n"
+            "        c = params['save_file']\n"
+            "        return opener(params.get('data_path'))\n",
+        },
+    )
+    tools = {
+        "x": {
+            "properties": {n: {} for n in ("out_dir", "in_path", "save_file", "data_path", "mode")}
+        }
+    }
+    assert check_path_params_resolved(addon, tools, exempt={}) == [
+        "addon/pkg/handlers/a.py::_handle_x: path parameter 'data_path' not resolved",
+        "addon/pkg/handlers/a.py::_handle_x: path parameter 'save_file' not resolved",
+    ]
+    assert check_path_params_resolved(addon, tools, exempt={("x", "data_path"): "rna"}) == [
+        "addon/pkg/handlers/a.py::_handle_x: path parameter 'save_file' not resolved",
+    ]
+
+
+def test_path_exemptions_carry_a_reason():
+    assert all(reason.strip() for reason in PATH_PARAM_EXEMPT.values())
 
 
 def test_fixture_tool_handler_parity(tmp_path):

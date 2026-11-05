@@ -8,6 +8,7 @@ import bpy
 from .. import compat
 from ..validation import (
     require_param,
+    validate_filepath,
 )
 from ._helpers import (
     _ALL_CHANNELS,
@@ -535,7 +536,7 @@ class BakingHandlersMixin:
         """Bake all requested PBR channels in one call."""
 
         object_name = require_param(params, "object_name", str)
-        output_dir = require_param(params, "output_dir", str)
+        output_dir = validate_filepath(require_param(params, "output_dir", str), "output_dir")
         channels = params.get("channels", _ALL_CHANNELS)
         resolution = int(params.get("resolution", 2048))
         output_prefix = params.get("output_prefix", object_name)
@@ -656,7 +657,7 @@ class BakingHandlersMixin:
 
         lowpoly_name = require_param(params, "lowpoly_name", str)
         highpoly_name = require_param(params, "highpoly_name", str)
-        output_dir = require_param(params, "output_dir", str)
+        output_dir = validate_filepath(require_param(params, "output_dir", str), "output_dir")
         channels = params.get("channels", ["NORMAL", "AO"])
         resolution = int(params.get("resolution", 2048))
         cage_extrusion = float(params.get("cage_extrusion", 0.1))
@@ -811,7 +812,7 @@ class BakingHandlersMixin:
         """Bake normals or displacement from a Multiresolution modifier."""
 
         object_name = require_param(params, "object_name", str)
-        output_path = require_param(params, "output_path", str)
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         map_type = params.get("map_type", "NORMALS").upper()
         resolution = int(params.get("resolution", 2048))
         margin = int(params.get("margin", 16))
@@ -1056,7 +1057,7 @@ class BakingHandlersMixin:
         from mathutils import Vector
 
         object_name = require_param(params, "object_name", str)
-        output_path = require_param(params, "output_path", str)
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         resolution = int(params.get("resolution", 2048))
         cavity_type = params.get("cavity_type", "BOTH").upper()
 
@@ -1260,7 +1261,7 @@ class BakingHandlersMixin:
         import random
 
         object_name = require_param(params, "object_name", str)
-        output_path = require_param(params, "output_path", str)
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         resolution = int(params.get("resolution", 2048))
         color_mode = params.get("color_mode", "PER_MATERIAL").upper()
 

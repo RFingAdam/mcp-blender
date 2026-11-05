@@ -15,6 +15,7 @@ from ..validation import (
     ValidationError,
     require_param,
     validate_enum,
+    validate_filepath,
 )
 from ._helpers import needs_view3d, restores_object_mode, view3d_override
 
@@ -388,6 +389,8 @@ class SculptHandlersMixin:
         bake_displacement = params.get("bake_displacement", True)
         displacement_resolution = int(params.get("displacement_resolution", 2048))
         output_path = params.get("output_displacement_path", "")
+        if output_path:
+            output_path = validate_filepath(output_path, "output_displacement_path")
 
         obj = get_object_or_error(object_name)
         if obj.type != "MESH":
