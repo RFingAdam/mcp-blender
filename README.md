@@ -173,7 +173,7 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_refine` | needs network access, which the harness turns off |
 | `ai_texture_from_render` | no AI backend is reachable offline |
 | `analyze_viewport` | needs network access, which the harness turns off |
-| `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
+| `annotation_add` | Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |
 | `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
 | `mesh_loop_cut` | needs a 3D viewport; socket lane covers it |

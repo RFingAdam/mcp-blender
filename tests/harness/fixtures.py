@@ -247,7 +247,7 @@ SOFT_FAIL_ALLOWED: dict[str, Known] = {
     ),
     "ai_texture_from_render": _NO_AI_BACKEND,
     "annotation_add": Known(
-        "Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
+        "Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
         r"no Python call that creates annotation strokes",
     ),
     "msfs_livery_convert_to_dds": Known(

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `annotation_add` note names the right series.** The harness reason and the README table said
+  Blender 4.3 to 4.5 has no Python call for annotation strokes. The baselines show 4.3, 4.4, 4.5, 5.0 and
+  5.1 return that message, and only 4.2 and 5.2 draw the stroke, so the text now says 4.3 to 5.1.
 - **The truth harness no longer lets an allowed failure hide a new one.** Each row in
   `SOFT_FAIL_ALLOWED` and `KNOWN_UNREACHED` now carries a regex for the message the tool really returns
   ("No AI backends are available", "needs an open 3D viewport", and so on). A `SOFT_FAIL` whose message
