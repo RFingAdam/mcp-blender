@@ -859,11 +859,6 @@ def test_read_tools_are_non_mutating():
     assert sorted(set(reads) - non_mutating) == []
 
 
-if __name__ == "__main__":
-    if "--write-baseline" in sys.argv:
-        _write_baseline()
-
-
 def test_fixture_required_matches(tmp_path):
     addon = _make_addon(
         tmp_path,
@@ -912,3 +907,8 @@ def test_fixture_required_matches_ignores_branch_only_requires(tmp_path):
         },
     )
     assert check_required_matches(addon, {"x": {"required": ["name"]}}) == []
+
+
+if __name__ == "__main__":
+    if "--write-baseline" in sys.argv:
+        _write_baseline()
