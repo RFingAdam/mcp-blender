@@ -420,8 +420,6 @@ def auto_uv_unwrap(
                     PREF_CONTEXT="ALL_FACES",
                     PREF_PACK_IN_ONE=True,
                     PREF_NEW_UVLAYER=False,
-                    PREF_APPLY_IMAGE=False,
-                    PREF_IMG_PX_SIZE=1024,
                     PREF_BOX_DIV=12,
                     PREF_MARGIN_DIV=island_margin,
                 )

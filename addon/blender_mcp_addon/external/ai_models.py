@@ -819,6 +819,18 @@ def refine_with_feedback(
         ollama_model=ollama_model,
     )
 
+    # A failed evaluation is not a score of 0: do not record it as an iteration.
+    if evaluation.get("success") is False:
+        return {
+            "success": False,
+            "error": evaluation.get("error", "Evaluation failed"),
+            "session_id": session.session_id,
+            "object_name": object_name,
+            "category": category,
+            "evaluation": evaluation,
+            "render_path": str(render_path),
+        }
+
     score = evaluation.get("overall_score", 0.0)
     previous_score = session.iterations[-1].score if session.iterations else 0.0
     score_delta = score - previous_score

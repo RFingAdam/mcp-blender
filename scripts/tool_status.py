@@ -4,8 +4,10 @@
     python scripts/tool_status.py --check   exit 1 if README.md is out of date
 
 A tool passes on a Blender series when every harness case for it is PASS or
-EXPECTED: it ran on valid input and rejected bad input. That does not prove
-its output is right. The socket lane checks output for some tools, and its
+EXPECTED and at least one valid call passed: it ran on valid input and
+rejected bad input. A tool whose valid calls all stopped at the disabled
+network never ran, so it is listed as unchecked. Passing does not prove its
+output is right. The socket lane checks output for some tools, and its
 known failures are listed too.
 """
 
@@ -58,7 +60,7 @@ AREAS = {
     "annotations": ("Annotations", ["annotation_dimension", "annotation_text"]),
     "msfs": ("MSFS content", ["msfs_create_lod_hierarchy", "msfs_setup_material"]),
     "msfs_livery": ("MSFS livery", ["msfs_livery_transfer", "msfs_livery_create_package"]),
-    "ai": ("AI generation and refinement", ["ai_evaluate", "refine_iteration"]),
+    "ai": ("AI generation and refinement", ["ai_mesh_remesh", "ai_auto_uv"]),
     "polyhaven": ("Poly Haven", ["polyhaven_search", "polyhaven_download"]),
 }
 
@@ -79,15 +81,19 @@ def tool_states(results: dict[str, str]) -> dict[str, str]:
     """State of each tool on one Blender series.
 
     pass: every case passed. loose: works, but a call with no arguments was not
-    rejected cleanly. unchecked: needs what headless Blender lacks. fail: the rest.
+    rejected cleanly. unchecked: needs what headless Blender lacks. offline:
+    every valid call stopped at the network, which the harness disables, so the
+    tool never ran. fail: the rest.
     """
-    classes, loose = defaultdict(set), set()
+    classes, valid, loose = defaultdict(set), defaultdict(set), set()
     for case, result in results.items():
         tool, _, kind = case.partition("#")
         if kind == "invalid" and result in BROKEN:
             loose.add(tool)
         else:
             classes[tool].add(result)
+        if kind != "invalid":
+            valid[tool].add(result)
     states = {}
     for tool, seen in classes.items():
         if (
@@ -98,6 +104,8 @@ def tool_states(results: dict[str, str]) -> dict[str, str]:
             states[tool] = "fail"
         elif "SOFT_FAIL" in seen:
             states[tool] = "unchecked"
+        elif valid[tool] == {"EXPECTED"}:
+            states[tool] = "offline"
         else:
             states[tool] = "loose" if tool in loose else "pass"
     return states
@@ -144,7 +152,7 @@ def status_section(states: dict[str, dict[str, str]]) -> str:
         (
             "unchecked",
             "need what a headless test cannot provide, such as a GUI, "
-            "an AI backend, or an earlier call.",
+            "network access, or an earlier call.",
         ),
         ("fail", "have a known failure."),
     ]
@@ -178,6 +186,9 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     rows.append(["**Total**", f"**{len(tools)}**", *(f"**{t}**" for t in totals), ""])
 
     why = {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}
+    for t in g["unchecked"]:
+        if t not in why and any(states[s][t] == "offline" for s in SERIES):
+            why[t] = "needs network access, which the harness turns off"
     fail_rows = [
         [f"`{t}`", ", ".join(s for s in SERIES if states[s][t] == "fail")] for t in g["fail"]
     ]

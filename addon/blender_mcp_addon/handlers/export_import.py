@@ -24,7 +24,7 @@ class ExportImportHandlersMixin:
         export_format = validate_enum(
             params.get("export_format", "GLB"),
             "export_format",
-            ["GLB", "GLTF_SEPARATE", "GLTF_EMBEDDED"]
+            ["GLB", "GLTF_SEPARATE"]
         )
 
         bpy.ops.export_scene.gltf(

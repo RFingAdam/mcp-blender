@@ -178,7 +178,7 @@ class PhysicsHandlersMixin:
 
         # Collect final positions of rigid body objects
         final_positions = {}
-        rb_group = scene.rigidbody_world.group
+        rb_group = scene.rigidbody_world.collection
         if rb_group:
             for obj in rb_group.objects:
                 final_positions[obj.name] = {
@@ -464,7 +464,8 @@ class PhysicsHandlersMixin:
         # Set as flow (inflow)
         flow_mod.fluid_type = 'FLOW'
         flow_settings = flow_mod.flow_settings
-        flow_settings.flow_type = fluid_type
+        # The flow enum has no GAS: gas is simulated from smoke.
+        flow_settings.flow_type = "SMOKE" if fluid_type == "GAS" else fluid_type
         flow_settings.flow_behavior = 'INFLOW'
 
         return {
@@ -479,7 +480,7 @@ class PhysicsHandlersMixin:
             "flow": {
                 "object": flow_obj.name,
                 "type": "FLOW",
-                "flow_type": fluid_type,
+                "flow_type": flow_settings.flow_type,
                 "behavior": "INFLOW",
             },
             "note": "Use bpy.ops.fluid.bake_all() or the Physics tab to bake the simulation before rendering.",

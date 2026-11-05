@@ -484,7 +484,8 @@ class ArmatureHandlersMixin:
         constraint.influence = influence
 
         # Set target
-        if target_object_name:
+        # Limit constraints have no target; setting one raises AttributeError.
+        if target_object_name and hasattr(constraint, "target"):
             target_obj = bpy.data.objects.get(target_object_name)
             if target_obj is None:
                 raise ValidationError(f"Target object '{target_object_name}' not found")
@@ -511,7 +512,7 @@ class ArmatureHandlersMixin:
             "owner": owner_desc,
             "constraint_type": constraint_type,
             "constraint_name": constraint.name,
-            "target": target_object_name,
+            "target": target_object_name if hasattr(constraint, "target") else None,
             "target_bone": target_bone_name,
             "influence": influence,
         }

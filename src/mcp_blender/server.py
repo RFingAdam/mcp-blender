@@ -577,7 +577,7 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
-                "export_format": {"type": "string", "enum": ["GLB", "GLTF_SEPARATE", "GLTF_EMBEDDED"], "description": "Export format"},
+                "export_format": {"type": "string", "enum": ["GLB", "GLTF_SEPARATE"], "description": "Export format"},
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "export_animations": {"type": "boolean", "description": "Include animations"},
                 "export_materials": {"type": "boolean", "description": "Include materials"},
