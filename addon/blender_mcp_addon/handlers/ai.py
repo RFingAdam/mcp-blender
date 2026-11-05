@@ -33,7 +33,7 @@ class AIHandlersMixin:
         """Download and apply Poly Haven asset."""
         from ..external.polyhaven import download_polyhaven
         return download_polyhaven(
-            asset_id=params["asset_id"],
+            asset_id=require_param(params, "asset_id", str),
             resolution=params.get("resolution", "2k"),
             apply_to=params.get("apply_to"),
         )
@@ -66,7 +66,7 @@ class AIHandlersMixin:
         """Check AI model generation status."""
         from ..external.ai_models import check_status
         return check_status(
-            job_id=params["job_id"],
+            job_id=require_param(params, "job_id", str),
             auto_import=params.get("auto_import", True),
         )
 
@@ -176,8 +176,8 @@ class AIHandlersMixin:
 
         image_path = require_param(params, "image_path", str)
         mask_path = require_param(params, "mask_path", str)
-        validate_filepath(image_path, must_exist=True)
-        validate_filepath(mask_path, must_exist=True)
+        image_path = validate_filepath(image_path, "image_path", must_exist=True)
+        mask_path = validate_filepath(mask_path, "mask_path", must_exist=True)
 
         return generate_texture(
             prompt=require_param(params, "prompt", str),
@@ -937,7 +937,7 @@ class AIHandlersMixin:
         """Get status of a pipeline run."""
         from ..external.pipeline import get_pipeline_status
 
-        return get_pipeline_status(params.get("pipeline_id", ""))
+        return get_pipeline_status(require_param(params, "pipeline_id", str))
 
     # ========== Sculpting Handlers ==========
 

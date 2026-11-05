@@ -27,7 +27,7 @@ class ObjectHandlersMixin:
             "monkey", "circle", "grid", "empty", "camera", "light"
         ]
         obj_type = validate_enum(
-            params.get("type", "cube"), "type", valid_types
+            require_param(params, "type", str), "type", valid_types
         )
 
         location = params.get("location", [0, 0, 0])
@@ -74,9 +74,10 @@ class ObjectHandlersMixin:
 
     def _handle_object_delete(self, params: dict) -> dict:
         """Delete an object by name."""
-        obj = get_object_or_error(params["name"])
+        name = require_param(params, "name", str)
+        obj = get_object_or_error(name)
         bpy.data.objects.remove(obj, do_unlink=True)
-        return {"deleted": params["name"]}
+        return {"deleted": name}
 
 
     def _handle_object_list(self, params: dict) -> dict:
@@ -94,13 +95,13 @@ class ObjectHandlersMixin:
 
     def _handle_object_get(self, params: dict) -> dict:
         """Get detailed properties of an object."""
-        obj = get_object_or_error(params["name"])
+        obj = get_object_or_error(require_param(params, "name", str))
         return serialize_object(obj)
 
 
     def _handle_object_transform(self, params: dict) -> dict:
         """Set object transform."""
-        obj = get_object_or_error(params["name"])
+        obj = get_object_or_error(require_param(params, "name", str))
 
         if "location" in params:
             obj.location = params["location"]
@@ -115,7 +116,7 @@ class ObjectHandlersMixin:
 
     def _handle_object_duplicate(self, params: dict) -> dict:
         """Duplicate an object."""
-        obj = get_object_or_error(params["name"])
+        obj = get_object_or_error(require_param(params, "name", str))
         linked = params.get("linked", False)
 
         # Duplicate
@@ -132,7 +133,7 @@ class ObjectHandlersMixin:
 
     def _handle_object_join(self, params: dict) -> dict:
         """Join multiple objects into one."""
-        names = params["names"]
+        names = require_param(params, "names", list)
         if len(names) < 2:
             raise ValueError("Need at least 2 objects to join")
 
@@ -150,7 +151,7 @@ class ObjectHandlersMixin:
 
     def _handle_object_separate(self, params: dict) -> dict:
         """Separate an object by loose parts."""
-        obj = get_object_or_error(params["name"])
+        obj = get_object_or_error(require_param(params, "name", str))
         mode = params.get("mode", "LOOSE").upper()
 
         ensure_object_selected(obj)
@@ -165,7 +166,7 @@ class ObjectHandlersMixin:
 
     def _handle_object_parent(self, params: dict) -> dict:
         """Set parent relationship."""
-        child = get_object_or_error(params["child"])
+        child = get_object_or_error(require_param(params, "child", str))
         parent_name = params.get("parent")
 
         if parent_name:

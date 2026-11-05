@@ -2152,7 +2152,7 @@ class MeshEditingHandlersMixin:
         opacity = params.get("opacity", 0.5)
         size = params.get("size", 5.0)
 
-        validate_filepath(image_path)
+        image_path = validate_filepath(image_path, "image_path")
 
         # Create image empty
         bpy.ops.object.empty_add(type="IMAGE")

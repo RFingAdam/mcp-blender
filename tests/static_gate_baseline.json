@@ -1,15 +1,13 @@
 {
   "relative_imports": [],
   "self_attributes": [],
-  "validator_calls": [
-    "addon/blender_mcp_addon/handlers/ai.py::AIHandlersMixin._handle_ai_inpaint_texture: validate_filepath missing name: image_path",
-    "addon/blender_mcp_addon/handlers/ai.py::AIHandlersMixin._handle_ai_inpaint_texture: validate_filepath missing name: mask_path",
-    "addon/blender_mcp_addon/handlers/mesh_editing.py::MeshEditingHandlersMixin._handle_reference_image_setup: validate_filepath missing name: image_path"
-  ],
+  "validator_calls": [],
+  "validate_filepath_result_used": [],
   "schema_params": [
     "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_generate_texture: reads 'texture_types' not in schema",
     "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_generate_texture_sync: reads 'texture_types' not in schema",
     "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_pipeline_status: schema 'resume' never read",
+    "addon/blender_mcp_addon/handlers/ai.py::_handle_execute_script: schema 'timeout' never read",
     "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'apply_unit_scale' not in schema",
     "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'axis_forward' not in schema",
     "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'axis_up' not in schema",

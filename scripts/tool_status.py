@@ -135,15 +135,24 @@ def groups(states: dict[str, dict[str, str]]) -> dict[str, list[str]]:
 
 def status_section(states: dict[str, dict[str, str]]) -> str:
     g = groups(states)
+    counted = [
+        (
+            "loose",
+            "of those still accept a call that leaves out a required argument "
+            "instead of returning an error.",
+        ),
+        (
+            "unchecked",
+            "need what a headless test cannot provide, such as a GUI, "
+            "an AI backend, or an earlier call.",
+        ),
+        ("fail", "have a known failure."),
+    ]
     lines = [
         f"**Status:** every pull request runs each tool in real Blender {SERIES[0]} LTS and "
         f"{SERIES[1]} LTS.",
         f"**{len(g['works'])} of {len(states[SERIES[0]])} tools work on both.**",
-        f"{len(g['loose'])} of those still accept a call that leaves out a required argument "
-        "instead of returning an error.",
-        f"{len(g['unchecked'])} need what a headless test cannot provide, such as a GUI, "
-        "an AI backend, or an earlier call.",
-        f"{len(g['fail'])} have a known failure.",
+        *(f"{len(g[k])} {text}" for k, text in counted if g[k]),
         f"Each list is under [Tools](#tools), and fixes are tracked in the [issues]({ISSUES}).",
     ]
     return "\n".join(f"> {line}" for line in lines)
@@ -179,14 +188,16 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     if lane_fails:
         named = ", ".join(f"`{c}`" for c in lane_fails)
         lines[-2:-2] = [f"Socket checks that still fail: {named}.", ""]
-    lines += _details(
-        f"{len(g['loose'])} tools that accept a call with a required argument missing",
-        ", ".join(f"`{t}`" for t in g["loose"]),
-    )
-    lines += _details(
-        f"{len(g['unchecked'])} tools that cannot be checked headless",
-        _table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]]),
-    )
+    if g["loose"]:
+        lines += _details(
+            f"{len(g['loose'])} tools that accept a call with a required argument missing",
+            ", ".join(f"`{t}`" for t in g["loose"]),
+        )
+    if g["unchecked"]:
+        lines += _details(
+            f"{len(g['unchecked'])} tools that cannot be checked headless",
+            _table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]]),
+        )
     return "\n".join(lines[:-1])
 
 

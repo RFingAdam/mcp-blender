@@ -18,10 +18,9 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **170 of 218 tools work on both.**
-> 13 of those still accept a call that leaves out a required argument instead of returning an error.
-> 13 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
-> 35 have a known failure.
+> **171 of 218 tools work on both.**
+> 14 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 33 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -128,7 +127,7 @@ if they drift. More detail per area is in
 | --- | ---: | ---: | ---: | --- |
 | Scene | 5 | 5 | 5 | `scene_info`, `scene_new` |
 | Objects | 13 | 13 | 13 | `object_create`, `object_duplicate` |
-| Mesh, curves, booleans | 38 | 29 | 27 | `mesh_bevel`, `curve_create` |
+| Mesh, curves, booleans | 38 | 30 | 28 | `mesh_bevel`, `curve_create` |
 | Materials and nodes | 13 | 13 | 13 | `material_create`, `material_inspect_graph` |
 | Modifiers | 5 | 5 | 5 | `modifier_add`, `modifier_apply` |
 | Animation | 7 | 7 | 6 | `keyframe_delete`, `action_create` |
@@ -146,14 +145,13 @@ if they drift. More detail per area is in
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
 | AI generation and refinement | 29 | 16 | 16 | `ai_evaluate`, `refine_iteration` |
 | Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
-| **Total** | **218** | **178** | **170** |  |
+| **Total** | **218** | **179** | **171** |  |
 
-<details><summary>35 tools with a known failure</summary>
+<details><summary>33 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
 | `ai_auto_uv` | 4.5, 5.2 |
-| `ai_inpaint_texture` | 4.5, 5.2 |
 | `ai_mesh_decimate` | 4.5, 5.2 |
 | `ai_pipeline_generate` | 4.5, 5.2 |
 | `ai_texture_from_render` | 4.5, 5.2 |
@@ -178,7 +176,6 @@ if they drift. More detail per area is in
 | `mesh_subdivide` | 4.5, 5.2 |
 | `physics_fluid_quick` | 4.5, 5.2 |
 | `physics_simulate` | 4.5, 5.2 |
-| `reference_image_setup` | 4.5, 5.2 |
 | `render_screenshot` | 4.5, 5.2 |
 | `render_set_engine` | 5.2 |
 | `sculpt_extract_mask` | 4.5, 5.2 |
@@ -192,13 +189,7 @@ Socket checks that still fail: `mesh_knife_project_keeps_outside`, `reply_16mb_c
 
 </details>
 
-<details><summary>13 tools that accept a call with a required argument missing</summary>
-
-`material_add_texture`, `material_set_principled`, `object_create`, `object_delete`, `object_duplicate`, `object_get`, `object_join`, `object_parent`, `object_separate`, `object_transform`, `polyhaven_download`, `render_animation`, `render_set_resolution`
-
-</details>
-
-<details><summary>13 tools that cannot be checked headless</summary>
+<details><summary>14 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -207,6 +198,7 @@ Socket checks that still fail: `mesh_knife_project_keeps_outside`, `reply_16mb_c
 | `ai_generate_reference_image` | no AI backend is reachable offline |
 | `ai_generate_texture` | no AI backend is reachable offline |
 | `ai_generate_texture_sync` | no AI backend is reachable offline |
+| `ai_inpaint_texture` | no AI backend is reachable offline |
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
 | `msfs_livery_convert_to_dds` | needs texconv from DirectXTex, which is not installed here |

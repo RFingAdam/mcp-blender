@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Missing arguments are rejected with a validation error, and `~` paths work.** Sixteen
+  tools (`object_create`, `object_delete`, `object_get`, `object_transform`,
+  `object_duplicate`, `object_join`, `object_separate`, `object_parent`,
+  `material_set_principled`, `material_add_texture`, `render_animation`,
+  `render_screenshot`, `render_set_engine`, `render_set_resolution`, `polyhaven_download`,
+  `ai_model_status`) and `ai_pipeline_status` raised a bare `KeyError` or accepted `{}`.
+  They now report the missing parameter through `require_param`. `validate_filepath` returns
+  the absolute path with `~` expanded, checks existence after expansion and leaves Blender
+  `//` paths alone. `ai_inpaint_texture` and `reference_image_setup` called it without a
+  `name` or discarded the result; a static gate now catches an unused result.
+
 - **Five of the six baking tools never worked.** `bake_pbr_batch`, `bake_highpoly_to_lowpoly`,
   `bake_from_multires`, `bake_to_vertex_colors` and `bake_id_map` called eight `_bake_*`
   helpers that were never written, so each raised `AttributeError` once past argument

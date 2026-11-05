@@ -181,7 +181,9 @@ def validate_filepath(value: Any, name: str, must_exist: bool = False) -> str:
         must_exist: Whether the file must exist
 
     Returns:
-        The validated path
+        The absolute path with ``~`` expanded. Blender-relative paths
+        (starting ``//``) are returned unchanged. Callers must use this
+        return value, not the original string.
 
     Raises:
         ValidationError: If not a valid path
@@ -194,7 +196,20 @@ def validate_filepath(value: Any, name: str, must_exist: bool = False) -> str:
     if not value.strip():
         raise ValidationError(f"Parameter '{name}' cannot be empty")
 
-    if must_exist and not os.path.exists(value):
-        raise ValidationError(f"File not found: {value}")
+    # Blender-relative paths resolve against the .blend file, not the cwd.
+    if value.startswith("//"):
+        path = value
+        if must_exist:
+            import bpy
 
-    return value
+            check = bpy.path.abspath(value)
+        else:
+            check = value
+    else:
+        path = os.path.abspath(os.path.expanduser(value))
+        check = path
+
+    if must_exist and not os.path.exists(check):
+        raise ValidationError(f"File not found: {path}")
+
+    return path

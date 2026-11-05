@@ -41,7 +41,9 @@ class RenderHandlersMixin:
 
     def _handle_render_animation(self, params: dict) -> dict:
         """Render animation."""
-        output_path = params["output_path"]
+        output_path = validate_filepath(
+            require_param(params, "output_path", str), "output_path"
+        )
         file_format = params.get("file_format", "PNG").upper()
 
         scene = bpy.context.scene
@@ -59,7 +61,7 @@ class RenderHandlersMixin:
 
     def _handle_render_set_engine(self, params: dict) -> dict:
         """Set render engine."""
-        engine = params["engine"].upper()
+        engine = require_param(params, "engine", str).upper()
 
         # Handle EEVEE naming across versions
         if engine in ("EEVEE", "BLENDER_EEVEE"):
@@ -72,8 +74,8 @@ class RenderHandlersMixin:
     def _handle_render_set_resolution(self, params: dict) -> dict:
         """Set render resolution."""
         scene = bpy.context.scene
-        scene.render.resolution_x = params["width"]
-        scene.render.resolution_y = params["height"]
+        scene.render.resolution_x = require_param(params, "width", int)
+        scene.render.resolution_y = require_param(params, "height", int)
         scene.render.resolution_percentage = params.get("percentage", 100)
         return {
             "width": scene.render.resolution_x,
@@ -84,7 +86,9 @@ class RenderHandlersMixin:
 
     def _handle_render_screenshot(self, params: dict) -> dict:
         """Capture viewport screenshot."""
-        output_path = params["output_path"]
+        output_path = validate_filepath(
+            require_param(params, "output_path", str), "output_path"
+        )
         bpy.ops.screen.screenshot_area(filepath=output_path)
         return {"output_path": output_path}
 

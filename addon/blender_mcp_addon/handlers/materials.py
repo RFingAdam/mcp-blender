@@ -16,6 +16,7 @@ from ..validation import (
     ValidationError,
     require_param,
     validate_color,
+    validate_filepath,
 )
 from ._helpers import (
     _PRESET_BUILDERS,
@@ -80,7 +81,7 @@ class MaterialHandlersMixin:
 
     def _handle_material_set_principled(self, params: dict) -> dict:
         """Configure Principled BSDF parameters."""
-        mat = get_material_or_error(params["material_name"])
+        mat = get_material_or_error(require_param(params, "material_name", str))
 
         if not mat.use_nodes:
             mat.use_nodes = True
@@ -106,8 +107,10 @@ class MaterialHandlersMixin:
 
     def _handle_material_add_texture(self, params: dict) -> dict:
         """Add image texture node to material."""
-        mat = get_material_or_error(params["material_name"])
-        image_path = params["image_path"]
+        mat = get_material_or_error(require_param(params, "material_name", str))
+        image_path = validate_filepath(
+            require_param(params, "image_path", str), "image_path", must_exist=True
+        )
         connect_to = params.get("connect_to", "Base Color")
 
         if not mat.use_nodes:
