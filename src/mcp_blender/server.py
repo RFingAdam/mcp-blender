@@ -954,8 +954,9 @@ TOOLS: list[Tool] = [
                 "num_variations": {
                     "type": "integer",
                     "minimum": 1,
+                    "maximum": 8,
                     "default": 3,
-                    "description": "How many jobs to submit (default: 3)",
+                    "description": "How many jobs to submit (default: 3, at most 8)",
                 },
                 "style": {
                     "type": "string",
@@ -1002,7 +1003,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_ai_redo_generation",
-        description="Run the most recent generation job again, optionally changing its prompt, style, quality, output format or backend. Returns an error when there is no previous generation. Needs a reachable AI backend.",
+        description="Run the most recent generation job again (a 3D model or a texture, replayed as the same kind), optionally changing its prompt, style, quality, output format or backend. Returns an error when there is no previous generation. Needs a reachable AI backend.",
         input_schema={
             "type": "object",
             "properties": {

@@ -19,6 +19,10 @@ from ..validation import (
 _DECIMATE_METHOD_ALIASES = {"UN_SUBDIVIDE": "UNSUBDIV", "PLANAR": "DISSOLVE"}
 
 
+# Most jobs one ai_generate_variations call may submit; each is a paid backend job.
+MAX_VARIATIONS = 8
+
+
 class AIHandlersMixin:
     """Mixin for AI, refinement, and script execution handlers."""
 
@@ -411,6 +415,12 @@ class AIHandlersMixin:
 
         prompt = require_param(params, "prompt", str)
         num_variations = params.get("num_variations", 3)
+        if not isinstance(num_variations, int) or isinstance(num_variations, bool):
+            raise ValidationError("num_variations must be an integer")
+        if not 1 <= num_variations <= MAX_VARIATIONS:
+            raise ValidationError(
+                f"num_variations must be between 1 and {MAX_VARIATIONS}, got {num_variations}"
+            )
         style = params.get("style")
         quality = params.get("quality", "medium")
         output_format = params.get("output_format", "glb")
@@ -454,7 +464,11 @@ class AIHandlersMixin:
 
     def _handle_ai_redo_generation(self, params: dict) -> dict:
         """Redo the last generation with optional modifications."""
-        from ..external.ai_models import generate_model, generate_model_from_image
+        from ..external.ai_models import (
+            generate_model,
+            generate_model_from_image,
+            generate_texture,
+        )
         from ..external.job_queue import get_job_queue
 
         queue = get_job_queue()
@@ -463,12 +477,31 @@ class AIHandlersMixin:
         if not last_job:
             return {"success": False, "error": "No previous generation found"}
 
+        # Jobs recorded before the kind existed were model jobs unless they carry a
+        # texture workflow.
+        meta = last_job.metadata or {}
+        kind = meta.get("kind") or ("texture" if "workflow_type" in meta else "model")
+        if kind not in ("model", "texture"):
+            return {
+                "success": False,
+                "error": f"The last job is a '{kind}' job, which ai_redo_generation cannot replay",
+            }
+
         # Allow overriding parameters
         prompt = params.get("prompt", last_job.prompt)
         style = params.get("style", last_job.style)
         quality = params.get("quality", last_job.quality)
         output_format = params.get("output_format", last_job.output_format)
         backend = params.get("backend", last_job.backend)
+
+        if kind == "texture":
+            return generate_texture(
+                prompt=prompt,
+                workflow_type=meta.get("workflow_type", "pbr_texture"),
+                object_name=meta.get("object_name"),
+                auto_apply=meta.get("auto_apply", True),
+                backend=backend if backend != "auto" else None,
+            )
 
         if last_job.image_path:
             return generate_model_from_image(
