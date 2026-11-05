@@ -161,6 +161,20 @@ jobs:
           --check-baseline tests/harness/baselines/blender-${{ matrix.series }}.json
           --retry-crashes
 
+      # Runs even when the driver step failed so one failure does not hide the
+      # other. Best effort like the driver step: a failing check shows in the
+      # log and gates nothing.
+      - name: Run socket lane
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          BLENDER_BIN: ${{ steps.fetch.outputs.bin }}
+        run: >-
+          xvfb-run -a uv run --locked --python 3.12 python -m tests.harness.socket_lane
+          --blender "$BLENDER_BIN"
+          --out "$RUNNER_TEMP/runs/socket-${{ matrix.series }}"
+          --check-baseline tests/harness/baselines/socket-lane.json
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

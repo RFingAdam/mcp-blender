@@ -191,6 +191,11 @@ Use `--write-baseline` to update it. The file is keyed by Blender series (`4.5`,
 the lane replaces only the series it ran. An artifact's `results.json` is
 `{"<series>": {...}}`, so merge that one key into the file. Do not copy it over.
 
+The lane runs on 4.5 and 5.2 with every pull request, and a difference there blocks the merge.
+The nightly job also runs it on 4.2, 4.3, 4.4, 5.0 and 5.1 as a best-effort step that gates
+nothing. All seven series have a baseline. A `FAIL` recorded for any series is listed in the
+README under the known failing socket checks, with the series it fails on.
+
 ### Adding a tool
 
 A new tool shows up as `added:` lines. That is expected. Record them in the 4.5 and 5.2

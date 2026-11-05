@@ -148,7 +148,7 @@ if they drift. More detail per area is in
 
 <details><summary>No tool has a known failure; some socket checks do</summary>
 
-Socket checks that still fail: `reply_16mb_complete`.
+Socket checks that still fail: `reply_16mb_complete` (on 4.2, 4.3, 4.4, 4.5, 5.0, 5.1, 5.2).
 
 </details>
 
@@ -173,22 +173,22 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_refine` | needs network access, which the harness turns off |
 | `ai_texture_from_render` | no AI backend is reachable offline |
 | `analyze_viewport` | needs network access, which the harness turns off |
-| `annotation_add` | Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
-| `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |
-| `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
-| `mesh_loop_cut` | needs a 3D viewport; socket lane covers it |
+| `annotation_add` | Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes (the socket lane runs on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort) |
+| `mesh_edge_slide` | needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
+| `mesh_knife_project` | needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
+| `mesh_loop_cut` | needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
 | `msfs_livery_convert_to_dds` | needs texconv from DirectXTex, which is not installed here |
-| `msfs_livery_export_uv_layout` | the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI |
-| `msfs_livery_set_paint_brush` | needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both |
+| `msfs_livery_export_uv_layout` | the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI (the socket lane runs on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort) |
+| `msfs_livery_set_paint_brush` | needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both (the socket lane runs on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort) |
 | `polyhaven_download` | needs network access, which the harness turns off |
 | `polyhaven_search` | needs network access, which the harness turns off |
 | `redo` | Blender disables undo in background mode |
 | `refine_get_session` | needs a session id from a prior refine_create_session call |
 | `refine_iteration` | needs network access, which the harness turns off |
-| `render_screenshot` | needs a 3D viewport; socket lane covers it |
-| `sculpt_face_set_create` | face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it |
-| `sculpt_mask_by_topology` | the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it |
-| `sculpt_mesh_filter` | needs a 3D viewport; socket lane covers it |
+| `render_screenshot` | needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
+| `sculpt_face_set_create` | face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
+| `sculpt_mask_by_topology` | the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
+| `sculpt_mesh_filter` | needs a 3D viewport; socket lane covers it on 4.5 and 5.2 on every pull request and 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort |
 | `sculpt_multires_reshape` | the fixture mesh has no subdivision levels to rebuild or unsubdivide |
 | `undo` | Blender disables undo in background mode |
 

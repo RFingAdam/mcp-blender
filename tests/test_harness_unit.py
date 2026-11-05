@@ -545,3 +545,17 @@ def test_pipeline_generate_names_the_stage_that_failed():
     assert classify("minimal", _soft(real), "ai_pipeline_generate") == "SOFT_FAIL"
     other = "Pipeline stage failed: texture: Cannot add node of type ShaderNodeMath"
     assert classify("minimal", _soft(other), "ai_pipeline_generate") == "BUG"
+
+
+def test_nightly_job_runs_the_socket_lane_as_a_best_effort_step():
+    from pathlib import Path
+
+    text = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "blender.yml"
+    ).read_text()
+    nightly = text[text.index("\n  nightly:") :]
+    step = nightly[nightly.index("- name: Run socket lane") :]
+    step = step[: step.index("- name: Upload results")]
+    assert "tests.harness.socket_lane" in step
+    assert "continue-on-error: true" in step
+    assert "--check-baseline tests/harness/baselines/socket-lane.json" in step
