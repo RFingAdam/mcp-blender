@@ -423,3 +423,139 @@ def test_enum_overrides_reach_the_generated_case():
         case = cases[f"{tool}#enum:{param}={value}"]
         assert {k: case.params[k] for k in extra} == extra
         assert case.params[param] == value
+
+
+def _crashing_run(monkeypatch, crashed):
+    from tests.harness import driver
+    from tests.harness.cases import build_cases
+    from tests.harness.catalog import load_tools
+
+    ids = [c.id for c in build_cases(load_tools())]
+    marked = set(ids[:crashed])
+
+    def fake_run(blender, cases, out_dir):
+        if len(cases) == 1:
+            return {cases[0].id: "PASS"}
+        return {c.id: "CRASH" if c.id in marked else "PASS" for c in cases}
+
+    monkeypatch.setattr(driver, "run", fake_run)
+    return ids
+
+
+def test_retry_crashes_passes_at_the_cap(monkeypatch, tmp_path, capsys):
+    import json
+
+    from tests.harness import driver
+
+    ids = _crashing_run(monkeypatch, driver.MAX_SESSION_CRASHES)
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps(dict.fromkeys(ids, "PASS")))
+    out = tmp_path / "out"
+    out.mkdir()
+    argv = ["--blender", "x", "--out", str(out), "--check-baseline", str(base), "--retry-crashes"]
+    assert driver.main(argv) == 0
+
+
+def test_retry_crashes_fails_past_the_cap(monkeypatch, tmp_path, capsys):
+    import json
+
+    from tests.harness import driver
+
+    assert driver.MAX_SESSION_CRASHES == 3
+
+    ids = _crashing_run(monkeypatch, driver.MAX_SESSION_CRASHES + 1)
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps(dict.fromkeys(ids, "PASS")))
+    out = tmp_path / "out"
+    out.mkdir()
+    argv = ["--blender", "x", "--out", str(out), "--check-baseline", str(base), "--retry-crashes"]
+    assert driver.main(argv) == 1
+    assert "more than 3: " in capsys.readouterr().err
+    # the results are still written, so the run can be inspected
+    assert (out / "results.json").exists()
+
+
+def _soft(message):
+    return {"status": "ok", "result": {"error": message}}
+
+
+def test_soft_fail_with_the_expected_message_stays_soft_fail():
+    outcome = _soft("No AI backends are available")
+    assert classify("minimal", outcome, "ai_generate_model") == "SOFT_FAIL"
+
+
+def test_soft_fail_with_another_message_is_a_bug():
+    outcome = _soft("Cannot add node of type ShaderNodeMath")
+    assert classify("minimal", outcome, "ai_generate_model") == "BUG"
+
+
+def test_unreached_tool_with_another_message_is_a_bug():
+    assert classify("minimal", _soft("Job not found in any backend"), "ai_model_status") == (
+        "SOFT_FAIL"
+    )
+    assert classify("minimal", _soft("KeyError: 'job'"), "ai_model_status") == "BUG"
+
+
+def test_soft_fail_without_a_message_is_a_bug_for_a_tool_with_a_row():
+    outcome = {"status": "ok", "result": {"success": False}}
+    assert classify("minimal", outcome, "ai_generate_model") == "BUG"
+
+
+def test_tool_with_no_row_keeps_soft_fail_whatever_it_says():
+    assert classify("minimal", _soft("anything"), "scene_info") == "SOFT_FAIL"
+    assert classify("minimal", _soft("anything")) == "SOFT_FAIL"
+
+
+def test_pass_and_network_sentinel_ignore_the_row():
+    ok = {"status": "ok", "result": {"x": 1}}
+    assert classify("minimal", ok, "ai_generate_model") == "PASS"
+    assert classify("minimal", _soft("harness: network disabled"), "ai_generate_model") == (
+        "EXPECTED"
+    )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Cannot add node of type ShaderNodeMath",
+        "Not a shader or geometry node tree",
+        "Failed to build the compositor graph: Cannot add node of type ShaderNodeMath",
+    ],
+)
+def test_ai_texture_from_render_pattern_does_not_hide_the_4_2_compositor_failure(message):
+    assert classify("minimal", _soft(message), "ai_texture_from_render") == "BUG"
+
+
+def test_every_row_has_a_specific_pattern():
+    import re
+
+    from tests.harness.fixtures import EXPECTED_SOFT_FAILS
+
+    assert EXPECTED_SOFT_FAILS
+    for tool, row in EXPECTED_SOFT_FAILS.items():
+        assert row.reason, tool
+        compiled = re.compile(row.pattern)
+        assert not compiled.search(""), f"{tool}: pattern matches an empty message"
+        assert not compiled.search("some unrelated failure"), tool
+        assert len(row.pattern) >= 8, tool
+
+
+def test_pipeline_generate_names_the_stage_that_failed():
+    real = "Pipeline stage failed: generate: generation failed: No AI backends are available"
+    assert classify("minimal", _soft(real), "ai_pipeline_generate") == "SOFT_FAIL"
+    other = "Pipeline stage failed: texture: Cannot add node of type ShaderNodeMath"
+    assert classify("minimal", _soft(other), "ai_pipeline_generate") == "BUG"
+
+
+def test_nightly_job_runs_the_socket_lane_as_a_best_effort_step():
+    from pathlib import Path
+
+    text = (
+        Path(__file__).resolve().parents[1] / ".github" / "workflows" / "blender.yml"
+    ).read_text()
+    nightly = text[text.index("\n  nightly:") :]
+    step = nightly[nightly.index("- name: Run socket lane") :]
+    step = step[: step.index("- name: Upload results")]
+    assert "tests.harness.socket_lane" in step
+    assert "continue-on-error: true" in step
+    assert "--check-baseline tests/harness/baselines/socket-lane.json" in step

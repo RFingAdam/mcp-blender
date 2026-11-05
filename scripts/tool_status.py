@@ -115,14 +115,54 @@ def works(state: str) -> bool:
     return state in ("pass", "loose")
 
 
-def load() -> tuple[dict[str, dict[str, str]], list[str]]:
+def _version(series: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in series.split("."))
+
+
+def _names(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def lane_failures(lane: dict[str, dict[str, str]]) -> dict[str, list[str]]:
+    """Each socket check that fails, with every series whose lane baseline records the FAIL."""
+    out: dict[str, list[str]] = defaultdict(list)
+    for series in sorted(lane, key=_version):
+        for check, result in sorted(lane[series].items()):
+            if result == "FAIL":
+                out[check].append(series)
+    return dict(sorted(out.items()))
+
+
+def lane_sentence(fails: dict[str, list[str]], lane: dict[str, dict[str, str]]) -> str:
+    def where(series: list[str]) -> str:
+        return "every series" if set(series) == set(lane) else ", ".join(series)
+
+    named = ", ".join(f"`{c}` (on {where(s)})" for c, s in fails.items())
+    return f"Socket checks that still fail: {named}."
+
+
+def lane_note(lane: dict[str, dict[str, str]]) -> str:
+    """One line saying which series run the socket lane, for rows that lean on it.
+
+    The pull request jobs run it on SERIES. Any other series in the lane baseline
+    runs it nightly, where a failure does not block a merge.
+    """
+    ran = sorted(lane, key=_version)
+    gated = [s for s in ran if s in SERIES]
+    nightly = [s for s in ran if s not in SERIES]
+    where = f"{_names(gated)} on every pull request"
+    if nightly:
+        where += f", and on {_names(nightly)} nightly, best effort"
+    return f"Where a reason names the socket lane, it runs on Blender {where}."
+
+
+def load() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
     states = {}
     for series in SERIES:
         results = json.loads((BASELINES / f"blender-{series}.json").read_text(encoding="utf-8"))
         states[series] = tool_states(results)
     lane = json.loads((BASELINES / "socket-lane.json").read_text(encoding="utf-8"))
-    lane_fails = sorted({c for s in SERIES for c, r in lane.get(s, {}).items() if r == "FAIL"})
-    return states, lane_fails
+    return states, lane
 
 
 def groups(states: dict[str, dict[str, str]]) -> dict[str, list[str]]:
@@ -166,7 +206,8 @@ def status_section(states: dict[str, dict[str, str]]) -> str:
     return "\n".join(f"> {line}" for line in lines)
 
 
-def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> str:
+def tools_section(states: dict[str, dict[str, str]], lane: dict[str, dict[str, str]]) -> str:
+    lane_fails = lane_failures(lane)
     areas = tool_areas()
     tools = sorted(states[SERIES[0]])
     if missing := sorted(set(tools) - set(areas)):
@@ -185,7 +226,7 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     totals = [str(sum(map(works, states[s].values()))) for s in SERIES]
     rows.append(["**Total**", f"**{len(tools)}**", *(f"**{t}**" for t in totals), ""])
 
-    why = {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}
+    why = {t: k.reason for t, k in {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}.items()}
     for t in g["unchecked"]:
         if t not in why and any(states[s][t] == "offline" for s in SERIES):
             why[t] = "needs network access, which the harness turns off"
@@ -195,8 +236,7 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     lines = [_table(head, rows, numeric=range(1, 2 + len(SERIES))), ""]
     known = [_table(["Tool", "Fails on"], fail_rows)] if fail_rows else []
     if lane_fails:
-        named = ", ".join(f"`{c}`" for c in lane_fails)
-        known.append(f"Socket checks that still fail: {named}.")
+        known.append(lane_sentence(lane_fails, lane))
     if known:
         summary = (
             f"{len(g['fail'])} tools with a known failure"
@@ -212,7 +252,14 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     if g["unchecked"]:
         lines += _details(
             f"{len(g['unchecked'])} tools that cannot be checked headless",
-            _table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]]),
+            "\n\n".join(
+                (
+                    [lane_note(lane)]
+                    if any("socket" in why.get(t, "") for t in g["unchecked"])
+                    else []
+                )
+                + [_table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]])]
+            ),
         )
     return "\n".join(lines[:-1])
 
@@ -227,10 +274,10 @@ def _table(head: list[str], rows: list[list[str]], numeric=()) -> str:
 
 
 def render(text: str) -> str:
-    states, lane_fails = load()
+    states, lane = load()
     for name, body in (
         ("status", status_section(states)),
-        ("tools", tools_section(states, lane_fails)),
+        ("tools", tools_section(states, lane)),
     ):
         start, end = f"<!-- generated:{name} -->\n", f"<!-- /generated:{name} -->"
         pattern = re.compile(re.escape(start) + ".*?" + re.escape(end), re.DOTALL)

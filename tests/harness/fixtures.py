@@ -6,7 +6,7 @@ Object names refer to the scene built by the runner's scene module.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 FIXTURES: dict[str, Any] = {
     "object_name": "Cube",
@@ -190,45 +190,98 @@ ENUM_OVERRIDES: dict[tuple[str, str, str], dict] = {
     ("measure", "mode", "VERTEX_DISTANCE"): _over(vertex_indices=[0, 1]),
 }
 
-# Cases the harness cannot reach, keyed by tool name, with the reason.
-# Informational only: baselines record each case's true class regardless.
-KNOWN_UNREACHED: dict[str, str] = {
-    "undo": "Blender disables undo in background mode",
-    "redo": "Blender disables undo in background mode",
-    "ai_model_status": "needs a job id that only a live AI backend can issue",
-    "ai_pipeline_status": "needs a pipeline id that only a live AI backend can issue",
-    "ai_cancel_generation": "needs a job id that only a live AI backend can issue",
-    "ai_redo_generation": "needs a previous generation, which only a live AI backend can produce",
-    "refine_get_session": "needs a session id from a prior refine_create_session call",
+
+class Known(NamedTuple):
+    """Why a tool may end in SOFT_FAIL, and the message that proves it is that reason."""
+
+    reason: str
+    # Regex searched in the outcome's error text. It names the specific cause. A SOFT_FAIL
+    # whose text does not match is a different failure, so the driver classes it BUG.
+    pattern: str
+
+
+_NO_AI_BACKEND = Known("no AI backend is reachable offline", r"No AI backends are available")
+_NO_VIEWPORT = r"needs an open 3D viewport"
+
+# Cases the harness cannot reach, keyed by tool name.
+# Baselines record each case's true class regardless.
+KNOWN_UNREACHED: dict[str, Known] = {
+    "undo": Known(
+        "Blender disables undo in background mode", r"Undo disabled at startup in background-mode"
+    ),
+    "redo": Known(
+        "Blender disables undo in background mode", r"Undo disabled at startup in background-mode"
+    ),
+    "ai_model_status": Known(
+        "needs a job id that only a live AI backend can issue", r"Job not found in any backend"
+    ),
+    "ai_pipeline_status": Known(
+        "needs a pipeline id that only a live AI backend can issue", r"Pipeline \S+ not found"
+    ),
+    "ai_cancel_generation": Known(
+        "needs a job id that only a live AI backend can issue", r"Could not cancel job"
+    ),
+    "ai_redo_generation": Known(
+        "needs a previous generation, which only a live AI backend can produce",
+        r"No previous generation found",
+    ),
+    "refine_get_session": Known(
+        "needs a session id from a prior refine_create_session call", r"Session not found"
+    ),
 }
 
-# SOFT_FAIL classes the baselines may keep, keyed by tool name, with the reason.
+# SOFT_FAIL classes the baselines may keep, keyed by tool name.
 # Benign means the harness environment is the cause, not the tool: offline, a
 # fixture id or fixture limit, or background mode.
 # M3 is done only when both defect tables below are empty.
-SOFT_FAIL_ALLOWED: dict[str, str] = {
-    "ai_generate_model": "no AI backend is reachable offline",
-    "ai_generate_model_sync": "no AI backend is reachable offline",
-    "ai_generate_variations": "no AI backend is reachable offline",
-    "ai_generate_reference_image": "no AI backend is reachable offline",
-    "ai_generate_texture": "no AI backend is reachable offline",
-    "ai_generate_texture_sync": "no AI backend is reachable offline",
-    "ai_inpaint_texture": "no AI backend is reachable offline",
-    "ai_pipeline_generate": "no AI backend is reachable offline",
-    "ai_texture_from_render": "no AI backend is reachable offline",
-    "annotation_add": "Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
-    "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
-    "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
-    "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
-    "mesh_edge_slide": "needs a 3D viewport; socket lane covers it",
-    "mesh_knife_project": "needs a 3D viewport; socket lane covers it",
-    "mesh_loop_cut": "needs a 3D viewport; socket lane covers it",
-    "render_screenshot": "needs a 3D viewport; socket lane covers it",
-    "sculpt_face_set_create": "face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it",
-    "sculpt_mask_by_topology": "the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it",
-    "sculpt_mesh_filter": "needs a 3D viewport; socket lane covers it",
-    "sculpt_multires_reshape": "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
+SOFT_FAIL_ALLOWED: dict[str, Known] = {
+    "ai_generate_model": _NO_AI_BACKEND,
+    "ai_generate_model_sync": _NO_AI_BACKEND,
+    "ai_generate_variations": _NO_AI_BACKEND,
+    "ai_generate_reference_image": _NO_AI_BACKEND,
+    "ai_generate_texture": _NO_AI_BACKEND,
+    "ai_generate_texture_sync": _NO_AI_BACKEND,
+    "ai_inpaint_texture": _NO_AI_BACKEND,
+    "ai_pipeline_generate": Known(
+        _NO_AI_BACKEND.reason, r"Pipeline stage failed: generate: .*No AI backends are available"
+    ),
+    "ai_texture_from_render": _NO_AI_BACKEND,
+    "annotation_add": Known(
+        "Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
+        r"no Python call that creates annotation strokes",
+    ),
+    "msfs_livery_convert_to_dds": Known(
+        "needs texconv from DirectXTex, which is not installed here", r"texconv not found"
+    ),
+    "msfs_livery_export_uv_layout": Known(
+        "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
+        r"needs a GPU context, which is not available in background mode",
+    ),
+    "msfs_livery_set_paint_brush": Known(
+        "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
+        r"Not in texture paint mode",
+    ),
+    "mesh_edge_slide": Known("needs a 3D viewport; socket lane covers it", _NO_VIEWPORT),
+    "mesh_knife_project": Known("needs a 3D viewport; socket lane covers it", _NO_VIEWPORT),
+    "mesh_loop_cut": Known("needs a 3D viewport; socket lane covers it", _NO_VIEWPORT),
+    "render_screenshot": Known("needs a 3D viewport; socket lane covers it", _NO_VIEWPORT),
+    "sculpt_face_set_create": Known(
+        "face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it",
+        _NO_VIEWPORT,
+    ),
+    "sculpt_mask_by_topology": Known(
+        "the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it",
+        _NO_VIEWPORT,
+    ),
+    "sculpt_mesh_filter": Known("needs a 3D viewport; socket lane covers it", _NO_VIEWPORT),
+    "sculpt_multires_reshape": Known(
+        "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
+        r"No valid subdivisions found to rebuild",
+    ),
 }
+
+# What classify checks a SOFT_FAIL against. A tool in neither table keeps SOFT_FAIL.
+EXPECTED_SOFT_FAILS: dict[str, Known] = {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}
 
 # Tools whose SOFT_FAIL hides a real defect. A tool with both benign and
 # defective cases belongs here.

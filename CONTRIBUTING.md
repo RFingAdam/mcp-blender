@@ -141,7 +141,8 @@ passes when it runs alone. The nightly job passes `--retry-crashes`, which rerun
 case alone in a fresh Blender. A case that passes alone takes its solo class and is printed as
 `session crash: id CRASH in the full run, CLASS alone`. The list is also saved to
 `session_crashes.json`. A case that crashes alone too stays `CRASH`. The 4.5 and 5.2 jobs never
-retry, so any crash there fails the check.
+retry, so any crash there fails the check. A run with `--retry-crashes` that finds more than 3
+session crashes exits 1 even when the baseline matches, because that many is not the known segfault.
 
 ### Reproduce locally
 
@@ -190,6 +191,11 @@ Use `--write-baseline` to update it. The file is keyed by Blender series (`4.5`,
 the lane replaces only the series it ran. An artifact's `results.json` is
 `{"<series>": {...}}`, so merge that one key into the file. Do not copy it over.
 
+The lane runs on 4.5 and 5.2 with every pull request, and a difference there blocks the merge.
+The nightly job also runs it on 4.2, 4.3, 4.4, 5.0 and 5.1 as a best-effort step that gates
+nothing. All seven series have a baseline. A `FAIL` recorded for any series is listed in the
+README under the known failing socket checks, with the series it fails on.
+
 ### Adding a tool
 
 A new tool shows up as `added:` lines. That is expected. Record them in the 4.5 and 5.2
@@ -197,9 +203,12 @@ baselines. Copy the same lines into every other `blender-*.json` baseline too, s
 passes. The nightly job flags any real difference there.
 
 If the new tool has a benign `SOFT_FAIL` case, such as no AI backend, add the tool to
-`SOFT_FAIL_ALLOWED` in `tests/harness/fixtures.py`, with a reason. A test fails until you do. A
-`SOFT_FAIL` that hides a real defect needs a fix, not a table entry: `SOFT_FAIL_DEFECTS` must
-stay empty.
+`SOFT_FAIL_ALLOWED` in `tests/harness/fixtures.py`, as a `Known(reason, pattern)`. The reason is
+for people. The pattern is a regex that names the specific cause and matches the message the tool
+really returns. The driver turns a `SOFT_FAIL` whose message does not match the pattern into a
+`BUG`, so a tool that starts failing for a new reason cannot hide behind the row. Do not widen a
+pattern to make a `BUG` go away. A test fails until the row exists. A `SOFT_FAIL` that hides a
+real defect needs a fix, not a table entry: `SOFT_FAIL_DEFECTS` must stay empty.
 
 ## Project Structure
 

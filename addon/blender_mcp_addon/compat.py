@@ -254,6 +254,27 @@ def boolean_solver(name: str) -> str:
     return name
 
 
+def sculpt_filter_type(name: str) -> str:
+    """The spelling of a sculpt.mesh_filter type that this Blender's operator offers.
+
+    4.2 spells the erase-displacement filter ``ERASE_DISCPLACEMENT`` and later series
+    spell it correctly. The enum is read from the operator, never from a version number.
+    A name the operator does not offer passes through, and Blender reports it.
+    """
+    try:
+        items = bpy.ops.sculpt.mesh_filter.get_rna_type().properties["type"].enum_items
+        offered = {item.identifier for item in items}
+    except (AttributeError, KeyError):
+        return name
+    swaps = {
+        "ERASE_DISPLACEMENT": "ERASE_DISCPLACEMENT",
+        "ERASE_DISCPLACEMENT": "ERASE_DISPLACEMENT",
+    }
+    if name not in offered and swaps.get(name) in offered:
+        return swaps[name]
+    return name
+
+
 def select_edge_loops(ring: bool = False) -> None:
     """Select the edge loop or ring through each selected edge (edit mode).
 

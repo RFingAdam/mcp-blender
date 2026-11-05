@@ -148,11 +148,13 @@ if they drift. More detail per area is in
 
 <details><summary>No tool has a known failure; some socket checks do</summary>
 
-Socket checks that still fail: `reply_16mb_complete`.
+Socket checks that still fail: `reply_16mb_complete` (on every series).
 
 </details>
 
 <details><summary>35 tools that cannot be checked headless</summary>
+
+Where a reason names the socket lane, it runs on Blender 4.5 and 5.2 on every pull request, and on 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort.
 
 | Tool | Why |
 | --- | --- |
@@ -173,7 +175,7 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_refine` | needs network access, which the harness turns off |
 | `ai_texture_from_render` | no AI backend is reachable offline |
 | `analyze_viewport` | needs network access, which the harness turns off |
-| `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
+| `annotation_add` | Blender 4.3 to 5.1 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |
 | `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
 | `mesh_loop_cut` | needs a 3D viewport; socket lane covers it |

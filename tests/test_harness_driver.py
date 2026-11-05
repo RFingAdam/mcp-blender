@@ -35,6 +35,9 @@ FAKE = textwrap.dedent(
     open(os.path.join(os.path.dirname(opt["--out"]), "seen_tmpdir"), "w").write(
         os.environ.get("TMPDIR", "") + "|" + opt["--tmp"] + "|" + str(os.path.exists(opt["--tmp"] + "/in.png"))
     )
+    open(os.path.join(os.path.dirname(opt["--out"]), "seen_user"), "w").write(
+        os.environ.get("BLENDER_USER_RESOURCES", "")
+    )
     for i in range(int(opt["--start"]), len(cases)):
         mode = cases[i]["params"].get("fake", "ok")
         if mode == "die_before_start":
@@ -234,3 +237,31 @@ def test_check_baseline_diff_points_at_contributing(fake_blender, tmp_path, monk
     assert code == 1
     assert err[0].startswith("improved:")
     assert "CONTRIBUTING.md" in err[-1] and "Truth harness" in err[-1]
+
+
+def test_blender_env_keeps_user_files_under_the_run_tmp_dir(tmp_path):
+    from tests.harness.env import blender_env
+
+    env = blender_env(tmp_path / "tmp")
+    user = Path(env["BLENDER_USER_RESOURCES"])
+    assert user.is_dir()
+    assert (tmp_path / "tmp") in user.parents
+    assert env["TMPDIR"] == str(tmp_path / "tmp")
+    assert env["PYTHONDONTWRITEBYTECODE"] == "1"
+
+
+def test_blender_env_overrides_a_developers_own_resource_dir(tmp_path, monkeypatch):
+    from tests.harness.env import blender_env
+
+    monkeypatch.setenv("BLENDER_USER_RESOURCES", "/home/dev/blender")
+    monkeypatch.setenv("BLENDER_USER_CONFIG", "/home/dev/config")
+    env = blender_env(tmp_path)
+    assert env["BLENDER_USER_RESOURCES"].startswith(str(tmp_path))
+    assert "BLENDER_USER_CONFIG" not in env
+
+
+def test_driver_blender_sees_the_resource_dir_under_its_tmp_dir(fake_blender, tmp_path):
+    out = tmp_path / "out"
+    driver.run(fake_blender, make_cases("ok"), out)
+    seen = (out / "seen_user").read_text()
+    assert seen.startswith(str(out / "tmp"))
