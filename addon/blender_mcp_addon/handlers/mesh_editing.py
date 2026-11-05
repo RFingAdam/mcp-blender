@@ -33,10 +33,12 @@ class MeshEditingHandlersMixin:
             "operation",
             ["UNION", "DIFFERENCE", "INTERSECT"],
         )
-        solver = validate_enum(
-            params.get("solver", "EXACT"),
-            "solver",
-            ["FAST", "EXACT"],
+        solver = compat.boolean_solver(
+            validate_enum(
+                params.get("solver", "EXACT"),
+                "solver",
+                ["FAST", "EXACT"],
+            )
         )
         apply_mod = params.get("apply", True)
         hide_tool = params.get("hide_tool", True)
@@ -1063,7 +1065,7 @@ class MeshEditingHandlersMixin:
         mesh.edges[edge_index].select = True
 
         bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.loop_multi_select(ring=ring)
+        compat.select_edge_loops(ring)
         bpy.ops.object.mode_set(mode="OBJECT")
 
         selected = [e.index for e in mesh.edges if e.select]
@@ -1100,7 +1102,7 @@ class MeshEditingHandlersMixin:
         elif shade_type == "AUTO":
             bpy.ops.object.shade_smooth()
             # Blender 4.2+ removed use_auto_smooth. Use Smooth by Angle modifier
-            if compat.IS_4_2_OR_LATER:
+            if not compat.has_legacy_auto_smooth(obj.data):
                 # Check if modifier already exists
                 existing = None
                 for mod in obj.modifiers:

@@ -262,14 +262,11 @@ When adding features that differ between Blender versions:
 2. Use the compatibility functions in handlers
 3. Test on both Blender 4.5 and 5.2
 
-Example:
+Detect what Blender offers, never its version number. Read the identifier from the
+running Blender (`hasattr`, `bl_rna.properties`, enum items, `dir(bpy.ops.x)`), as in
+`compat.boolean_solver`:
 ```python
-from .compat import IS_5_0_OR_LATER
-
-if IS_5_0_OR_LATER:
-    # Blender 5.x code path
-else:
-    # Blender 4.x code path
+offered = _enum_identifiers(bpy.types.BooleanModifier, "solver")
 ```
 
 ## Pull Request Process

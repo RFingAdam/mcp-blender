@@ -64,9 +64,7 @@ class RenderHandlersMixin:
         """Set render engine."""
         engine = require_param(params, "engine", str).upper()
 
-        # Handle EEVEE naming across versions
-        if engine in ("EEVEE", "BLENDER_EEVEE"):
-            engine = compat.get_eevee_engine_name()
+        engine = compat.resolve_render_engine(engine)
 
         bpy.context.scene.render.engine = engine
         return {"engine": bpy.context.scene.render.engine}

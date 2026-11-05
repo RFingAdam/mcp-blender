@@ -5,6 +5,7 @@ import os
 
 import bpy
 
+from .. import compat
 from ..validation import (
     require_param,
     validate_color,
@@ -36,12 +37,17 @@ class AnnotationHandlersMixin:
         for i, pt in enumerate(points):
             validated_points.append(validate_vector3(pt, f"points[{i}]"))
 
+        if not compat.can_add_annotation_strokes():
+            return {
+                "success": False,
+                "error": "This Blender has no Python call that creates annotation "
+                "strokes; the only way to draw one is the interactive gpencil.annotate "
+                "operator",
+            }
+
         # Get or create annotation grease pencil data
         scene = bpy.context.scene
-        gpd = scene.grease_pencil
-        if gpd is None:
-            gpd = bpy.data.grease_pencils.new("Annotations")
-            scene.grease_pencil = gpd
+        gpd = compat.get_annotation_data(scene, create=True)
 
         # Get or create the layer
         gpl = gpd.layers.get(layer_name)
@@ -64,17 +70,7 @@ class AnnotationHandlersMixin:
         if gpf is None:
             gpf = gpl.frames.new(current_frame)
 
-        # Create the stroke
-        stroke = gpf.strokes.new()
-        stroke.display_mode = '3DSPACE'
-        stroke.line_width = thickness
-
-        # Add points to the stroke
-        stroke.points.add(len(validated_points))
-        for i, pt in enumerate(validated_points):
-            stroke.points[i].co = (pt[0], pt[1], pt[2])
-            stroke.points[i].pressure = 1.0
-            stroke.points[i].strength = color[3]
+        compat.add_annotation_stroke(gpf, validated_points, thickness, strength=color[3])
 
         return {
             "success": True,
@@ -310,7 +306,7 @@ class AnnotationHandlersMixin:
         layer_name = params.get("layer_name")
 
         scene = bpy.context.scene
-        gpd = scene.grease_pencil
+        gpd = compat.get_annotation_data(scene)
 
         if gpd is None:
             return {
@@ -325,17 +321,17 @@ class AnnotationHandlersMixin:
             # Remove a specific layer
             gpl = gpd.layers.get(layer_name)
             if gpl is None:
-                available = [layer.info for layer in gpd.layers]
+                available = [compat.layer_name(layer) for layer in gpd.layers]
                 return {
                     "error": f"Annotation layer '{layer_name}' not found. "
                     f"Available layers: {available}"
                 }
-            removed_layers.append(gpl.info)
+            removed_layers.append(compat.layer_name(gpl))
             gpd.layers.remove(gpl)
         else:
             # Remove all layers
             for gpl in list(gpd.layers):
-                removed_layers.append(gpl.info)
+                removed_layers.append(compat.layer_name(gpl))
                 gpd.layers.remove(gpl)
 
         return {
@@ -356,20 +352,8 @@ class AnnotationHandlersMixin:
         if len(strokes_data) == 0:
             return {"error": "At least one stroke is required"}
 
-        # Create new grease pencil data
-        gpd = bpy.data.grease_pencils.new(name)
-
-        # Create layer
-        gpl = gpd.layers.new("Layer", set_active=True)
-        gpl.color = (color[0], color[1], color[2])
-
-        # Create frame at current frame
-        current_frame = bpy.context.scene.frame_current
-        gpf = gpl.frames.new(current_frame)
-
-        stroke_count = 0
-        total_points = 0
-
+        # Validate every stroke before creating any data
+        valid_strokes = []
         for s_idx, stroke_def in enumerate(strokes_data):
             pts = stroke_def.get("points", [])
             stroke_thickness = int(stroke_def.get("thickness", 10))
@@ -377,26 +361,25 @@ class AnnotationHandlersMixin:
             if len(pts) < 2:
                 continue
 
-            # Validate points
             validated_pts = []
             for i, pt in enumerate(pts):
                 validated_pts.append(
                     validate_vector3(pt, f"strokes[{s_idx}].points[{i}]")
                 )
+            valid_strokes.append((validated_pts, stroke_thickness))
 
-            # Create the stroke
-            stroke = gpf.strokes.new()
-            stroke.display_mode = '3DSPACE'
-            stroke.line_width = stroke_thickness
+        if not valid_strokes:
+            return {"error": "At least one stroke with 2 or more points is required"}
 
-            stroke.points.add(len(validated_pts))
-            for i, pt in enumerate(validated_pts):
-                stroke.points[i].co = (pt[0], pt[1], pt[2])
-                stroke.points[i].pressure = 1.0
-                stroke.points[i].strength = 1.0
+        stroke_count = len(valid_strokes)
+        total_points = sum(len(pts) for pts, _ in valid_strokes)
 
-            stroke_count += 1
-            total_points += len(validated_pts)
+        # Create the data, one layer, and the strokes on the current frame
+        gpd = compat.new_grease_pencil(name)
+        current_frame = bpy.context.scene.frame_current
+        gpl = compat.add_grease_pencil_strokes(
+            gpd, valid_strokes, color, current_frame
+        )
 
         # Create the grease pencil object and link to scene
         gp_obj = bpy.data.objects.new(name, gpd)
@@ -414,7 +397,7 @@ class AnnotationHandlersMixin:
             "strokes_created": stroke_count,
             "total_points": total_points,
             "color": color,
-            "layer": gpl.info,
+            "layer": compat.layer_name(gpl),
             "frame": current_frame,
         }
 

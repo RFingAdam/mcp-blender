@@ -18,9 +18,9 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **178 of 218 tools work on both.**
-> 22 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
-> 18 have a known failure.
+> **186 of 218 tools work on both.**
+> 23 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 9 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -127,27 +127,27 @@ if they drift. More detail per area is in
 | --- | ---: | ---: | ---: | --- |
 | Scene | 5 | 5 | 5 | `scene_info`, `scene_new` |
 | Objects | 13 | 13 | 13 | `object_create`, `object_duplicate` |
-| Mesh, curves, booleans | 38 | 35 | 33 | `mesh_bevel`, `curve_create` |
+| Mesh, curves, booleans | 38 | 35 | 35 | `mesh_bevel`, `curve_create` |
 | Materials and nodes | 13 | 13 | 13 | `material_create`, `material_inspect_graph` |
 | Modifiers | 5 | 5 | 5 | `modifier_add`, `modifier_apply` |
-| Animation | 7 | 7 | 6 | `keyframe_delete`, `action_create` |
-| Render | 6 | 5 | 4 | `render_image`, `render_multi_angle` |
+| Animation | 7 | 7 | 7 | `keyframe_delete`, `action_create` |
+| Render | 6 | 5 | 5 | `render_image`, `render_multi_angle` |
 | Import and export | 6 | 5 | 5 | `export_fbx`, `export_usd` |
 | Measurement and validation | 7 | 7 | 7 | `measure_volume`, `measure_clearance` |
 | Baking | 6 | 6 | 6 | `bake_pbr_batch`, `bake_from_multires` |
-| Geometry nodes | 7 | 7 | 5 | `geonode_array_grid`, `geonode_extrude_profile` |
+| Geometry nodes | 7 | 7 | 7 | `geonode_array_grid`, `geonode_extrude_profile` |
 | Sculpting | 8 | 4 | 4 | `sculpt_setup`, `sculpt_remesh_voxel` |
 | Rigging | 8 | 7 | 7 | `armature_create`, `autorig_preset` |
 | Physics | 6 | 4 | 4 | `physics_rigid_body_add`, `physics_cloth_add` |
 | Collections and session | 8 | 6 | 6 | `collection_create`, `save_as` |
-| Annotations | 6 | 4 | 2 | `annotation_dimension`, `annotation_text` |
+| Annotations | 6 | 4 | 5 | `annotation_dimension`, `annotation_text` |
 | MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
 | AI generation and refinement | 29 | 16 | 16 | `ai_evaluate`, `refine_iteration` |
 | Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
-| **Total** | **218** | **186** | **178** |  |
+| **Total** | **218** | **186** | **187** |  |
 
-<details><summary>18 tools with a known failure</summary>
+<details><summary>9 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
@@ -155,26 +155,17 @@ if they drift. More detail per area is in
 | `ai_mesh_decimate` | 4.5, 5.2 |
 | `ai_pipeline_generate` | 4.5, 5.2 |
 | `ai_texture_from_render` | 4.5, 5.2 |
-| `annotation_add` | 4.5, 5.2 |
-| `annotation_clear` | 5.2 |
-| `boolean_op` | 5.2 |
 | `constraint_add` | 4.5, 5.2 |
 | `export_gltf` | 4.5, 5.2 |
-| `geonode_apply` | 5.2 |
-| `geonode_inspect` | 5.2 |
-| `grease_pencil_create` | 4.5, 5.2 |
-| `grease_pencil_markup` | 5.2 |
-| `keyframe_list` | 5.2 |
-| `mesh_select_edge_loops` | 5.2 |
+| `grease_pencil_markup` | 4.5, 5.2 |
 | `physics_fluid_quick` | 4.5, 5.2 |
 | `physics_simulate` | 4.5, 5.2 |
-| `render_set_engine` | 5.2 |
 
 Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>22 tools that cannot be checked headless</summary>
+<details><summary>23 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -186,6 +177,7 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_inpaint_texture` | no AI backend is reachable offline |
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
+| `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |
 | `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
 | `mesh_loop_cut` | needs a 3D viewport; socket lane covers it |

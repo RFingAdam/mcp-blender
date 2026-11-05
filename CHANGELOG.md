@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Blender 5.x differences go through `compat.py`, by feature detection.** No handler or compat
+  function compares a version number. `render_set_engine` accepts `EEVEE`, `BLENDER_EEVEE` and
+  `BLENDER_EEVEE_NEXT` and sets the one this Blender registers; `ai_texture_from_render` no longer
+  hard-codes `BLENDER_EEVEE_NEXT`, so its depth and normal renders work on 5.x and the tool reaches
+  the AI backend. `boolean_op` maps the `FAST` solver to `FLOAT` where that is the name.
+  `geonode_apply` and `geonode_inspect` read and write modifier inputs through
+  `modifier.properties.inputs` where Blender offers it. `keyframe_list` reads curves from the
+  action's channelbags (only the object's own slot) in place of the removed `slot.layers`.
+  `mesh_select_edge_loops` calls `select_edge_loop_multi` or `select_edge_ring_multi` where
+  `loop_multi_select` is gone. `grease_pencil_markup`'s compositor fallback finds the compositor
+  tree in `Scene.compositing_node_group` and uses a group output where the Composite node is gone.
+- **Annotation and grease pencil tools work on 4.5 and 5.x.** `grease_pencil_create` draws through
+  the v3 drawing API (`bpy.data.grease_pencils_v3` on 4.3 to 4.5). `annotation_add` and
+  `annotation_clear` use `Scene.annotation` where annotations are their own datablock. Blender 4.3
+  to 4.5 has no Python call that creates an annotation stroke, so there `annotation_add` returns an
+  error and leaves nothing behind; a new socket test covers both outcomes.
+- **Behaviour changes in the grease pencil tools.** `grease_pencil_create` returns an error when no
+  stroke has two or more points, where it used to create an empty object. On the v3 data API the
+  point radius is the stroke thickness divided by 2000 (the legacy API used a pixel `line_width`).
+  `boolean_op` still takes `FAST` or `EXACT` as the solver; `FAST` is the cross-version name and
+  becomes `FLOAT` where Blender calls it that.
+- **`get_version_info` reports detected features.** It no longer returns `is_5_0` and `is_4_2`;
+  `features` says which API shapes this build has.
+
 - **Sculpt tools use Blender's real identifiers.** `sculpt_face_set_create` calls
   `sculpt.face_sets_init`, whose modes the criteria map to (`LINKED` is `LOOSE_PARTS`);
   `face_sets_create` never took them. `sculpt_mask_by_topology` uses `sculpt.mask_from_cavity` and

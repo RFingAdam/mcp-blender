@@ -7,6 +7,7 @@ import tempfile
 
 import bpy
 
+from .. import compat
 from ..validation import (
     ValidationError,
     require_param,
@@ -232,7 +233,7 @@ class AIHandlersMixin:
         old_res_y = render.resolution_y
 
         try:
-            render.engine = "BLENDER_EEVEE_NEXT"
+            render.engine = compat.get_eevee_engine_name()
             render.film_transparent = True
             render.resolution_x = 1024
             render.resolution_y = 1024
