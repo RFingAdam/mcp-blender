@@ -508,8 +508,27 @@ def check_required_matches(
     return sorted(out)
 
 
+_WAIT_REASON = (
+    "timeout is how many seconds the server waits for Blender; the handler never reads it"
+)
+
+
+def _server_wait_timeout() -> dict[str, str]:
+    from mcp_blender.server import HANDLER_READS_TIMEOUT, LONG_RUNNING
+
+    return {
+        name: _WAIT_REASON
+        for name in sorted(LONG_RUNNING - HANDLER_READS_TIMEOUT) + ["execute_script"]
+    }
+
+
+SERVER_WAIT_TIMEOUT: dict[str, str] = _server_wait_timeout()
+
+
 def check_schema_params(
-    addon_dir: Path = ADDON_DIR, tools: dict[str, dict] | None = None
+    addon_dir: Path = ADDON_DIR,
+    tools: dict[str, dict] | None = None,
+    timeout_exempt: dict[str, str] | None = None,
 ) -> list[str]:
     """Diff a handler's ``params`` reads against its tool schema properties.
 
@@ -517,6 +536,7 @@ def check_schema_params(
     properties the handler never reads (unless ``params`` is passed on whole).
     """
     tools = _tools() if tools is None else tools
+    timeout_exempt = SERVER_WAIT_TIMEOUT if timeout_exempt is None else timeout_exempt
     methods = _method_index(addon_dir)
     out: set[str] = set()
     for key, method_name in _registered_handlers(addon_dir).items():
@@ -526,8 +546,9 @@ def check_schema_params(
         rel = _rel(path, addon_dir)
         props = set(tools[key].get("properties", {}))
         reads, escapes = _param_reads(func)
-        if "timeout" in props:
-            # The server reads timeout as its wait for Blender's reply.
+        if key in timeout_exempt:
+            # The server reads timeout as its wait for Blender's reply; the handler does not.
+            assert "timeout" not in reads, f"{key} reads timeout: drop it from the exemptions"
             reads = reads | {"timeout"}
         for name in reads - props:
             out.add(f"{rel}::{method_name}: reads '{name}' not in schema")
@@ -1065,6 +1086,28 @@ def test_fixture_required_matches(tmp_path):
     ]
 
 
+def test_server_wait_timeout_exemptions_carry_a_reason():
+    assert SERVER_WAIT_TIMEOUT
+    assert all(reason.strip() for reason in SERVER_WAIT_TIMEOUT.values())
+    tools = _tools()
+    assert all("timeout" in tools[name].get("properties", {}) for name in SERVER_WAIT_TIMEOUT)
+
+
+def test_undeclared_timeout_is_not_exempt(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY,
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        params.get('size')\n",
+        },
+    )
+    tools = {"x": {"properties": {"size": {}, "timeout": {}}}}
+    assert check_schema_params(addon, tools, timeout_exempt={}) == [
+        "addon/pkg/handlers/a.py::_handle_x: schema 'timeout' never read"
+    ]
+
+
 def test_fixture_ping_and_timeout_exemptions(tmp_path):
     addon = _make_addon(
         tmp_path,
@@ -1079,7 +1122,7 @@ def test_fixture_ping_and_timeout_exemptions(tmp_path):
     )
     tools = {"x": {"properties": {"size": {}, "timeout": {}}}, "orphan": {}}
     assert check_tool_handler_parity(addon, tools) == []
-    assert check_schema_params(addon, tools) == []
+    assert check_schema_params(addon, tools, timeout_exempt={"x": "server wait"}) == []
 
 
 def test_fixture_required_matches_ignores_branch_only_requires(tmp_path):

@@ -41,6 +41,14 @@ async def get_client(host: str = "127.0.0.1", port: int = 9876) -> BlenderClient
         return _client
 
 
+# Schema of the optional `timeout` that long-running tools declare. It is only how
+# long this server waits for Blender's reply, so it is never forwarded to the handler.
+_SERVER_WAIT_TIMEOUT = {
+    "type": "number",
+    "default": 600,
+    "description": "How many seconds the server waits for Blender's reply (default: 600). Blender keeps working after the wait ends, so a timeout error does not cancel the job.",
+}
+
 # Tool definitions with JSON schemas
 TOOLS: list[Tool] = [
     # Scene Tools
@@ -569,6 +577,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "output_path": {"type": "string", "description": "Output file path"},
                 "file_format": {
                     "type": "string",
@@ -585,6 +594,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "output_path": {
                     "type": "string",
                     "description": "Output path (with frame placeholder)",
@@ -816,6 +826,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "prompt": {
                     "type": "string",
                     "description": "Text description of the model to generate (required for text-to-3D, optional for image-to-3D)",
@@ -1089,6 +1100,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "prompt": {
                     "type": "string",
                     "description": "Text description of the model to generate",
@@ -1717,6 +1729,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "filepath": {"type": "string", "description": "Output file path (.glb or .gltf)"},
                 "objects": {
                     "type": "array",
@@ -1773,6 +1786,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
                 "output_dir": {"type": "string", "description": "Output directory path"},
                 "separate_files": {
@@ -2457,6 +2471,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of object to render (omit for all mesh objects)",
@@ -2865,6 +2880,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the mesh object to UV unwrap",
@@ -2984,6 +3000,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "prompt": {
                     "type": "string",
                     "description": "Text description of the object to generate",
@@ -4628,6 +4645,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "frame_start": {
                     "type": "number",
                     "description": "First frame of simulation. Default: 1",
@@ -4721,6 +4739,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "domain_object": {
                     "type": "string",
                     "description": "Name of the object to use as the fluid domain (bounding box for the simulation)",
@@ -5205,6 +5224,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "material_name": {
                     "type": "string",
                     "description": "Name of the material to preview",
@@ -5661,6 +5681,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the object to bake from",
@@ -5738,6 +5759,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "lowpoly_name": {
                     "type": "string",
                     "description": "Name of the low-poly target object (active)",
@@ -5812,6 +5834,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the object with a Multiresolution modifier",
@@ -5849,6 +5872,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the object to bake",
@@ -5882,6 +5906,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the object to calculate curvature for",
@@ -5918,6 +5943,7 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
+                "timeout": _SERVER_WAIT_TIMEOUT,
                 "object_name": {
                     "type": "string",
                     "description": "Name of the object to bake ID map for",
@@ -6294,11 +6320,39 @@ TOOLS: list[Tool] = [
 ]
 
 
-_TOOLS_DECLARING_TIMEOUT = frozenset(
-    t.name.removeprefix("blender_")
-    for t in TOOLS
-    if "timeout" in t.input_schema.get("properties", {})
+# Tools that wait for Blender longer than the 30 s default: baking, export, physics,
+# rendering and the AI generators. Each declares `timeout` in its schema, and its wait
+# defaults to LONG_WAIT seconds.
+LONG_RUNNING: frozenset[str] = frozenset(
+    {
+        "ai_pipeline_generate",
+        "ai_generate_model_sync",
+        "ai_generate_texture_sync",
+        "ai_auto_uv",
+        "ai_generate_model",
+        "render_animation",
+        "render_multi_angle",
+        "render_image",
+        "material_preview_render",
+        "bake_pbr_batch",
+        "bake_highpoly_to_lowpoly",
+        "bake_from_multires",
+        "bake_to_vertex_colors",
+        "bake_curvature",
+        "bake_id_map",
+        "msfs_export_model",
+        "msfs_batch_export_lods",
+        "physics_simulate",
+        "physics_fluid_quick",
+    }
 )
+LONG_WAIT = 600.0
+DEFAULT_WAIT = 30.0
+
+# Tools whose handler reads `timeout` itself (a polling limit). They receive it as well
+# as using it for the server's wait. For every other tool `timeout` is a transport
+# option: the server pops it and does not forward it.
+HANDLER_READS_TIMEOUT: frozenset[str] = frozenset({"ai_generate_texture_sync"})
 
 
 def create_server(host: str, port: int) -> Server:
@@ -6324,26 +6378,17 @@ def create_server(host: str, port: int) -> Server:
             client = await get_client(host, port)
             # Map tool name to Blender command (remove 'blender_' prefix)
             command = name.replace("blender_", "")
-            # timeout is how long this server waits for Blender's reply. A tool
-            # whose schema declares it also receives it; for any other tool it
-            # is a transport option and is not forwarded.
+            # timeout is how long this server waits for Blender's reply. Only a tool
+            # whose handler reads it also receives it; for any other tool it is a
+            # transport option and is not forwarded.
             timeout = None
             if isinstance(arguments, dict):
-                if command in _TOOLS_DECLARING_TIMEOUT:
+                if command in HANDLER_READS_TIMEOUT:
                     timeout = arguments.get("timeout")
                 else:
                     timeout = arguments.pop("timeout", None)
             if timeout is None:
-                _long_running = {
-                    "ai_pipeline_generate",
-                    "ai_generate_model_sync",
-                    "ai_generate_texture_sync",
-                    "ai_auto_uv",
-                    "render_animation",
-                    "render_multi_angle",
-                    "ai_generate_model",
-                }
-                timeout = 600.0 if command in _long_running else 30.0
+                timeout = LONG_WAIT if command in LONG_RUNNING else DEFAULT_WAIT
             result = await client.send_command(command, arguments, timeout=timeout)
             # Format result as text
             if isinstance(result, dict):

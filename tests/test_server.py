@@ -327,16 +327,38 @@ def _call(monkeypatch, name, arguments):
     return client.calls[0]
 
 
+def _short(name):
+    return name.removeprefix("blender_")
+
+
+def _props(name):
+    return next(t for t in TOOLS if t.name == name).input_schema["properties"]
+
+
 class TestTimeoutReachesHandler:
-    def test_timeout_reaches_handler(self, monkeypatch):
-        """A tool that declares timeout in its schema still receives it."""
-        declared = [t.name for t in TOOLS if "timeout" in t.input_schema["properties"]]
-        assert declared, "expected at least one tool that declares timeout"
-        for name in declared:
-            command, args, timeout = _call(monkeypatch, name, {"timeout": 7})
-            assert args.get("timeout") == 7, name
+    def test_timeout_reaches_a_handler_that_reads_it(self, monkeypatch):
+        """Only a tool whose handler reads timeout receives it."""
+        assert server_module.HANDLER_READS_TIMEOUT
+        for short in server_module.HANDLER_READS_TIMEOUT:
+            assert "timeout" in _props("blender_" + short), short
+            command, args, timeout = _call(monkeypatch, "blender_" + short, {"timeout": 7})
+            assert args.get("timeout") == 7, short
+            assert timeout == 7, short
+            assert command == short
+
+    def test_server_wait_timeout_is_not_forwarded(self, monkeypatch):
+        """A declared timeout that no handler reads is the server's wait only."""
+        waiting = [
+            t.name
+            for t in TOOLS
+            if "timeout" in t.input_schema["properties"]
+            and _short(t.name) not in server_module.HANDLER_READS_TIMEOUT
+        ]
+        assert waiting
+        for name in waiting:
+            _, args, timeout = _call(monkeypatch, name, {"timeout": 7})
+            assert "timeout" not in args, name
             assert timeout == 7, name
-            assert command == name.removeprefix("blender_")
 
     def test_timeout_without_declaration_still_sets_wait(self, monkeypatch):
         _, args, timeout = _call(monkeypatch, "blender_scene_info", {})
@@ -347,3 +369,55 @@ class TestTimeoutReachesHandler:
         _, args, timeout = _call(monkeypatch, "blender_scene_info", {"timeout": 5})
         assert timeout == 5
         assert "timeout" not in args
+
+
+class TestLongRunning:
+    def test_every_bake_tool_is_long_running_and_declares_timeout(self):
+        bakes = [t.name for t in TOOLS if _short(t.name).startswith("bake_")]
+        assert bakes
+        for name in bakes:
+            assert _short(name) in server_module.LONG_RUNNING, name
+            assert "timeout" in _props(name), name
+
+    def test_long_running_names_only_real_tools(self):
+        real = {_short(t.name) for t in TOOLS}
+        assert sorted(server_module.LONG_RUNNING - real) == []
+
+    def test_required_tools_are_long_running(self):
+        required = {
+            "msfs_export_model",
+            "msfs_batch_export_lods",
+            "physics_simulate",
+            "physics_fluid_quick",
+            "render_image",
+            "material_preview_render",
+            "ai_pipeline_generate",
+            "ai_generate_model_sync",
+            "ai_generate_texture_sync",
+            "ai_auto_uv",
+            "render_animation",
+            "render_multi_angle",
+            "ai_generate_model",
+        }
+        assert required <= server_module.LONG_RUNNING
+
+    def test_every_long_running_tool_declares_a_documented_timeout(self):
+        for short in server_module.LONG_RUNNING:
+            prop = _props("blender_" + short).get("timeout")
+            assert prop is not None, short
+            if short in server_module.HANDLER_READS_TIMEOUT:
+                continue
+            assert prop["type"] == "number", short
+            assert "server waits" in prop["description"], short
+            assert "600" in prop["description"], short
+
+    def test_long_running_default_wait_is_600(self, monkeypatch):
+        for short in sorted(server_module.LONG_RUNNING):
+            _, args, timeout = _call(monkeypatch, "blender_" + short, {})
+            assert timeout == 600.0, short
+            assert "timeout" not in args or short in server_module.HANDLER_READS_TIMEOUT, short
+
+    def test_handler_reading_a_timeout_is_not_a_server_wait_tool(self):
+        assert server_module.HANDLER_READS_TIMEOUT <= {
+            _short(t.name) for t in TOOLS if "timeout" in t.input_schema["properties"]
+        }
