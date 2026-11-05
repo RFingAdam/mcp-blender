@@ -16,10 +16,14 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 [Security](#security) ·
 [Documentation](#documentation)
 
-> **Status, October 2026:** a full audit found that many tools fail in real Blender, including
-> every MSFS tool, most bake tools, and a group of mesh tools. Fixes are landing now and are
-> tracked in the [issues](https://github.com/RFingAdam/meshwire/issues). Treat those areas
-> as not working until the next release.
+<!-- generated:status -->
+> **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
+> **170 of 218 tools work on both.**
+> 13 of those still accept a call that leaves out a required argument instead of returning an error.
+> 13 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 35 have a known failure.
+> Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
+<!-- /generated:status -->
 
 ---
 
@@ -39,7 +43,8 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 - **Blender coverage:** scene, object, mesh, material, modifier, animation, render, export,
   baking, geometry nodes, sculpting, rigging, physics, and annotations.
 - **MSFS content:** LOD, collision, material, animation, and livery tools for Microsoft Flight
-  Simulator. This area is being rebuilt and does not work in the current release.
+  Simulator. These tools now run in the test harness, but no generated package has been
+  loaded in the sim yet, so treat their output as unproven until it has.
 - **AI 3D generation:** text and image to 3D through Hyper3D Rodin, Meshy, Tripo, TripoSR,
   Stable Fast 3D, Hunyuan3D, and ComfyUI.
 - **Self-refinement loop:** render an object from several angles, score it with an Ollama vision
@@ -97,7 +102,7 @@ If you installed with pip, use `"command": "meshwire"` with no `args`.
 
 ### 4. Connect
 
-1. In Blender's 3D viewport, press `N` and open the **MCP Server** tab.
+1. In Blender's 3D viewport, press `N` and open the **Meshwire** tab.
 2. Click **Start Server**.
 3. Restart your MCP client. The Blender tools appear in its tool list.
 
@@ -110,31 +115,109 @@ Then try:
 
 ## Tools
 
-The server defines 218 tools. This table lists what exists, not what has been verified to work;
-see the status note above. The tool list is in [`docs/tools.md`](https://github.com/RFingAdam/meshwire/blob/main/docs/tools.md).
+Each tool is run in headless Blender with valid input, with every value of each enum, and with no
+arguments at all. A tool counts as working when every valid call succeeds or returns the error it
+should. That does not prove the output is right, so a second test drives Blender through the real
+socket and checks the result for core tools such as object creation, render, and bake. The
+numbers below are generated from the test baselines by `scripts/tool_status.py`, and a test fails
+if they drift. More detail per area is in
+[`docs/tools.md`](https://github.com/RFingAdam/meshwire/blob/main/docs/tools.md).
 
-| Category                     | Tools | Examples                                                 |
-| ---------------------------- | ----: | -------------------------------------------------------- |
-| Scene                        |     5 | `scene_info`, `scene_new`, `scene_clear`                 |
-| Objects                      |    12 | `object_create`, `object_duplicate`, `object_delete`     |
-| Mesh, curves, booleans       |    35 | `mesh_bevel`, `mesh_bridge`, `curve_create`, `boolean_op` |
-| Materials and nodes          |    13 | `material_create`, `material_inspect_graph`              |
-| Modifiers                    |     5 | `modifier_add`, `modifier_configure`, `modifier_apply`   |
-| Animation                    |     7 | `keyframe_delete`, `animation_play`, `action_create`     |
-| Render                       |     6 | `render_image`, `render_multi_angle`, `render_screenshot` |
-| Import and export            |     6 | `export_gltf`, `export_fbx`, `export_usd`                |
-| Measurement and validation   |    10 | `measure_volume`, `measure_clearance`                    |
-| Baking                       |     6 | `bake_pbr_batch`, `bake_curvature`                       |
-| Geometry nodes               |     7 | `geonode_array_grid`, `geonode_extrude_profile`          |
-| Sculpting                    |     8 | `sculpt_mesh_filter`, `sculpt_extract_mask`              |
-| Rigging                      |     8 | `armature_create`, `autorig_preset`, `constraint_preset` |
-| Physics                      |     6 | `physics_rigid_body_add`, `physics_cloth_add`            |
-| Collections and session      |     9 | `collection_create`, `undo`, `redo`                      |
-| Annotations                  |     6 | `annotation_dimension`, `grease_pencil_create`           |
-| MSFS content                 |    20 | `msfs_create_lod_hierarchy`, `msfs_setup_material`       |
-| MSFS livery                  |    18 | `msfs_livery_transfer`, `msfs_livery_create_package`     |
-| AI generation and refinement |    29 | `ai_generate_model`, `ai_evaluate`, `refine_iteration`   |
-| Poly Haven                   |     2 | `polyhaven_search`, `polyhaven_download`                 |
+<!-- generated:tools -->
+| Area | Tools | Work on 4.5 | Work on 5.2 | Examples |
+| --- | ---: | ---: | ---: | --- |
+| Scene | 5 | 5 | 5 | `scene_info`, `scene_new` |
+| Objects | 13 | 13 | 13 | `object_create`, `object_duplicate` |
+| Mesh, curves, booleans | 38 | 29 | 27 | `mesh_bevel`, `curve_create` |
+| Materials and nodes | 13 | 13 | 13 | `material_create`, `material_inspect_graph` |
+| Modifiers | 5 | 5 | 5 | `modifier_add`, `modifier_apply` |
+| Animation | 7 | 7 | 6 | `keyframe_delete`, `action_create` |
+| Render | 6 | 5 | 4 | `render_image`, `render_multi_angle` |
+| Import and export | 6 | 5 | 5 | `export_fbx`, `export_usd` |
+| Measurement and validation | 7 | 7 | 7 | `measure_volume`, `measure_clearance` |
+| Baking | 6 | 6 | 6 | `bake_pbr_batch`, `bake_from_multires` |
+| Geometry nodes | 7 | 7 | 5 | `geonode_array_grid`, `geonode_extrude_profile` |
+| Sculpting | 8 | 2 | 2 | `sculpt_setup`, `sculpt_remesh_voxel` |
+| Rigging | 8 | 7 | 7 | `armature_create`, `autorig_preset` |
+| Physics | 6 | 4 | 4 | `physics_rigid_body_add`, `physics_cloth_add` |
+| Collections and session | 8 | 6 | 6 | `collection_create`, `save_as` |
+| Annotations | 6 | 4 | 2 | `annotation_dimension`, `annotation_text` |
+| MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
+| MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
+| AI generation and refinement | 29 | 16 | 16 | `ai_evaluate`, `refine_iteration` |
+| Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
+| **Total** | **218** | **178** | **170** |  |
+
+<details><summary>35 tools with a known failure</summary>
+
+| Tool | Fails on |
+| --- | --- |
+| `ai_auto_uv` | 4.5, 5.2 |
+| `ai_inpaint_texture` | 4.5, 5.2 |
+| `ai_mesh_decimate` | 4.5, 5.2 |
+| `ai_pipeline_generate` | 4.5, 5.2 |
+| `ai_texture_from_render` | 4.5, 5.2 |
+| `annotation_add` | 4.5, 5.2 |
+| `annotation_clear` | 5.2 |
+| `boolean_op` | 5.2 |
+| `constraint_add` | 4.5, 5.2 |
+| `curve_to_mesh` | 4.5, 5.2 |
+| `export_gltf` | 4.5, 5.2 |
+| `geonode_apply` | 5.2 |
+| `geonode_inspect` | 5.2 |
+| `grease_pencil_create` | 4.5, 5.2 |
+| `grease_pencil_markup` | 5.2 |
+| `keyframe_list` | 5.2 |
+| `measure` | 4.5, 5.2 |
+| `mesh_crease` | 4.5, 5.2 |
+| `mesh_edge_slide` | 4.5, 5.2 |
+| `mesh_knife_project` | 4.5, 5.2 |
+| `mesh_loop_cut` | 4.5, 5.2 |
+| `mesh_merge` | 4.5, 5.2 |
+| `mesh_select_edge_loops` | 5.2 |
+| `mesh_subdivide` | 4.5, 5.2 |
+| `physics_fluid_quick` | 4.5, 5.2 |
+| `physics_simulate` | 4.5, 5.2 |
+| `reference_image_setup` | 4.5, 5.2 |
+| `render_screenshot` | 4.5, 5.2 |
+| `render_set_engine` | 5.2 |
+| `sculpt_extract_mask` | 4.5, 5.2 |
+| `sculpt_face_set_create` | 4.5, 5.2 |
+| `sculpt_mask_by_topology` | 4.5, 5.2 |
+| `sculpt_mesh_filter` | 4.5, 5.2 |
+| `sculpt_multires_reshape` | 4.5, 5.2 |
+| `sculpt_to_retopo` | 4.5, 5.2 |
+
+Socket checks that still fail: `mesh_knife_project_keeps_outside`, `reply_16mb_complete`, `undo_reverts`.
+
+</details>
+
+<details><summary>13 tools that accept a call with a required argument missing</summary>
+
+`material_add_texture`, `material_set_principled`, `object_create`, `object_delete`, `object_duplicate`, `object_get`, `object_join`, `object_parent`, `object_separate`, `object_transform`, `polyhaven_download`, `render_animation`, `render_set_resolution`
+
+</details>
+
+<details><summary>13 tools that cannot be checked headless</summary>
+
+| Tool | Why |
+| --- | --- |
+| `ai_generate_model` | no AI backend is reachable offline |
+| `ai_generate_model_sync` | no AI backend is reachable offline |
+| `ai_generate_reference_image` | no AI backend is reachable offline |
+| `ai_generate_texture` | no AI backend is reachable offline |
+| `ai_generate_texture_sync` | no AI backend is reachable offline |
+| `ai_model_status` | needs a job id that only a live AI backend can issue |
+| `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
+| `msfs_livery_convert_to_dds` | needs texconv from DirectXTex, which is not installed here |
+| `msfs_livery_export_uv_layout` | the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI |
+| `msfs_livery_set_paint_brush` | needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both |
+| `redo` | Blender disables undo in background mode |
+| `refine_get_session` | needs a session id from a prior refine_create_session call |
+| `undo` | Blender disables undo in background mode |
+
+</details>
+<!-- /generated:tools -->
 
 Every tool name takes a `blender_` prefix, for example `blender_scene_info`.
 
@@ -273,7 +356,7 @@ best-effort basis.
 
 ## Troubleshooting
 
-**"Connection refused":** make sure Blender is running, the **MCP Server** tab shows the server
+**"Connection refused":** make sure Blender is running, the **Meshwire** tab shows the server
 running, and the port matches.
 
 **"Tool not found":** restart your MCP client after editing its config, confirm the server command
@@ -329,9 +412,10 @@ Contributions are welcome. See [`CONTRIBUTING.md`](https://github.com/RFingAdam/
 
 ## Trademarks
 
-This project is not affiliated with, endorsed by, or sponsored by the Blender Foundation.
-"Blender" is a trademark of the Blender Foundation, used here only to identify the software this
-project works with.
+Meshwire is an independent project. It is not affiliated with, endorsed by, or sponsored by the
+Blender Foundation, Microsoft, or Asobo Studio. Blender is a registered trademark of the Blender
+Foundation. Microsoft Flight Simulator is a trademark of Microsoft Corporation. These names are used
+only to say what Meshwire works with.
 
 ## Acknowledgments
 
@@ -341,10 +425,3 @@ project works with.
   **[Tripo](https://www.tripo3d.ai/)**, **TripoSR**, **Stable Fast 3D**, **Hunyuan3D**, and
   **ComfyUI** for AI 3D backends.
 - **The MCP working group** for the [Model Context Protocol](https://modelcontextprotocol.io).
-
-## Trademarks
-
-Meshwire is an independent project. It is not affiliated with, endorsed by, or sponsored by the
-Blender Foundation, Microsoft, or Asobo Studio. Blender is a registered trademark of the Blender
-Foundation. Microsoft Flight Simulator is a trademark of Microsoft Corporation. These names are used
-only to say what Meshwire works with.
