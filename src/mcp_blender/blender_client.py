@@ -8,6 +8,10 @@ from typing import Any
 
 logger = logging.getLogger("meshwire.client")
 
+# The add-on holds at most 256 MiB of reply per client, so no honest reply line is longer.
+MAX_REPLY_LINE = 256 * 1024 * 1024 + 1024 * 1024
+READ_SIZE = 1024 * 1024
+
 
 class BlenderConnectionError(Exception):
     """Raised when connection to Blender fails."""
@@ -83,11 +87,13 @@ class BlenderClient:
         self._connected = False
 
         if self._read_task:
-            self._read_task.cancel()
-            try:
-                await self._read_task
-            except asyncio.CancelledError:
-                pass
+            # The read loop disconnects itself when the socket closes; it cannot await itself.
+            if self._read_task is not asyncio.current_task():
+                self._read_task.cancel()
+                try:
+                    await self._read_task
+                except asyncio.CancelledError:
+                    pass
             self._read_task = None
 
         if self._writer:
@@ -173,12 +179,12 @@ class BlenderClient:
 
     async def _read_loop(self) -> None:
         """Background task to read responses from Blender."""
-        buffer = b""
+        buffer = bytearray()
+        scanned = 0  # bytes of buffer already known to hold no newline
 
         while self._connected and self._reader:
             try:
-                # Read data
-                data = await self._reader.read(65536)
+                data = await self._reader.read(READ_SIZE)
                 if not data:
                     # Connection closed
                     logger.warning("Connection closed by Blender")
@@ -188,10 +194,22 @@ class BlenderClient:
                 buffer += data
 
                 # Process complete messages
-                while b"\n" in buffer:
-                    line, buffer = buffer.split(b"\n", 1)
+                while (end := buffer.find(b"\n", scanned)) >= 0:
+                    line = bytes(buffer[:end])
+                    del buffer[: end + 1]
+                    scanned = 0
                     if line.strip():
                         await self._handle_response(line)
+                scanned = len(buffer)
+
+                if len(buffer) > MAX_REPLY_LINE:
+                    self._fail_pending(
+                        BlenderConnectionError(
+                            f"Reply from Blender too large (over {MAX_REPLY_LINE} bytes)"
+                        )
+                    )
+                    await self.disconnect()
+                    break
 
             except asyncio.CancelledError:
                 break
@@ -199,6 +217,14 @@ class BlenderClient:
                 logger.error(f"Read error: {e}")
                 await self.disconnect()
                 break
+
+    def _fail_pending(self, exc: Exception) -> None:
+        """Fail every request still waiting for a reply with ``exc``."""
+        pending = list(self._pending_requests.values())
+        self._pending_requests.clear()
+        for future in pending:
+            if not future.done():
+                future.set_exception(exc)
 
     async def _handle_response(self, data: bytes) -> None:
         """Handle a JSON-RPC response from Blender."""
@@ -208,9 +234,23 @@ class BlenderClient:
             logger.error(f"Invalid JSON response: {e}")
             return
 
+        if not isinstance(response, dict):
+            logger.error("Reply from Blender is not a JSON object")
+            return
+
         request_id = response.get("id")
         if request_id is None:
-            logger.warning("Received response without ID")
+            # The add-on could not tell which request was bad (parse error, too many
+            # clients, oversize line) and is about to close the connection. Every
+            # waiting request gets its reason.
+            error = response.get("error")
+            if error:
+                message = (
+                    error.get("message", str(error)) if isinstance(error, dict) else str(error)
+                )
+                self._fail_pending(BlenderCommandError(message))
+            else:
+                logger.warning("Received response without ID")
             return
 
         future = self._pending_requests.pop(request_id, None)
