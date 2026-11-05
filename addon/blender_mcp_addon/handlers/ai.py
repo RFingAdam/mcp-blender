@@ -400,13 +400,11 @@ class AIHandlersMixin:
     def _handle_ai_mesh_decimate(self, params: dict) -> dict:
         """Reduce polygon count of a mesh."""
         from ..external.mesh_processing import decimate_mesh
+        method = str(params.get("method", "COLLAPSE")).upper()
         return decimate_mesh(
             object_name=require_param(params, "object_name", str),
             ratio=params.get("ratio", 0.5),
-            method=_DECIMATE_METHOD_ALIASES.get(
-                str(params.get("method", "COLLAPSE")).upper(),
-                str(params.get("method", "COLLAPSE")),
-            ),
+            method=_DECIMATE_METHOD_ALIASES.get(method, method),
             triangulate=params.get("triangulate", False),
             preserve_uvs=params.get("preserve_uvs", True),
             vertex_group=params.get("vertex_group"),

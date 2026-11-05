@@ -18,8 +18,8 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **192 of 218 tools work on both.**
-> 24 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> **185 of 218 tools work on both.**
+> 31 need what a headless test cannot provide, such as a GUI, network access, or an earlier call.
 > 2 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
@@ -143,9 +143,9 @@ if they drift. More detail per area is in
 | Annotations | 6 | 4 | 5 | `annotation_dimension`, `annotation_text` |
 | MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
-| AI generation and refinement | 29 | 18 | 18 | `ai_evaluate`, `refine_iteration` |
-| Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
-| **Total** | **218** | **192** | **193** |  |
+| AI generation and refinement | 29 | 13 | 13 | `ai_mesh_remesh`, `ai_auto_uv` |
+| Poly Haven | 2 | 0 | 0 |  |
+| **Total** | **218** | **185** | **186** |  |
 
 <details><summary>2 tools with a known failure</summary>
 
@@ -158,10 +158,11 @@ Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>24 tools that cannot be checked headless</summary>
+<details><summary>31 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
+| `ai_evaluate` | needs network access, which the harness turns off |
 | `ai_generate_model` | no AI backend is reachable offline |
 | `ai_generate_model_sync` | no AI backend is reachable offline |
 | `ai_generate_reference_image` | no AI backend is reachable offline |
@@ -171,6 +172,9 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
 | `ai_pipeline_generate` | no AI backend is reachable offline |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
+| `ai_probe_backends` | needs network access, which the harness turns off |
+| `ai_refine` | needs network access, which the harness turns off |
+| `analyze_viewport` | needs network access, which the harness turns off |
 | `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |
 | `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
@@ -178,8 +182,11 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `msfs_livery_convert_to_dds` | needs texconv from DirectXTex, which is not installed here |
 | `msfs_livery_export_uv_layout` | the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI |
 | `msfs_livery_set_paint_brush` | needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both |
+| `polyhaven_download` | needs network access, which the harness turns off |
+| `polyhaven_search` | needs network access, which the harness turns off |
 | `redo` | Blender disables undo in background mode |
 | `refine_get_session` | needs a session id from a prior refine_create_session call |
+| `refine_iteration` | needs network access, which the harness turns off |
 | `render_screenshot` | needs a 3D viewport; socket lane covers it |
 | `sculpt_face_set_create` | face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it |
 | `sculpt_mask_by_topology` | the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it |
