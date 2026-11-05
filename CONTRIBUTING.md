@@ -19,7 +19,8 @@ agreement. Read CLA.md before you submit if you want the full terms.
 ### Prerequisites
 
 - Python 3.10 or later
-- Blender 4.5 LTS or 5.2 LTS (for testing). Every series from 4.2 through 5.2 is supported, and 4.2 is the minimum. Series other than 4.5 and 5.2 run nightly on a best-effort basis.
+- Blender 4.5 LTS or 5.2 LTS (for testing). Meshwire supports 4.2 through 5.2, and the other series
+  run nightly on a best-effort basis.
 - Git
 
 ### Setting Up the Development Environment
@@ -101,8 +102,9 @@ The truth harness runs every tool in real headless Blender. See
 ## Truth harness
 
 The truth harness runs every tool in real headless Blender and compares the results with
-committed baselines. It is gated on Blender 4.5 and 5.2 on every pull request. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 run
-nightly and are best effort. The minimum is 4.2. Baselines live in `tests/harness/baselines/`. They hold case ids
+committed baselines. It runs on Blender 4.5 and 5.2 on every pull request, and a difference there
+blocks the merge. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 run nightly and are best effort. Baselines live
+in `tests/harness/baselines/`. They hold case ids
 and result classes only, never messages or paths.
 
 Each tool gets several cases: a minimal call, one call per enum value, and a call with a
