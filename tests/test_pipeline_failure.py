@@ -64,3 +64,56 @@ def test_all_stages_completing_reports_success():
     )
     assert out["success"] is True
     assert "error" not in out
+
+
+class _MsfsHandlers:
+    """Stub handler set for the MSFS prep stage; records the export call."""
+
+    def __init__(self, export):
+        self._export = export
+        self.export_params = None
+
+    def _handle_msfs_create_lod_hierarchy(self, params):
+        return {"success": True}
+
+    def _handle_msfs_create_collision_box(self, params):
+        return {"success": True}
+
+    def _handle_msfs_validate_for_export(self, params):
+        return {"success": True}
+
+    def _handle_msfs_export_model(self, params):
+        self.export_params = dict(params)
+        return self._export
+
+
+def _run_msfs(monkeypatch, handlers, tmp_path):
+    import sys
+    from unittest.mock import MagicMock
+
+    monkeypatch.setitem(sys.modules, "bpy", MagicMock())
+    mod = _pipeline()
+    return mod.run_pipeline(
+        {
+            "pipeline_preset": "msfs_vehicle",
+            "existing_object": "Wing",
+            "skip_stages": ["cleanup", "uv"],
+            "output_dir": str(tmp_path),
+        },
+        handlers,
+    )
+
+
+def test_msfs_stage_exports_to_a_filepath_built_from_the_output_dir(monkeypatch, tmp_path):
+    handlers = _MsfsHandlers({"success": True})
+    out = _run_msfs(monkeypatch, handlers, tmp_path)
+    assert out["success"] is True
+    assert handlers.export_params == {"filepath": str(tmp_path / "Wing.glb")}
+
+
+def test_msfs_export_failure_reaches_the_pipeline_result(monkeypatch, tmp_path):
+    handlers = _MsfsHandlers({"success": False, "error": "disk full"})
+    out = _run_msfs(monkeypatch, handlers, tmp_path)
+    assert out["success"] is False
+    assert "disk full" in out["error"]
+    assert out["stages"]["msfs_prep"]["status"] == "failed"

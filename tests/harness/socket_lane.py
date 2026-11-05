@@ -397,8 +397,8 @@ def check_object_create_listed(ctx: Ctx) -> str:
 
 def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
     # knife_project needs a cutter with wire or boundary edges, which a closed cube lacks,
-    # so the cutter is a single quad. It projects along the view, so the view is set to a
-    # top-down orthographic one over the target instead of whatever the GUI opened with.
+    # so the cutter is a single quad. The viewport is left as the GUI opened it: the tool
+    # must frame the objects along its view axis (TOP by default) itself.
     ctx.conn.exec(
         MAKE_CUBE
         + "make('LaneTarget', 2.0, (20, 0, 0))\n"
@@ -410,14 +410,6 @@ def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
         + "cutter = bpy.data.objects.new('LaneCutter', me)\n"
         + "cutter.location = (20, 0, 2)\n"
         + "bpy.context.scene.collection.objects.link(cutter)\n"
-        + "from mathutils import Euler\n"
-        + "for area in bpy.context.window_manager.windows[0].screen.areas:\n"
-        + "    if area.type == 'VIEW_3D':\n"
-        + "        r3d = area.spaces[0].region_3d\n"
-        + "        r3d.view_perspective = 'ORTHO'\n"
-        + "        r3d.view_rotation = Euler((0.0, 0.0, 0.0)).to_quaternion()\n"
-        + "        r3d.view_location = (20.0, 0.0, 0.0)\n"
-        + "        r3d.view_distance = 10.0\n"
     )
     probe = (
         "ob = bpy.data.objects['LaneTarget']\n"
@@ -442,6 +434,86 @@ def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
             f"no cut was made: verts {before['verts']} -> {after['verts']} (reported method {method})"
         )
     return f"outer geometry kept and cut added ({before['verts']} -> {after['verts']} verts)"
+
+
+def check_mesh_knife_project_reports_no_cut(ctx: Ctx) -> str:
+    # A cutter that sits beside the target does not overlap it in the top view, so the
+    # operator cuts nothing and raises nothing. The reply must say so.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneMissTarget', 2.0, (80, 0, 0))\n"
+        + "me = bpy.data.meshes.new('LaneMissCutter')\n"
+        + "bm = bmesh.new()\n"
+        + "bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.25)\n"
+        + "bm.to_mesh(me)\n"
+        + "bm.free()\n"
+        + "cutter = bpy.data.objects.new('LaneMissCutter', me)\n"
+        + "cutter.location = (95, 0, 2)\n"
+        + "bpy.context.scene.collection.objects.link(cutter)\n"
+    )
+    probe = (
+        "me = bpy.data.objects['LaneMissTarget'].data\n"
+        "result = [len(me.vertices), len(me.edges), len(me.polygons)]\n"
+    )
+    before = ctx.conn.exec(probe)
+    reply = ctx.conn.call(
+        "mesh_knife_project",
+        {"target_object": "LaneMissTarget", "cutter_object": "LaneMissCutter"},
+    )
+    after = ctx.conn.exec(probe)
+    if not (isinstance(reply, dict) and reply.get("success") is False):
+        raise CheckFailed(f"a cut that changed nothing did not report failure: {str(reply)[:160]}")
+    if "does not overlap" not in str(reply.get("error", "")):
+        raise CheckFailed(f"the failure does not say why: {str(reply)[:160]}")
+    if before != after:
+        raise CheckFailed(f"the mesh changed although no cut was reported: {before} -> {after}")
+    return "no-overlap cut reported as a failure, mesh unchanged"
+
+
+def check_mesh_knife_project_uses_view_axis(ctx: Ctx) -> str:
+    # The cutter stands upright in front of the target (an XZ-plane square at y = -3).
+    # Seen from the top it is a line outside the target, so TOP cuts nothing. Seen
+    # from the front it covers part of the target's front face, so FRONT cuts.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneAxisTarget', 2.0, (110, 0, 0))\n"
+        + "me = bpy.data.meshes.new('LaneAxisCutter')\n"
+        + "bm = bmesh.new()\n"
+        + "bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.25)\n"
+        + "bm.to_mesh(me)\n"
+        + "bm.free()\n"
+        + "cutter = bpy.data.objects.new('LaneAxisCutter', me)\n"
+        + "cutter.location = (110, -3, 0)\n"
+        + "cutter.rotation_euler = (1.5707963, 0, 0)\n"
+        + "bpy.context.scene.collection.objects.link(cutter)\n"
+    )
+    probe = (
+        "me = bpy.data.objects['LaneAxisTarget'].data\n"
+        "area = next(a for w in bpy.context.window_manager.windows\n"
+        "            for a in w.screen.areas if a.type == 'VIEW_3D')\n"
+        "rv3d = area.spaces.active.region_3d\n"
+        "front = sum(1 for v in me.vertices if abs(v.co.y + 1.0) < 1e-4)\n"
+        "result = [len(me.vertices), front, [round(v, 4) for v in rv3d.view_rotation],"
+        " [round(v, 4) for v in rv3d.view_location], round(rv3d.view_distance, 4),"
+        " rv3d.view_perspective]\n"
+    )
+    args = {"target_object": "LaneAxisTarget", "cutter_object": "LaneAxisCutter"}
+    before = ctx.conn.exec(probe)
+    top = ctx.conn.call("mesh_knife_project", {**args, "view_axis": "TOP"})
+    if not (isinstance(top, dict) and top.get("success") is False):
+        raise CheckFailed(f"TOP should cut nothing here: {str(top)[:160]}")
+    front = ctx.conn.call("mesh_knife_project", {**args, "view_axis": "FRONT"})
+    after = ctx.conn.exec(probe)
+    if not (isinstance(front, dict) and front.get("success") and front.get("view_axis") == "FRONT"):
+        raise CheckFailed(f"FRONT should cut and report its axis: {str(front)[:160]}")
+    if after[1] - before[1] != after[0] - before[0] or after[0] <= before[0]:
+        raise CheckFailed(
+            f"FRONT should add vertices on the front face only: verts {before[0]} -> {after[0]},"
+            f" front-face verts {before[1]} -> {after[1]}"
+        )
+    if after[2:] != before[2:]:
+        raise CheckFailed(f"the view was not restored: {before[2:]} -> {after[2:]}")
+    return f"TOP cut nothing, FRONT cut the front face ({before[0]} -> {after[0]} verts), view restored"
 
 
 def check_mesh_loop_cut_adds_edges(ctx: Ctx) -> str:
@@ -1801,6 +1873,8 @@ def check_bake_without_uvs_errors(ctx: Ctx) -> str:
 CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
     ("mesh_knife_project_keeps_outside", check_mesh_knife_project_keeps_outside, CHECK_TIMEOUT),
+    ("mesh_knife_project_reports_no_cut", check_mesh_knife_project_reports_no_cut, CHECK_TIMEOUT),
+    ("mesh_knife_project_uses_view_axis", check_mesh_knife_project_uses_view_axis, CHECK_TIMEOUT),
     ("mesh_loop_cut_adds_edges", check_mesh_loop_cut_adds_edges, CHECK_TIMEOUT),
     ("mesh_select_criteria_intersect", check_mesh_select_criteria_intersect, CHECK_TIMEOUT),
     ("mesh_edge_slide_moves_edge", check_mesh_edge_slide_moves_edge, CHECK_TIMEOUT),

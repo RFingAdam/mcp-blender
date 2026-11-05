@@ -120,7 +120,7 @@ def generate_model(
         style=style,
         quality=quality,
         output_format=output_format,
-        metadata={"external_job_id": result.job_id},
+        metadata={"external_job_id": result.job_id, "kind": "model"},
     )
 
     return {
@@ -182,6 +182,7 @@ def generate_texture(
         output_format="png",
         metadata={
             "external_job_id": result.job_id,
+            "kind": "texture",
             "workflow_type": workflow_type,
             "object_name": object_name,
             "auto_apply": auto_apply,
@@ -256,7 +257,7 @@ def generate_model_from_image(
         style=style,
         quality=quality,
         output_format=output_format,
-        metadata={"external_job_id": result.job_id},
+        metadata={"external_job_id": result.job_id, "kind": "model"},
     )
 
     return {

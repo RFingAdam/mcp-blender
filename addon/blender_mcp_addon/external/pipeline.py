@@ -4,6 +4,7 @@ Supports multiple presets with backend routing, component separation
 for vehicle modeling, and configurable stage chains.
 """
 
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -315,6 +316,7 @@ def run_pipeline(params, handlers):
                             "lod_count": 3,
                         }
                     )
+                    base_name = run.object_name
                     # Update object name to LOD0 after hierarchy creation
                     lod0_name = f"{run.object_name}_LOD0"
                     import bpy as _bpy
@@ -327,7 +329,10 @@ def run_pipeline(params, handlers):
                     )
                     output_dir = params.get("output_dir")
                     if output_dir:
-                        handlers._handle_msfs_export_model({"output_dir": output_dir})
+                        export = handlers._handle_msfs_export_model(
+                            {"filepath": os.path.join(output_dir, f"{base_name}.glb")}
+                        )
+                        _raise_if_failed(export, "MSFS export")
                     sr.result = {
                         "lod": lod_result,
                         "validation": validation,

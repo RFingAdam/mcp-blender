@@ -36,7 +36,6 @@ NON_MUTATING: frozenset[str] = frozenset(
         # Names that read: *_get, *_list, *_info, *_status, get_*, list_*
         "action_list",
         "ai_get_backend_info",
-        "ai_model_status",
         "ai_pipeline_status",
         "ai_queue_list",
         "collection_list",
@@ -76,10 +75,21 @@ NON_MUTATING: frozenset[str] = frozenset(
 HARNESS_ONLY: frozenset[str] = frozenset({"harness_reset", "harness_exec"})
 
 
+# Handlers that push a step only when they report a change through CHANGED_KEY.
+CONDITIONALLY_MUTATING: frozenset[str] = frozenset({"ai_model_status"})
+
+# Private reply key a conditionally mutating handler sets when it changed the scene.
+CHANGED_KEY = "_pushed_changes"
+
+
 def _succeeded(result: Any) -> bool:
-    """False for a reply that reports an error, True for anything else."""
+    """False for a reply that reports an error, True for anything else.
+
+    A reply carries ``"error": None`` on success in places (execute_script), so
+    only a truthy error counts.
+    """
     if isinstance(result, dict):
-        return "error" not in result and result.get("success") is not False
+        return not result.get("error") and result.get("success") is not False
     return True
 
 
@@ -439,7 +449,11 @@ class CommandHandlers(
         if handler is None:
             raise ValueError(f"Unknown method: {method}")
         result = handler(params)
-        if method not in NON_MUTATING and method not in HARNESS_ONLY and _succeeded(result):
+        # A handler that only sometimes changes the scene (ai_model_status imports a
+        # finished model) sets this private key when it did. It never reaches the client.
+        changed = isinstance(result, dict) and bool(result.pop(CHANGED_KEY, False))
+        pushes = changed if method in CONDITIONALLY_MUTATING else method not in NON_MUTATING
+        if pushes and method not in HARNESS_ONLY and _succeeded(result):
             self._push_undo_step(method)
         return result
 
