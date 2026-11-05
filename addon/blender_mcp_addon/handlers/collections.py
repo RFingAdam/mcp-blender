@@ -23,8 +23,14 @@ class CollectionHandlersMixin:
         # Validate color_tag if provided
         valid_tags = [
             "NONE",
-            "COLOR_01", "COLOR_02", "COLOR_03", "COLOR_04",
-            "COLOR_05", "COLOR_06", "COLOR_07", "COLOR_08",
+            "COLOR_01",
+            "COLOR_02",
+            "COLOR_03",
+            "COLOR_04",
+            "COLOR_05",
+            "COLOR_06",
+            "COLOR_07",
+            "COLOR_08",
         ]
         color_tag = validate_enum(color_tag, "color_tag", valid_tags)
 
@@ -65,7 +71,6 @@ class CollectionHandlersMixin:
             "path": full_path,
             "color_tag": new_collection.color_tag,
         }
-
 
     def _handle_collection_list(self, params: dict) -> dict:
         """List all collections with hierarchy as a nested tree."""
@@ -118,10 +123,7 @@ class CollectionHandlersMixin:
         tree = {
             "name": root.name,
             "objects": [obj.name for obj in root.objects],
-            "children": [
-                _build_tree(child, layer_root)
-                for child in root.children
-            ],
+            "children": [_build_tree(child, layer_root) for child in root.children],
             "visible": True,
             "excluded": False,
             "render_visible": True,
@@ -136,7 +138,6 @@ class CollectionHandlersMixin:
             "hierarchy": tree,
             "total_collections": total_collections,
         }
-
 
     def _handle_collection_move(self, params: dict) -> dict:
         """Move objects between collections."""
@@ -170,9 +171,7 @@ class CollectionHandlersMixin:
             # Remove from current collections if requested
             if remove_from_current:
                 # Collect all collections this object is in
-                current_collections = [
-                    c for c in bpy.data.collections if obj.name in c.objects
-                ]
+                current_collections = [c for c in bpy.data.collections if obj.name in c.objects]
                 # Also check scene collection
                 scene_col = bpy.context.scene.collection
                 if obj.name in scene_col.objects:
@@ -197,7 +196,6 @@ class CollectionHandlersMixin:
             result["errors"] = errors
 
         return result
-
 
     def _handle_collection_visibility(self, params: dict) -> dict:
         """Toggle collection visibility, renderability, and selectability."""
@@ -262,9 +260,7 @@ class CollectionHandlersMixin:
             },
         }
 
-
     # ========== System Handlers ==========
-
 
     def _handle_undo(self, params: dict) -> dict:
         """Undo the last operation."""
@@ -284,7 +280,6 @@ class CollectionHandlersMixin:
         except RuntimeError as e:
             return {"success": False, "error": f"Undo failed: {e}"}
 
-
     def _handle_redo(self, params: dict) -> dict:
         """Redo the last undone operation."""
         try:
@@ -292,7 +287,6 @@ class CollectionHandlersMixin:
             return {"success": True}
         except RuntimeError as e:
             return {"success": False, "error": f"Redo failed: {e}"}
-
 
     def _handle_save(self, params: dict) -> dict:
         """Save the current file."""
@@ -323,7 +317,6 @@ class CollectionHandlersMixin:
             result["filesize_mb"] = round(filesize / (1024 * 1024), 2)
 
         return result
-
 
     def _handle_save_as(self, params: dict) -> dict:
         """Save to a new file path."""
@@ -363,6 +356,4 @@ class CollectionHandlersMixin:
 
         return result
 
-
     # ========== Baking Handlers ==========
-

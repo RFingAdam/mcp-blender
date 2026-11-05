@@ -231,7 +231,9 @@ class CommandHandlers(
         self._handlers["msfs_create_collision_convex"] = self._handle_msfs_create_collision_convex
         self._handlers["msfs_tag_collision_type"] = self._handle_msfs_tag_collision_type
         self._handlers["msfs_add_animation_tag"] = self._handle_msfs_add_animation_tag
-        self._handlers["msfs_setup_visibility_animation"] = self._handle_msfs_setup_visibility_animation
+        self._handlers["msfs_setup_visibility_animation"] = (
+            self._handle_msfs_setup_visibility_animation
+        )
         self._handlers["msfs_configure_animation_loop"] = self._handle_msfs_configure_animation_loop
         self._handlers["msfs_list_animation_tags"] = self._handle_msfs_list_animation_tags
         self._handlers["msfs_export_model"] = self._handle_msfs_export_model
@@ -241,13 +243,19 @@ class CommandHandlers(
 
         # MSFS livery handlers
         self._handlers["msfs_livery_setup_paint_mode"] = self._handle_msfs_livery_setup_paint_mode
-        self._handlers["msfs_livery_create_paint_layers"] = self._handle_msfs_livery_create_paint_layers
-        self._handlers["msfs_livery_load_template_overlay"] = self._handle_msfs_livery_load_template_overlay
+        self._handlers["msfs_livery_create_paint_layers"] = (
+            self._handle_msfs_livery_create_paint_layers
+        )
+        self._handlers["msfs_livery_load_template_overlay"] = (
+            self._handle_msfs_livery_load_template_overlay
+        )
         self._handlers["msfs_livery_export_uv_layout"] = self._handle_msfs_livery_export_uv_layout
         self._handlers["msfs_livery_set_paint_brush"] = self._handle_msfs_livery_set_paint_brush
         self._handlers["msfs_livery_sample_color"] = self._handle_msfs_livery_sample_color
         self._handlers["msfs_livery_get_paint_presets"] = self._handle_msfs_livery_get_paint_presets
-        self._handlers["msfs_livery_get_aircraft_templates"] = self._handle_msfs_livery_get_aircraft_templates
+        self._handlers["msfs_livery_get_aircraft_templates"] = (
+            self._handle_msfs_livery_get_aircraft_templates
+        )
         self._handlers["msfs_livery_get_template_info"] = self._handle_msfs_livery_get_template_info
         self._handlers["msfs_livery_download_template"] = self._handle_msfs_livery_download_template
         self._handlers["msfs_livery_analyze"] = self._handle_msfs_livery_analyze

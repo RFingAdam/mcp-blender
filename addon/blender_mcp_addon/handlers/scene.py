@@ -19,11 +19,9 @@ class SceneHandlersMixin:
             "has_ai_queue_list": "ai_queue_list" in self._handlers,
         }
 
-
     def _handle_scene_info(self, params: dict) -> dict:
         """Get current scene information."""
         return serialize_scene(bpy.context.scene)
-
 
     def _handle_scene_new(self, params: dict) -> dict:
         """Create a new scene."""
@@ -32,13 +30,11 @@ class SceneHandlersMixin:
         bpy.context.window.scene = scene
         return {"name": scene.name}
 
-
     def _handle_scene_clear(self, params: dict) -> dict:
         """Remove all objects from the current scene."""
         bpy.ops.object.select_all(action="SELECT")
         bpy.ops.object.delete(use_global=False)
         return {"cleared": True}
-
 
     def _handle_scene_set_frame_range(self, params: dict) -> dict:
         """Set animation frame range."""
@@ -50,10 +46,8 @@ class SceneHandlersMixin:
             "frame_end": scene.frame_end,
         }
 
-
     def _handle_get_version(self, params: dict) -> dict:
         """Get Blender version information."""
         return compat.get_version_info()
 
     # ========== Object Handlers ==========
-

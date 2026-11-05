@@ -239,19 +239,23 @@ def create_paint_layers(
             # Set default color
             img.generated_color = preset["default_color"]
 
-            created_layers.append({
-                "name": layer_name,
-                "image": img_name,
-                "description": preset["description"],
-                "blend_mode": preset["blend_mode"],
-            })
+            created_layers.append(
+                {
+                    "name": layer_name,
+                    "image": img_name,
+                    "description": preset["description"],
+                    "blend_mode": preset["blend_mode"],
+                }
+            )
         else:
-            created_layers.append({
-                "name": layer_name,
-                "image": img_name,
-                "description": preset["description"],
-                "already_exists": True,
-            })
+            created_layers.append(
+                {
+                    "name": layer_name,
+                    "image": img_name,
+                    "description": preset["description"],
+                    "already_exists": True,
+                }
+            )
 
     return {
         "object": object_name,
@@ -488,9 +492,7 @@ def sample_color_from_image(
 
     # Validate coordinates
     if x < 0 or x >= width or y < 0 or y >= height:
-        return {
-            "error": f"Coordinates ({x}, {y}) out of bounds for image size ({width}, {height})"
-        }
+        return {"error": f"Coordinates ({x}, {y}) out of bounds for image size ({width}, {height})"}
 
     # Get pixel data
     pixels = img.pixels[:]
@@ -506,9 +508,7 @@ def sample_color_from_image(
     a = pixels[pixel_index + 3]
 
     # Convert to hex
-    hex_color = "#{:02x}{:02x}{:02x}".format(
-        int(r * 255), int(g * 255), int(b * 255)
-    )
+    hex_color = "#{:02x}{:02x}{:02x}".format(int(r * 255), int(g * 255), int(b * 255))
 
     # Clean up loaded image
     bpy.data.images.remove(img)

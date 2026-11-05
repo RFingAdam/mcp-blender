@@ -132,11 +132,14 @@ class TestBlenderClient:
     @pytest.mark.asyncio
     async def test_send_command(self, mock_server):
         """Client should send commands and receive responses."""
-        mock_server.set_response("scene_info", {
-            "name": "Scene",
-            "frame_start": 1,
-            "frame_end": 250,
-        })
+        mock_server.set_response(
+            "scene_info",
+            {
+                "name": "Scene",
+                "frame_start": 1,
+                "frame_end": 250,
+            },
+        )
 
         async with BlenderClient(mock_server.host, mock_server.port) as client:
             result = await client.send_command("scene_info")
@@ -146,10 +149,13 @@ class TestBlenderClient:
     @pytest.mark.asyncio
     async def test_send_command_with_params(self, mock_server):
         """Client should send commands with parameters."""
-        mock_server.set_response("object_create", {
-            "name": "Cube",
-            "type": "MESH",
-        })
+        mock_server.set_response(
+            "object_create",
+            {
+                "name": "Cube",
+                "type": "MESH",
+            },
+        )
 
         async with BlenderClient(mock_server.host, mock_server.port) as client:
             result = await client.send_command("object_create", {"type": "cube"})

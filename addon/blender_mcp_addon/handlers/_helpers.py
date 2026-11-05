@@ -23,6 +23,7 @@ _SOCKET_TYPE_MAP = {
     "STRING": "NodeSocketString",
 }
 
+
 def view3d_override():
     """Context override for an operator that needs a 3D viewport, or None when there is none.
 
@@ -79,7 +80,11 @@ def restores_object_mode(handler=None, *, error_replies=False):
             except BaseException:
                 leave_to_object()
                 raise
-            if error_replies and isinstance(reply, dict) and (reply.get("error") or reply.get("success") is False):
+            if (
+                error_replies
+                and isinstance(reply, dict)
+                and (reply.get("error") or reply.get("success") is False)
+            ):
                 leave_to_object()
             return reply
 
@@ -143,7 +148,6 @@ _FORMAT_EXTENSIONS = {
 }
 
 
-
 # ---------------------------------------------------------------------------
 # Geometry Nodes helpers
 # ---------------------------------------------------------------------------
@@ -154,7 +158,7 @@ def _build_socket_info(group):
     inputs = []
     outputs = []
     for item in group.interface.items_tree:
-        if item.item_type != 'SOCKET':
+        if item.item_type != "SOCKET":
             continue
         info = {
             "name": item.name,
@@ -162,11 +166,12 @@ def _build_socket_info(group):
             "bl_socket_idname": item.bl_socket_idname,
             "identifier": item.identifier,
         }
-        if item.in_out == 'INPUT':
+        if item.in_out == "INPUT":
             inputs.append(info)
         else:
             outputs.append(info)
     return inputs, outputs
+
 
 def _link(tree, from_socket, to_socket):
     """Shortcut: create a node link."""
@@ -186,11 +191,11 @@ def _get_gn_modifier(obj, modifier_name=None):
     """Return the first (or named) Geometry Nodes modifier, or None."""
     if modifier_name:
         mod = obj.modifiers.get(modifier_name)
-        if mod and mod.type == 'NODES':
+        if mod and mod.type == "NODES":
             return mod
         return None
     for mod in obj.modifiers:
-        if mod.type == 'NODES':
+        if mod.type == "NODES":
             return mod
     return None
 
@@ -199,11 +204,16 @@ def _socket_type_label(socket):
     """Return a human-friendly type label for a node-group interface socket."""
     bl_type = socket.bl_socket_idname
     mapping = {
-        "FLOAT": "NodeSocketFloat", "INT": "NodeSocketInt",
-        "VECTOR": "NodeSocketVector", "BOOLEAN": "NodeSocketBool",
-        "OBJECT": "NodeSocketObject", "COLLECTION": "NodeSocketCollection",
-        "MATERIAL": "NodeSocketMaterial", "IMAGE": "NodeSocketImage",
-        "STRING": "NodeSocketString", "GEOMETRY": "NodeSocketGeometry",
+        "FLOAT": "NodeSocketFloat",
+        "INT": "NodeSocketInt",
+        "VECTOR": "NodeSocketVector",
+        "BOOLEAN": "NodeSocketBool",
+        "OBJECT": "NodeSocketObject",
+        "COLLECTION": "NodeSocketCollection",
+        "MATERIAL": "NodeSocketMaterial",
+        "IMAGE": "NodeSocketImage",
+        "STRING": "NodeSocketString",
+        "GEOMETRY": "NodeSocketGeometry",
     }
     for label, bl_name in mapping.items():
         if bl_name == bl_type:
@@ -228,7 +238,13 @@ def _read_modifier_input(modifier, identifier):
 def _set_modifier_input(modifier, identifier, value, socket_type):
     """Set a modifier input value, coercing types as needed."""
     import bpy
-    if socket_type in ("NodeSocketObject", "NodeSocketCollection", "NodeSocketMaterial", "NodeSocketImage"):
+
+    if socket_type in (
+        "NodeSocketObject",
+        "NodeSocketCollection",
+        "NodeSocketMaterial",
+        "NodeSocketImage",
+    ):
         coll_map = {
             "NodeSocketObject": bpy.data.objects,
             "NodeSocketCollection": bpy.data.collections,
@@ -554,7 +570,9 @@ def _markup_with_pixels(render_path, annotations, output_path):
                 skipped.append({"index": index, "type": "text", "reason": _MARKUP_TEXT_REASON})
                 continue
             if ann_type not in ("arrow", "circle", "rectangle"):
-                skipped.append({"index": index, "type": ann_type, "reason": f"unknown type {ann_type!r}"})
+                skipped.append(
+                    {"index": index, "type": ann_type, "reason": f"unknown type {ann_type!r}"}
+                )
                 continue
             try:
                 color = _parse_markup_color(ann.get("color", "red"))
@@ -574,7 +592,9 @@ def _markup_with_pixels(render_path, annotations, output_path):
             "method": "pixels",
         }
         if drawn == 0:
-            result["error"] = "Nothing was drawn; see 'skipped' for the reason each annotation was left out"
+            result["error"] = (
+                "Nothing was drawn; see 'skipped' for the reason each annotation was left out"
+            )
             return result
 
         img.pixels.foreach_set(pixels)
@@ -589,6 +609,7 @@ def _markup_with_pixels(render_path, annotations, output_path):
 
 
 # ── Preset builder helpers ────────────────────────────────────────────
+
 
 def _add_principled(tree, loc=(0, 0)):
     """Create a Principled BSDF and Material Output, connected."""
@@ -643,6 +664,7 @@ def _add_mapping(tree, loc=(-900, 0), scale_val=None):
 
 
 # ── Individual preset builders ────────────────────────────────────────
+
 
 def _build_vehicle_paint(tree, color, wear, scale):
     bsdf, out = _add_principled(tree)
@@ -987,7 +1009,7 @@ def _build_scratched_paint(tree, color, wear, scale):
     mix_r.location = (-300, -250)
     mix_r.data_type = "FLOAT"
     mix_r.inputs[2].default_value = 0.15  # paint roughness
-    mix_r.inputs[3].default_value = 0.5   # scratch roughness
+    mix_r.inputs[3].default_value = 0.5  # scratch roughness
     tree.links.new(scratch_ramp.outputs["Color"], mix_r.inputs[0])
     tree.links.new(mix_r.outputs[0], bsdf.inputs["Roughness"])
 
@@ -1064,7 +1086,7 @@ def _build_wood(tree, color, wear, scale):
 
     ramp = _add_color_ramp(tree, (-400, 0))
     ramp.color_ramp.elements[0].color = (0.15, 0.08, 0.03, 1.0)  # dark grain
-    ramp.color_ramp.elements[1].color = (0.4, 0.22, 0.1, 1.0)   # light grain
+    ramp.color_ramp.elements[1].color = (0.4, 0.22, 0.1, 1.0)  # light grain
     tree.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
 
     if color:
@@ -1096,9 +1118,7 @@ def _build_brick(tree, color, wear, scale):
     if len(c) == 3:
         c = list(c) + [1.0]
     brick.inputs["Color1"].default_value = c
-    brick.inputs["Color2"].default_value = (
-        c[0] * 0.7, c[1] * 0.7, c[2] * 0.7, 1.0
-    )
+    brick.inputs["Color2"].default_value = (c[0] * 0.7, c[1] * 0.7, c[2] * 0.7, 1.0)
     brick.inputs["Mortar"].default_value = (0.7, 0.7, 0.65, 1.0)
     brick.inputs["Mortar Size"].default_value = 0.02
 
@@ -1212,7 +1232,6 @@ def _extract_pbr_values(tree) -> dict:
             result["transmission"] = 1.0
 
     return result
-
 
 
 def _bake_ensure_cycles():

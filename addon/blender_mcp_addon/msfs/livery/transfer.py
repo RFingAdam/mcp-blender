@@ -150,12 +150,14 @@ def _extract_dominant_colors(
     result = []
     for (r, g, b), count in top_colors:
         percentage = (count / len(sample_colors)) * 100
-        result.append({
-            "rgb": [r, g, b],
-            "hex": "#{:02x}{:02x}{:02x}".format(r, g, b),
-            "percentage": round(percentage, 1),
-            "rgba_normalized": [r / 255, g / 255, b / 255, 1.0],
-        })
+        result.append(
+            {
+                "rgb": [r, g, b],
+                "hex": "#{:02x}{:02x}{:02x}".format(r, g, b),
+                "percentage": round(percentage, 1),
+                "rgba_normalized": [r / 255, g / 255, b / 255, 1.0],
+            }
+        )
 
     return result
 
@@ -219,15 +221,17 @@ def _detect_design_elements(
     # Detect horizontal stripes (cheatlines)
     stripe_rows = _detect_horizontal_stripes(pixels, width, height)
     if stripe_rows:
-        elements.append({
-            "type": "cheatline",
-            "confidence": 0.8,
-            "position": {
-                "y_normalized": stripe_rows[0] / height,
-                "thickness_normalized": len(stripe_rows) / height,
-            },
-            "description": f"Horizontal stripe detected at ~{int(stripe_rows[0] / height * 100)}% from top",
-        })
+        elements.append(
+            {
+                "type": "cheatline",
+                "confidence": 0.8,
+                "position": {
+                    "y_normalized": stripe_rows[0] / height,
+                    "thickness_normalized": len(stripe_rows) / height,
+                },
+                "description": f"Horizontal stripe detected at ~{int(stripe_rows[0] / height * 100)}% from top",
+            }
+        )
 
     # Detect if belly is different color (common in liveries)
     bottom_region_y = int(height * 0.7)
@@ -239,15 +243,17 @@ def _detect_design_elements(
     if bottom_avg and top_avg:
         color_diff = sum(abs(b - t) for b, t in zip(bottom_avg, top_avg))
         if color_diff > 100:  # Significant color difference
-            elements.append({
-                "type": "belly_color",
-                "confidence": 0.7,
-                "colors": {
-                    "upper": {"rgb": list(top_avg)},
-                    "lower": {"rgb": list(bottom_avg)},
-                },
-                "description": "Different belly color detected",
-            })
+            elements.append(
+                {
+                    "type": "belly_color",
+                    "confidence": 0.7,
+                    "colors": {
+                        "upper": {"rgb": list(top_avg)},
+                        "lower": {"rgb": list(bottom_avg)},
+                    },
+                    "description": "Different belly color detected",
+                }
+            )
 
     return elements
 
@@ -267,11 +273,13 @@ def _detect_horizontal_stripes(
         for x in range(0, width, 10):
             idx = (y * width + x) * 4
             if idx + 2 < len(pixels):
-                row_colors.append((
-                    int(pixels[idx] * 255),
-                    int(pixels[idx + 1] * 255),
-                    int(pixels[idx + 2] * 255),
-                ))
+                row_colors.append(
+                    (
+                        int(pixels[idx] * 255),
+                        int(pixels[idx + 1] * 255),
+                        int(pixels[idx + 2] * 255),
+                    )
+                )
 
         if row_colors:
             avg = (
@@ -304,11 +312,13 @@ def _get_region_average(
         for x in range(x_start, x_end, 10):
             idx = (y * width + x) * 4
             if idx + 2 < len(pixels):
-                colors.append((
-                    int(pixels[idx] * 255),
-                    int(pixels[idx + 1] * 255),
-                    int(pixels[idx + 2] * 255),
-                ))
+                colors.append(
+                    (
+                        int(pixels[idx] * 255),
+                        int(pixels[idx + 1] * 255),
+                        int(pixels[idx + 2] * 255),
+                    )
+                )
 
     if colors:
         return (
@@ -511,9 +521,7 @@ def transfer_livery(
         target_info = SUPPORTED_AIRCRAFT[target_aircraft]
         target_size = target_info.get("texture_size", [4096, 4096])
 
-        colors_desc = ", ".join(
-            c["hex"] for c in analysis.get("color_palette", [])[:5]
-        )
+        colors_desc = ", ".join(c["hex"] for c in analysis.get("color_palette", [])[:5])
 
         ai_prompt = (
             f"Aircraft livery texture for {target_info['name']}. "

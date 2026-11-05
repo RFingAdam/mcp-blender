@@ -25,7 +25,9 @@ def _tool_status():
 
 def test_readme_tool_counts_match_the_baselines():
     text = README.read_text(encoding="utf-8")
-    assert _tool_status().render(text) == text, "README.md is stale: run python scripts/tool_status.py"
+    assert _tool_status().render(text) == text, (
+        "README.md is stale: run python scripts/tool_status.py"
+    )
 
 
 def test_a_tool_that_only_reached_the_disabled_network_does_not_count_as_working():

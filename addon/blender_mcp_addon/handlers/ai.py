@@ -26,22 +26,22 @@ class AIHandlersMixin:
         """Search Poly Haven assets."""
         # This will be implemented in the external module
         from ..external.polyhaven import search_polyhaven
+
         return search_polyhaven(
             query=params.get("query", ""),
             asset_type=params.get("asset_type"),
             categories=params.get("categories"),
         )
 
-
     def _handle_polyhaven_download(self, params: dict) -> dict:
         """Download and apply Poly Haven asset."""
         from ..external.polyhaven import download_polyhaven
+
         return download_polyhaven(
             asset_id=require_param(params, "asset_id", str),
             resolution=params.get("resolution", "2k"),
             apply_to=params.get("apply_to"),
         )
-
 
     def _handle_ai_generate_model(self, params: dict) -> dict:
         """Generate 3D model via AI (text-to-3D or image-to-3D)."""
@@ -65,15 +65,14 @@ class AIHandlersMixin:
                 output_format=params.get("output_format", "glb"),
             )
 
-
     def _handle_ai_model_status(self, params: dict) -> dict:
         """Check AI model generation status."""
         from ..external.ai_models import check_status
+
         return check_status(
             job_id=require_param(params, "job_id", str),
             auto_import=params.get("auto_import", True),
         )
-
 
     def _handle_ai_generate_model_sync(self, params: dict) -> dict:
         """Generate 3D model and poll until complete (synchronous)."""
@@ -115,7 +114,6 @@ class AIHandlersMixin:
 
     # ========== Texture Generation Handlers ==========
 
-
     def _handle_ai_generate_texture(self, params: dict) -> dict:
         """Generate PBR texture set from text, optionally apply to object."""
         from ..external.ai_models import generate_texture
@@ -127,10 +125,11 @@ class AIHandlersMixin:
             auto_apply=params.get("auto_apply", True),
             width=params.get("resolution", 1024),
             height=params.get("resolution", 1024),
-            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            negative_prompt=params.get(
+                "negative_prompt", "blurry, low quality, watermark, text, logo"
+            ),
             seed=params.get("seed"),
         )
-
 
     def _handle_ai_generate_texture_sync(self, params: dict) -> dict:
         """Generate PBR texture and poll until complete (synchronous)."""
@@ -143,7 +142,9 @@ class AIHandlersMixin:
             auto_apply=params.get("auto_apply", True),
             width=params.get("resolution", 1024),
             height=params.get("resolution", 1024),
-            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            negative_prompt=params.get(
+                "negative_prompt", "blurry, low quality, watermark, text, logo"
+            ),
             seed=params.get("seed"),
         )
 
@@ -157,7 +158,6 @@ class AIHandlersMixin:
             auto_import=False,
         )
 
-
     def _handle_ai_generate_reference_image(self, params: dict) -> dict:
         """Generate concept art / reference image from text."""
         from ..external.ai_models import generate_texture
@@ -167,10 +167,11 @@ class AIHandlersMixin:
             workflow_type="reference_image",
             width=params.get("resolution", 1024),
             height=params.get("resolution", 1024),
-            negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
+            negative_prompt=params.get(
+                "negative_prompt", "blurry, low quality, watermark, text, logo"
+            ),
             seed=params.get("seed"),
         )
-
 
     def _handle_ai_inpaint_texture(self, params: dict) -> dict:
         """Inpaint a region of an existing texture."""
@@ -190,7 +191,6 @@ class AIHandlersMixin:
             negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark"),
             seed=params.get("seed"),
         )
-
 
     def _handle_ai_texture_from_render(self, params: dict) -> dict:
         """Generate texture from depth/normal render via ControlNet."""
@@ -220,10 +220,7 @@ class AIHandlersMixin:
             seed=params.get("seed"),
         )
 
-
-    def _render_control_image(
-        self, object_name: str, control_type: str, size: int = 1024
-    ) -> str:
+    def _render_control_image(self, object_name: str, control_type: str, size: int = 1024) -> str:
         """Render a real depth or normal pass of an object and return the PNG path.
 
         The render happens in a throwaway scene that holds only the object and a
@@ -377,42 +374,41 @@ class AIHandlersMixin:
 
     # ========== New AI Backend Management Handlers ==========
 
-
     def _handle_ai_list_backends(self, params: dict) -> dict:
         """List all available AI generation backends."""
         from ..external.ai_models import list_backends
+
         return list_backends(
             available_only=params.get("available_only", True),
         )
 
-
     def _handle_ai_set_backend(self, params: dict) -> dict:
         """Set the preferred AI backend."""
         from ..external.ai_models import set_preferred_backend
+
         return set_preferred_backend(
             backend=params.get("backend"),
             prefer_local=params.get("prefer_local"),
         )
 
-
     def _handle_ai_get_backend_info(self, params: dict) -> dict:
         """Get detailed information about a specific backend."""
         from ..external.ai_models import get_backend_info
+
         return get_backend_info(
             backend=require_param(params, "backend", str),
         )
 
-
     def _handle_ai_configure_backend(self, params: dict) -> dict:
         """Configure a specific AI backend."""
         from ..external.ai_models import configure_backend
+
         return configure_backend(
             backend=require_param(params, "backend", str),
             config=params.get("config", {}),
         )
 
     # ========== New AI Generation Enhancement Handlers ==========
-
 
     def _handle_ai_generate_variations(self, params: dict) -> dict:
         """Generate multiple variations of a prompt."""
@@ -434,10 +430,12 @@ class AIHandlersMixin:
                 output_format=output_format,
                 backend=backend,
             )
-            results.append({
-                "variation": i + 1,
-                **result,
-            })
+            results.append(
+                {
+                    "variation": i + 1,
+                    **result,
+                }
+            )
 
         succeeded = [r for r in results if r.get("success")]
         response = {
@@ -450,15 +448,14 @@ class AIHandlersMixin:
             response["error"] = results[0].get("error", "No variation was generated")
         return response
 
-
     def _handle_ai_cancel_generation(self, params: dict) -> dict:
         """Cancel an in-progress generation job."""
         from ..external.ai_models import cancel_generation
+
         return cancel_generation(
             job_id=require_param(params, "job_id", str),
             backend=params.get("backend"),
         )
-
 
     def _handle_ai_redo_generation(self, params: dict) -> dict:
         """Redo the last generation with optional modifications."""
@@ -498,10 +495,10 @@ class AIHandlersMixin:
 
     # ========== Mesh Processing Handlers ==========
 
-
     def _handle_ai_mesh_cleanup(self, params: dict) -> dict:
         """Clean up a generated mesh."""
         from ..external.mesh_processing import cleanup_mesh
+
         return cleanup_mesh(
             object_name=require_param(params, "object_name", str),
             remove_doubles=params.get("remove_doubles", True),
@@ -511,10 +508,10 @@ class AIHandlersMixin:
             remove_degenerate=params.get("remove_degenerate", True),
         )
 
-
     def _handle_ai_mesh_decimate(self, params: dict) -> dict:
         """Reduce polygon count of a mesh."""
         from ..external.mesh_processing import decimate_mesh
+
         method = str(params.get("method", "COLLAPSE")).upper()
         return decimate_mesh(
             object_name=require_param(params, "object_name", str),
@@ -526,10 +523,10 @@ class AIHandlersMixin:
             invert_vertex_group=params.get("invert_vertex_group", False),
         )
 
-
     def _handle_ai_mesh_remesh(self, params: dict) -> dict:
         """Retopologize a mesh."""
         from ..external.mesh_processing import remesh_object
+
         return remesh_object(
             object_name=require_param(params, "object_name", str),
             method=params.get("method", "VOXEL"),
@@ -541,10 +538,10 @@ class AIHandlersMixin:
             smooth_iterations=params.get("smooth_iterations", 2),
         )
 
-
     def _handle_ai_mesh_optimize(self, params: dict) -> dict:
         """Run full optimization pipeline on a mesh."""
         from ..external.mesh_processing import optimize_mesh
+
         return optimize_mesh(
             object_name=require_param(params, "object_name", str),
             cleanup=params.get("cleanup", True),
@@ -554,10 +551,10 @@ class AIHandlersMixin:
             smooth_normals=params.get("smooth_normals", True),
         )
 
-
     def _handle_ai_auto_uv(self, params: dict) -> dict:
         """Generate UV maps for a mesh."""
         from ..external.mesh_processing import auto_uv_unwrap
+
         return auto_uv_unwrap(
             object_name=require_param(params, "object_name", str),
             method=params.get("method", "SMART"),
@@ -569,10 +566,10 @@ class AIHandlersMixin:
             uv_layer_name=params.get("uv_layer_name"),
         )
 
-
     def _handle_ai_fix_mesh_issues(self, params: dict) -> dict:
         """Fix common mesh problems."""
         from ..external.mesh_processing import fix_mesh_issues
+
         return fix_mesh_issues(
             object_name=require_param(params, "object_name", str),
             fix_non_manifold=params.get("fix_non_manifold", True),
@@ -582,16 +579,15 @@ class AIHandlersMixin:
             remove_interior_faces=params.get("remove_interior_faces", True),
         )
 
-
     def _handle_ai_mesh_stats(self, params: dict) -> dict:
         """Get detailed statistics about a mesh."""
         from ..external.mesh_processing import get_mesh_stats
+
         return get_mesh_stats(
             object_name=require_param(params, "object_name", str),
         )
 
     # ========== AI Backend Probing Handlers ==========
-
 
     def _handle_ai_probe_backends(self, params: dict) -> dict:
         """Probe ComfyUI and report available 3D generation nodes, GPU info, and queue status."""
@@ -616,6 +612,7 @@ class AIHandlersMixin:
         comfyui_host = "http://127.0.0.1:8188"
         try:
             from ..external.ai_backends import get_backend_manager
+
             manager = get_backend_manager()
             if "comfyui" in manager._backends:
                 comfyui_host = manager._backends["comfyui"]._get_host()
@@ -666,8 +663,12 @@ class AIHandlersMixin:
                         "type": device.get("type", "unknown"),
                         "vram_total_mb": round(device.get("vram_total", 0) / (1024 * 1024), 1),
                         "vram_free_mb": round(device.get("vram_free", 0) / (1024 * 1024), 1),
-                        "torch_vram_total_mb": round(device.get("torch_vram_total", 0) / (1024 * 1024), 1),
-                        "torch_vram_free_mb": round(device.get("torch_vram_free", 0) / (1024 * 1024), 1),
+                        "torch_vram_total_mb": round(
+                            device.get("torch_vram_total", 0) / (1024 * 1024), 1
+                        ),
+                        "torch_vram_free_mb": round(
+                            device.get("torch_vram_free", 0) / (1024 * 1024), 1
+                        ),
                     }
             result["gpu_info"] = gpu_info
         except Exception as e:
@@ -700,7 +701,6 @@ class AIHandlersMixin:
 
     # ========== Queue Management Handlers ==========
 
-
     def _handle_ai_queue_list(self, params: dict) -> dict:
         """List all generation jobs."""
         from ..external.job_queue import get_job_queue
@@ -718,7 +718,6 @@ class AIHandlersMixin:
             "jobs": [job.to_dict() for job in jobs],
             "count": len(jobs),
         }
-
 
     def _handle_ai_queue_clear(self, params: dict) -> dict:
         """Clear completed or failed jobs from the queue."""
@@ -741,16 +740,15 @@ class AIHandlersMixin:
             "type": clear_type,
         }
 
-
     def _handle_ai_get_history(self, params: dict) -> dict:
         """Get generation history."""
         from ..external.ai_models import get_generation_history
+
         return get_generation_history(
             limit=params.get("limit", 50),
         )
 
     # ========== MSFS Content Creation Handlers ==========
-
 
     def _handle_execute_script(self, params: dict) -> dict:
         """Execute arbitrary Python script in Blender's context.
@@ -767,7 +765,10 @@ class AIHandlersMixin:
         exec_namespace = {"bpy": bpy, "__builtins__": __builtins__}
 
         try:
-            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+            with (
+                contextlib.redirect_stdout(stdout_capture),
+                contextlib.redirect_stderr(stderr_capture),
+            ):
                 exec(script, exec_namespace)  # noqa: S102
 
             stdout_str = stdout_capture.getvalue()
@@ -786,6 +787,7 @@ class AIHandlersMixin:
             if script_result is not None:
                 try:
                     import json
+
                     json.dumps(script_result)
                     result_data = script_result
                 except (TypeError, ValueError):
@@ -812,7 +814,6 @@ class AIHandlersMixin:
 
     # ========== Multi-Angle Rendering Handler ==========
 
-
     def _handle_analyze_viewport(self, params: dict) -> dict:
         """Render multi-angle views and analyze with Ollama vision model."""
         object_name = params.get("object_name")
@@ -821,10 +822,12 @@ class AIHandlersMixin:
         resolution = params.get("resolution", [512, 512])
 
         # Render multi-angle views
-        render_result = self._handle_render_multi_angle({
-            "object_name": object_name,
-            "resolution": resolution,
-        })
+        render_result = self._handle_render_multi_angle(
+            {
+                "object_name": object_name,
+                "resolution": resolution,
+            }
+        )
 
         if not render_result.get("success"):
             return render_result
@@ -869,7 +872,6 @@ class AIHandlersMixin:
 
     # ========== AI Evaluation & Self-Refinement Handlers ==========
 
-
     def _handle_ai_evaluate(self, params: dict) -> dict:
         """Evaluate any render/output using Ollama vision."""
         from ..external.ai_models import evaluate_output
@@ -880,7 +882,9 @@ class AIHandlersMixin:
         prompt = params.get("prompt", "")
 
         if category not in ("model", "texture", "animation"):
-            raise ValidationError(f"Invalid category: {category}. Must be model, texture, or animation")
+            raise ValidationError(
+                f"Invalid category: {category}. Must be model, texture, or animation"
+            )
 
         result = evaluate_output(
             render_path=render_path,
@@ -892,7 +896,6 @@ class AIHandlersMixin:
         )
 
         return result
-
 
     def _handle_ai_refine(self, params: dict) -> dict:
         """Run one iteration of AI self-refinement loop."""
@@ -906,7 +909,9 @@ class AIHandlersMixin:
         materials = params.get("materials")
 
         if category not in ("model", "texture", "animation"):
-            raise ValidationError(f"Invalid category: {category}. Must be model, texture, or animation")
+            raise ValidationError(
+                f"Invalid category: {category}. Must be model, texture, or animation"
+            )
 
         result = refine_with_feedback(
             object_name=object_name,
@@ -923,7 +928,6 @@ class AIHandlersMixin:
 
     # ========== Refinement Iteration Handler ==========
 
-
     def _handle_refine_iteration(self, params: dict) -> dict:
         """Run one iteration of the refinement feedback loop."""
         object_name = params.get("object_name")
@@ -934,11 +938,13 @@ class AIHandlersMixin:
         max_iterations = params.get("max_iterations", 10)
 
         # Analyze current state
-        analysis_result = self._handle_analyze_viewport({
-            "object_name": object_name,
-            "reference_image": reference_image,
-            "prompt": prompt,
-        })
+        analysis_result = self._handle_analyze_viewport(
+            {
+                "object_name": object_name,
+                "reference_image": reference_image,
+                "prompt": prompt,
+            }
+        )
 
         if not analysis_result.get("success"):
             return analysis_result
@@ -974,7 +980,6 @@ class AIHandlersMixin:
 
     # ========== Refinement Session Management Handlers ==========
 
-
     def _handle_refine_create_session(self, params: dict) -> dict:
         """Create a new refinement session."""
         from ..external.refinement import get_refinement_manager
@@ -991,7 +996,6 @@ class AIHandlersMixin:
             "object_name": session.object_name,
             "status": session.status,
         }
-
 
     def _handle_refine_get_session(self, params: dict) -> dict:
         """Get refinement session details."""
@@ -1022,7 +1026,6 @@ class AIHandlersMixin:
             "iteration_count": len(session.iterations),
         }
 
-
     def _handle_refine_list_sessions(self, params: dict) -> dict:
         """List all refinement sessions."""
         from ..external.refinement import get_refinement_manager
@@ -1046,13 +1049,11 @@ class AIHandlersMixin:
 
     # ========== AI Pipeline Handlers ==========
 
-
     def _handle_ai_pipeline_generate(self, params: dict) -> dict:
         """Run the full AI 3D generation pipeline."""
         from ..external.pipeline import run_pipeline
 
         return run_pipeline(params, self)
-
 
     def _handle_ai_pipeline_status(self, params: dict) -> dict:
         """Get status of a pipeline run."""
@@ -1061,4 +1062,3 @@ class AIHandlersMixin:
         return get_pipeline_status(require_param(params, "pipeline_id", str))
 
     # ========== Sculpting Handlers ==========
-

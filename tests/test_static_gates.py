@@ -828,7 +828,8 @@ def _module_frozenset(name: str) -> set[str]:
         target = node.target if isinstance(node, ast.AnnAssign) else None
         if isinstance(target, ast.Name) and target.id == name:
             return {
-                n.value for n in ast.walk(node.value)
+                n.value
+                for n in ast.walk(node.value)
                 if isinstance(n, ast.Constant) and isinstance(n.value, str)
             }
     raise AssertionError(f"{name} not found in handlers/__init__.py")

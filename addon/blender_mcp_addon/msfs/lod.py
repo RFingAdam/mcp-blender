@@ -6,18 +6,18 @@ import bpy
 
 # Default LOD distances for MSFS (in meters)
 DEFAULT_LOD_DISTANCES = {
-    "LOD0": 0,      # Full detail
-    "LOD1": 50,     # Medium detail
-    "LOD2": 200,    # Low detail
-    "LOD3": 500,    # Minimal detail
+    "LOD0": 0,  # Full detail
+    "LOD1": 50,  # Medium detail
+    "LOD2": 200,  # Low detail
+    "LOD3": 500,  # Minimal detail
 }
 
 # Default decimation ratios
 DEFAULT_DECIMATE_RATIOS = {
-    "LOD0": 1.0,    # 100% - no decimation
-    "LOD1": 0.5,    # 50%
-    "LOD2": 0.25,   # 25%
-    "LOD3": 0.1,    # 10%
+    "LOD0": 1.0,  # 100% - no decimation
+    "LOD1": 0.5,  # 50%
+    "LOD2": 0.25,  # 25%
+    "LOD3": 0.1,  # 10%
 }
 
 
@@ -96,12 +96,14 @@ def create_lod_hierarchy(
         if auto_decimate and ratio < 1.0:
             _apply_decimation(new_obj, ratio)
 
-        created_lods.append({
-            "name": new_obj.name,
-            "level": lod_level,
-            "ratio": ratio,
-            "vertex_count": len(new_obj.data.vertices),
-        })
+        created_lods.append(
+            {
+                "name": new_obj.name,
+                "level": lod_level,
+                "ratio": ratio,
+                "vertex_count": len(new_obj.data.vertices),
+            }
+        )
 
     return {
         "base_name": base_name,
@@ -216,12 +218,14 @@ def setup_lod_distances(
             max_distance = distances.get(next_key, DEFAULT_LOD_DISTANCES.get(next_key, 10000))
             obj["MSFS_lod_max_distance"] = max_distance
 
-            configured_lods.append({
-                "name": lod_name,
-                "level": lod_level,
-                "min_distance": distance,
-                "max_distance": max_distance,
-            })
+            configured_lods.append(
+                {
+                    "name": lod_name,
+                    "level": lod_level,
+                    "min_distance": distance,
+                    "max_distance": max_distance,
+                }
+            )
 
     if not configured_lods:
         return {"error": f"No LOD objects found with base name: {base_name}"}

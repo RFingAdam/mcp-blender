@@ -82,7 +82,6 @@ class MeshEditingHandlersMixin:
 
     # ========== Curve Tools Handlers ==========
 
-
     def _handle_curve_create(self, params: dict) -> dict:
         """Create a Bezier, NURBS, or Poly curve from control points."""
         name = params.get("name", "Curve")
@@ -159,7 +158,6 @@ class MeshEditingHandlersMixin:
             "resolution": resolution,
         }
 
-
     def _handle_curve_to_mesh(self, params: dict) -> dict:
         """Convert a curve to mesh, optionally with bevel/extrusion."""
         curve_name = require_param(params, "curve_name", str)
@@ -182,7 +180,9 @@ class MeshEditingHandlersMixin:
         if fill_type == "NONE" and curve_data.dimensions != "2D":
             # Blender only offers the NONE fill mode on 2D curves, so the schema omits it.
             # The handler still takes it for a 2D curve, for callers that already pass it.
-            raise ValidationError("fill_type NONE needs a 2D curve; this curve is " + curve_data.dimensions)
+            raise ValidationError(
+                "fill_type NONE needs a 2D curve; this curve is " + curve_data.dimensions
+            )
         curve_data.bevel_depth = bevel_depth
         curve_data.bevel_resolution = bevel_resolution
         curve_data.extrude = extrude
@@ -206,7 +206,6 @@ class MeshEditingHandlersMixin:
 
         return result_info
 
-
     def _handle_curve_from_mesh_edge(self, params: dict) -> dict:
         """Create a curve from mesh edge indices."""
 
@@ -228,7 +227,9 @@ class MeshEditingHandlersMixin:
         edge_verts = {}
         for idx in edge_indices:
             if idx >= len(mesh.edges):
-                raise ValidationError(f"Edge index {idx} out of range (mesh has {len(mesh.edges)} edges)")
+                raise ValidationError(
+                    f"Edge index {idx} out of range (mesh has {len(mesh.edges)} edges)"
+                )
             e = mesh.edges[idx]
             v1, v2 = e.vertices[0], e.vertices[1]
             edge_verts.setdefault(v1, []).append(v2)
@@ -310,7 +311,6 @@ class MeshEditingHandlersMixin:
 
     # ========== Edit Mode Mesh Operations Handlers ==========
 
-
     def _handle_mesh_extrude(self, params: dict) -> dict:
         """Extrude faces, edges, or vertices along an offset vector."""
         import bmesh
@@ -345,7 +345,9 @@ class MeshEditingHandlersMixin:
             for i in indices:
                 if i >= len(bm.faces):
                     bm.free()
-                    raise ValidationError(f"Face index {i} out of range (mesh has {len(bm.faces)} faces)")
+                    raise ValidationError(
+                        f"Face index {i} out of range (mesh has {len(bm.faces)} faces)"
+                    )
                 faces.append(bm.faces[i])
 
             if individual and mode == "FACES":
@@ -365,7 +367,9 @@ class MeshEditingHandlersMixin:
             for i in indices:
                 if i >= len(bm.edges):
                     bm.free()
-                    raise ValidationError(f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)")
+                    raise ValidationError(
+                        f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)"
+                    )
                 edges.append(bm.edges[i])
 
             result = bmesh.ops.extrude_edge_only(bm, edges=edges)
@@ -378,7 +382,9 @@ class MeshEditingHandlersMixin:
             for i in indices:
                 if i >= len(bm.verts):
                     bm.free()
-                    raise ValidationError(f"Vertex index {i} out of range (mesh has {len(bm.verts)} verts)")
+                    raise ValidationError(
+                        f"Vertex index {i} out of range (mesh has {len(bm.verts)} verts)"
+                    )
                 verts.append(bm.verts[i])
 
             result = bmesh.ops.extrude_vert_indiv(bm, verts=verts)
@@ -398,7 +404,6 @@ class MeshEditingHandlersMixin:
             "new_geometry_count": new_geom_count,
             "offset": list(offset),
         }
-
 
     def _handle_mesh_inset(self, params: dict) -> dict:
         """Inset faces to create border loops."""
@@ -423,7 +428,9 @@ class MeshEditingHandlersMixin:
         for i in face_indices:
             if i >= len(bm.faces):
                 bm.free()
-                raise ValidationError(f"Face index {i} out of range (mesh has {len(bm.faces)} faces)")
+                raise ValidationError(
+                    f"Face index {i} out of range (mesh has {len(bm.faces)} faces)"
+                )
             faces.append(bm.faces[i])
 
         bmesh.ops.inset_region(
@@ -446,7 +453,6 @@ class MeshEditingHandlersMixin:
             "thickness": thickness,
             "depth": depth,
         }
-
 
     def _handle_mesh_bevel(self, params: dict) -> dict:
         """Bevel edges or vertices for smooth transitions."""
@@ -473,7 +479,9 @@ class MeshEditingHandlersMixin:
             for i in edge_indices:
                 if i >= len(bm.edges):
                     bm.free()
-                    raise ValidationError(f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)")
+                    raise ValidationError(
+                        f"Edge index {i} out of range (mesh has {len(bm.edges)} edges)"
+                    )
                 edges.append(bm.edges[i])
         else:
             # Bevel all sharp edges (non-smooth)
@@ -509,7 +517,6 @@ class MeshEditingHandlersMixin:
             "profile": profile,
         }
 
-
     @restores_object_mode
     def _handle_mesh_loop_cut(self, params: dict) -> dict:
         """Add edge loops to a mesh via loop cut."""
@@ -524,7 +531,9 @@ class MeshEditingHandlersMixin:
 
         mesh = obj.data
         if edge_index >= len(mesh.edges):
-            raise ValidationError(f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)")
+            raise ValidationError(
+                f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)"
+            )
 
         # The loop cut operator reads the 3D view region, so it needs a viewport
         override = view3d_override()
@@ -568,7 +577,6 @@ class MeshEditingHandlersMixin:
 
     # ========== Selection & Query Tools ==========
 
-
     def _handle_mesh_select(self, params: dict) -> dict:
         """Multi-criteria mesh selection engine."""
         import bmesh
@@ -607,7 +615,13 @@ class MeshEditingHandlersMixin:
             bm.to_mesh(obj.data)
             bm.free()
             obj.data.update()
-            return {"success": True, "object": object_name, "selected_indices": [], "count": 0, "total": len(elements)}
+            return {
+                "success": True,
+                "object": object_name,
+                "selected_indices": [],
+                "count": 0,
+                "total": len(elements),
+            }
 
         if action == "SELECT_ALL":
             for e in elements:
@@ -616,7 +630,13 @@ class MeshEditingHandlersMixin:
             bm.to_mesh(obj.data)
             bm.free()
             obj.data.update()
-            return {"success": True, "object": object_name, "selected_indices": selected, "count": len(selected), "total": len(elements)}
+            return {
+                "success": True,
+                "object": object_name,
+                "selected_indices": selected,
+                "count": len(selected),
+                "total": len(elements),
+            }
 
         if action == "INVERT":
             for e in elements:
@@ -625,7 +645,13 @@ class MeshEditingHandlersMixin:
             bm.to_mesh(obj.data)
             bm.free()
             obj.data.update()
-            return {"success": True, "object": object_name, "selected_indices": selected, "count": len(selected), "total": len(elements)}
+            return {
+                "success": True,
+                "object": object_name,
+                "selected_indices": selected,
+                "count": len(selected),
+                "total": len(elements),
+            }
 
         # Build candidate set from criteria
         indices = params.get("indices")
@@ -663,14 +689,20 @@ class MeshEditingHandlersMixin:
                     co = world_matrix @ ((elem.verts[0].co + elem.verts[1].co) / 2)
                 else:
                     co = world_matrix @ elem.calc_center_median()
-                if p_min.x <= co.x <= p_max.x and p_min.y <= co.y <= p_max.y and p_min.z <= co.z <= p_max.z:
+                if (
+                    p_min.x <= co.x <= p_max.x
+                    and p_min.y <= co.y <= p_max.y
+                    and p_min.z <= co.z <= p_max.z
+                ):
                     hits.add(i)
             matched.append(hits)
 
         # Normal direction filter (FACE mode)
         if normal_direction is not None and mode == "FACE":
             nd = Vector(normal_direction).normalized()
-            matched.append({i for i, face in enumerate(bm.faces) if face.normal.dot(nd) >= normal_threshold})
+            matched.append(
+                {i for i, face in enumerate(bm.faces) if face.normal.dot(nd) >= normal_threshold}
+            )
 
         # Material index filter (FACE mode)
         if material_index is not None and mode == "FACE":
@@ -693,7 +725,9 @@ class MeshEditingHandlersMixin:
         if (face_area_min is not None or face_area_max is not None) and mode == "FACE":
             fa_min = face_area_min if face_area_min is not None else 0
             fa_max = face_area_max if face_area_max is not None else 1e10
-            matched.append({i for i, face in enumerate(bm.faces) if fa_min <= face.calc_area() <= fa_max})
+            matched.append(
+                {i for i, face in enumerate(bm.faces) if fa_min <= face.calc_area() <= fa_max}
+            )
 
         candidates = set.intersection(*matched) if matched else set()
 
@@ -777,14 +811,25 @@ class MeshEditingHandlersMixin:
             "total": len(elements),
         }
 
-
     def _handle_mesh_select_trait(self, params: dict) -> dict:
         """Select mesh elements by geometric trait."""
         import bmesh
 
         object_name = require_param(params, "object_name", str)
         trait = require_param(params, "trait", str)
-        validate_enum(trait, "trait", ["NON_MANIFOLD", "BOUNDARY", "LOOSE", "INTERIOR_FACES", "FACE_SIDES", "UNGROUPED", "NON_PLANAR"])
+        validate_enum(
+            trait,
+            "trait",
+            [
+                "NON_MANIFOLD",
+                "BOUNDARY",
+                "LOOSE",
+                "INTERIOR_FACES",
+                "FACE_SIDES",
+                "UNGROUPED",
+                "NON_PLANAR",
+            ],
+        )
         extend = params.get("extend", False)
 
         obj = get_object_or_error(object_name)
@@ -883,7 +928,6 @@ class MeshEditingHandlersMixin:
             "count": len(selected_indices),
         }
 
-
     def _handle_mesh_select_linked_flat(self, params: dict) -> dict:
         """Flood-select connected coplanar faces from a seed face."""
         import bmesh
@@ -902,7 +946,9 @@ class MeshEditingHandlersMixin:
 
         if face_index >= len(bm.faces):
             bm.free()
-            raise ValidationError(f"Face index {face_index} out of range (mesh has {len(bm.faces)} faces)")
+            raise ValidationError(
+                f"Face index {face_index} out of range (mesh has {len(bm.faces)} faces)"
+            )
 
         # BFS from seed face
         for f in bm.faces:
@@ -938,7 +984,6 @@ class MeshEditingHandlersMixin:
             "selected_indices": selected,
             "count": len(selected),
         }
-
 
     @restores_object_mode
     def _handle_mesh_select_shortest_path(self, params: dict) -> dict:
@@ -999,7 +1044,6 @@ class MeshEditingHandlersMixin:
             "count": len(selected),
         }
 
-
     def _handle_mesh_get_selection(self, params: dict) -> dict:
         """Query current mesh selection state."""
         import bmesh
@@ -1038,7 +1082,6 @@ class MeshEditingHandlersMixin:
             "total": total,
         }
 
-
     @restores_object_mode
     def _handle_mesh_select_edge_loops(self, params: dict) -> dict:
         """Select complete edge loops or rings through a given edge."""
@@ -1052,7 +1095,9 @@ class MeshEditingHandlersMixin:
 
         mesh = obj.data
         if edge_index >= len(mesh.edges):
-            raise ValidationError(f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)")
+            raise ValidationError(
+                f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)"
+            )
 
         ensure_object_selected(obj)
         bpy.context.view_layer.objects.active = obj
@@ -1081,11 +1126,12 @@ class MeshEditingHandlersMixin:
 
     # ========== Shading & Normal Control ==========
 
-
     def _handle_shade_smooth(self, params: dict) -> dict:
         """Set smooth, flat, or auto-smooth shading."""
         object_name = require_param(params, "object_name", str)
-        shade_type = validate_enum(params.get("shade_type", "AUTO"), "shade_type", ["SMOOTH", "FLAT", "AUTO"])
+        shade_type = validate_enum(
+            params.get("shade_type", "AUTO"), "shade_type", ["SMOOTH", "FLAT", "AUTO"]
+        )
         auto_smooth_angle = math.radians(params.get("auto_smooth_angle", 30.0))
 
         obj = get_object_or_error(object_name)
@@ -1123,6 +1169,7 @@ class MeshEditingHandlersMixin:
                         pass
                 # Fallback: set per-edge sharp based on angle via bmesh
                 import bmesh
+
                 bm = bmesh.new()
                 bm.from_mesh(obj.data)
                 for edge in bm.edges:
@@ -1142,9 +1189,10 @@ class MeshEditingHandlersMixin:
             "success": True,
             "object": object_name,
             "shade_type": shade_type,
-            "auto_smooth_angle_degrees": math.degrees(auto_smooth_angle) if shade_type == "AUTO" else None,
+            "auto_smooth_angle_degrees": math.degrees(auto_smooth_angle)
+            if shade_type == "AUTO"
+            else None,
         }
-
 
     def _handle_mesh_crease(self, params: dict) -> dict:
         """Set edge crease values for subdivision surface control."""
@@ -1181,7 +1229,6 @@ class MeshEditingHandlersMixin:
             "crease_value": crease_value,
             "affected_edges": affected,
         }
-
 
     def _handle_mesh_mark_sharp(self, params: dict) -> dict:
         """Mark or clear sharp edges."""
@@ -1229,7 +1276,6 @@ class MeshEditingHandlersMixin:
             "action": "clear_sharp" if clear else "mark_sharp",
             "affected_edges": affected,
         }
-
 
     def _handle_mesh_mark_seam(self, params: dict) -> dict:
         """Mark or clear UV seams on edges."""
@@ -1280,13 +1326,14 @@ class MeshEditingHandlersMixin:
 
     # ========== Topology Editing Tools ==========
 
-
     def _handle_mesh_dissolve(self, params: dict) -> dict:
         """Remove elements preserving surrounding geometry."""
         import bmesh
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(require_param(params, "mode", str), "mode", ["VERTS", "EDGES", "FACES"])
+        mode = validate_enum(
+            require_param(params, "mode", str), "mode", ["VERTS", "EDGES", "FACES"]
+        )
         indices = require_param(params, "indices", list)
         use_face_split = params.get("use_face_split", False)
 
@@ -1333,14 +1380,17 @@ class MeshEditingHandlersMixin:
             "dissolved_count": len(indices),
         }
 
-
     def _handle_mesh_merge(self, params: dict) -> dict:
         """Merge vertices together."""
         import bmesh
 
         object_name = require_param(params, "object_name", str)
         vertex_indices = params.get("vertex_indices")
-        merge_type = validate_enum(params.get("merge_type", "CENTER"), "merge_type", ["CENTER", "FIRST", "LAST", "BY_DISTANCE"])
+        merge_type = validate_enum(
+            params.get("merge_type", "CENTER"),
+            "merge_type",
+            ["CENTER", "FIRST", "LAST", "BY_DISTANCE"],
+        )
         distance = params.get("distance", 0.0001)
 
         obj = get_object_or_error(object_name)
@@ -1366,6 +1416,7 @@ class MeshEditingHandlersMixin:
             verts = [bm.verts[int(i)] for i in vertex_indices if 0 <= int(i) < len(bm.verts)]
             if merge_type == "CENTER":
                 from mathutils import Vector
+
                 center = Vector((0, 0, 0))
                 for v in verts:
                     center += v.co
@@ -1389,7 +1440,6 @@ class MeshEditingHandlersMixin:
             "verts_after": after_count,
             "merged": before_count - after_count,
         }
-
 
     @restores_object_mode
     def _handle_mesh_bridge(self, params: dict) -> dict:
@@ -1436,7 +1486,6 @@ class MeshEditingHandlersMixin:
             "segments": segments,
         }
 
-
     @restores_object_mode
     def _handle_mesh_fill(self, params: dict) -> dict:
         """Fill boundary edges with faces."""
@@ -1444,7 +1493,9 @@ class MeshEditingHandlersMixin:
 
         object_name = require_param(params, "object_name", str)
         edge_indices = require_param(params, "edge_indices", list)
-        fill_type = validate_enum(params.get("fill_type", "NGON"), "fill_type", ["NGON", "TRIANGLE_FAN", "GRID"])
+        fill_type = validate_enum(
+            params.get("fill_type", "NGON"), "fill_type", ["NGON", "TRIANGLE_FAN", "GRID"]
+        )
         use_beauty = params.get("use_beauty", True)
 
         obj = get_object_or_error(object_name)
@@ -1501,7 +1552,6 @@ class MeshEditingHandlersMixin:
             "fill_type": fill_type,
             "edge_count": len(edge_indices),
         }
-
 
     def _handle_mesh_subdivide(self, params: dict) -> dict:
         """Subdivide selected edges/faces to add resolution."""
@@ -1564,7 +1614,6 @@ class MeshEditingHandlersMixin:
             "faces_after": after_faces,
         }
 
-
     @restores_object_mode
     def _handle_mesh_edge_slide(self, params: dict) -> dict:
         """Slide edges along their connected faces."""
@@ -1609,7 +1658,6 @@ class MeshEditingHandlersMixin:
             "factor": factor,
             "even": even,
         }
-
 
     def _handle_mesh_tris_to_quads(self, params: dict) -> dict:
         """Convert triangles to quads."""
@@ -1662,7 +1710,6 @@ class MeshEditingHandlersMixin:
 
     # ========== Cutting & Separation Tools ==========
 
-
     @restores_object_mode
     def _handle_mesh_knife_project(self, params: dict) -> dict:
         """Project a curve/mesh onto a target surface to cut panel lines."""
@@ -1702,7 +1749,6 @@ class MeshEditingHandlersMixin:
             "cutter": cutter_name,
             "method": "knife_project",
         }
-
 
     def _handle_mesh_bisect(self, params: dict) -> dict:
         """Cut mesh with an infinite plane."""
@@ -1765,7 +1811,6 @@ class MeshEditingHandlersMixin:
             "filled": fill,
         }
 
-
     @restores_object_mode
     def _handle_mesh_separate_selected(self, params: dict) -> dict:
         """Separate selected faces into a new object."""
@@ -1812,7 +1857,6 @@ class MeshEditingHandlersMixin:
             "new_object": new_obj.name if new_obj else None,
             "separated_faces": len(face_indices),
         }
-
 
     def _handle_mesh_split(self, params: dict) -> dict:
         """Split edges or faces without separating into a new object."""
@@ -1867,7 +1911,6 @@ class MeshEditingHandlersMixin:
         }
 
     # ========== Reference & Measurement ==========
-
 
     def _handle_silhouette_compare(self, params: dict) -> dict:
         """Render silhouette and compare against reference image."""
@@ -1926,11 +1969,13 @@ class MeshEditingHandlersMixin:
             # Position camera based on angle
             bbox = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
             center = sum(bbox, Vector()) / 8
-            dims = Vector((
-                max(b.x for b in bbox) - min(b.x for b in bbox),
-                max(b.y for b in bbox) - min(b.y for b in bbox),
-                max(b.z for b in bbox) - min(b.z for b in bbox),
-            ))
+            dims = Vector(
+                (
+                    max(b.x for b in bbox) - min(b.x for b in bbox),
+                    max(b.y for b in bbox) - min(b.y for b in bbox),
+                    max(b.z for b in bbox) - min(b.z for b in bbox),
+                )
+            )
 
             angles = {
                 "FRONT": (0, -1, 0),
@@ -2025,14 +2070,17 @@ class MeshEditingHandlersMixin:
             "total_compared_pixels": total_pixels,
         }
 
-
     def _handle_measure(self, params: dict) -> dict:
         """Measure distances, bounding boxes, edge lengths."""
         import bmesh
         from mathutils import Vector
 
         object_name = require_param(params, "object_name", str)
-        mode = validate_enum(params.get("mode", "BBOX"), "mode", ["BBOX", "DISTANCE", "EDGE_LENGTH", "VERTEX_DISTANCE"])
+        mode = validate_enum(
+            params.get("mode", "BBOX"),
+            "mode",
+            ["BBOX", "DISTANCE", "EDGE_LENGTH", "VERTEX_DISTANCE"],
+        )
 
         obj = get_object_or_error(object_name)
 
@@ -2130,13 +2178,14 @@ class MeshEditingHandlersMixin:
                 "distance": dist,
             }
 
-
     def _handle_reference_image_setup(self, params: dict) -> dict:
         """Load a reference image as a background empty."""
         from mathutils import Vector
 
         image_path = require_param(params, "image_path", str)
-        axis = validate_enum(params.get("axis", "FRONT"), "axis", ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "BOTTOM"])
+        axis = validate_enum(
+            params.get("axis", "FRONT"), "axis", ["FRONT", "BACK", "LEFT", "RIGHT", "TOP", "BOTTOM"]
+        )
         offset = params.get("offset", -5.0)
         opacity = params.get("opacity", 0.5)
         size = params.get("size", 5.0)
@@ -2180,13 +2229,16 @@ class MeshEditingHandlersMixin:
 
     # ========== Detail Placement & Instancing ==========
 
-
     def _handle_array_along_curve(self, params: dict) -> dict:
         """Instance objects along a curve path."""
         source_name = require_param(params, "source_object", str)
         curve_name = require_param(params, "curve_name", str)
         count = int(params.get("count", 10))
-        fit_type = validate_enum(params.get("fit_type", "FIT_CURVE"), "fit_type", ["FIXED_COUNT", "FIT_LENGTH", "FIT_CURVE"])
+        fit_type = validate_enum(
+            params.get("fit_type", "FIT_CURVE"),
+            "fit_type",
+            ["FIXED_COUNT", "FIT_LENGTH", "FIT_CURVE"],
+        )
         apply = params.get("apply", False)
 
         source = get_object_or_error(source_name)
@@ -2223,7 +2275,6 @@ class MeshEditingHandlersMixin:
             "count": count,
             "applied": apply,
         }
-
 
     def _handle_scatter_on_surface(self, params: dict) -> dict:
         """Scatter objects on a mesh surface using particle system."""
@@ -2272,7 +2323,6 @@ class MeshEditingHandlersMixin:
             "seed": seed,
         }
 
-
     def _handle_collection_instance(self, params: dict) -> dict:
         """Place collection instances at specific locations."""
         from mathutils import Vector
@@ -2296,7 +2346,11 @@ class MeshEditingHandlersMixin:
 
             if rotations and i < len(rotations):
                 rot = rotations[i]
-                empty.rotation_euler = (math.radians(rot[0]), math.radians(rot[1]), math.radians(rot[2]))
+                empty.rotation_euler = (
+                    math.radians(rot[0]),
+                    math.radians(rot[1]),
+                    math.radians(rot[2]),
+                )
 
             if scales and i < len(scales):
                 empty.scale = Vector(scales[i])
@@ -2312,7 +2366,6 @@ class MeshEditingHandlersMixin:
         }
 
     # ========== Transform & Deform ==========
-
 
     def _handle_mesh_proportional_transform(self, params: dict) -> dict:
         """Move, rotate, or scale vertices with proportional falloff."""
@@ -2361,7 +2414,9 @@ class MeshEditingHandlersMixin:
                 return 0
             t = min(dist / r, 1.0)
             if falloff == "SMOOTH":
-                return 3 * (1 - t) ** 2 * t * 0 + 3 * (1 - t) * t ** 2 * 0 + (1 - t) ** 3  # smooth step
+                return (
+                    3 * (1 - t) ** 2 * t * 0 + 3 * (1 - t) * t**2 * 0 + (1 - t) ** 3
+                )  # smooth step
             elif falloff == "SPHERE":
                 return math.sqrt(max(0, 1 - t * t))
             elif falloff == "ROOT":
@@ -2399,9 +2454,13 @@ class MeshEditingHandlersMixin:
             elif transform_type == "SCALE":
                 scale_vec = Vector(value[:3])
                 diff = v.co - center
-                v.co = center + Vector((diff.x * (1 + (scale_vec.x - 1) * weight),
-                                        diff.y * (1 + (scale_vec.y - 1) * weight),
-                                        diff.z * (1 + (scale_vec.z - 1) * weight)))
+                v.co = center + Vector(
+                    (
+                        diff.x * (1 + (scale_vec.x - 1) * weight),
+                        diff.y * (1 + (scale_vec.y - 1) * weight),
+                        diff.z * (1 + (scale_vec.z - 1) * weight),
+                    )
+                )
             elif transform_type == "ROTATE":
                 if len(value) >= 4:
                     angle = math.radians(value[0]) * weight
@@ -2425,7 +2484,6 @@ class MeshEditingHandlersMixin:
             "affected_vertices": affected,
         }
 
-
     def _handle_mesh_shrinkwrap(self, params: dict) -> dict:
         """Snap vertices to another object's surface."""
         import bmesh
@@ -2435,7 +2493,11 @@ class MeshEditingHandlersMixin:
         object_name = require_param(params, "object_name", str)
         target_name = require_param(params, "target_object", str)
         vertex_indices = params.get("vertex_indices")
-        mode = validate_enum(params.get("mode", "NEAREST_SURFACE"), "mode", ["NEAREST_SURFACE", "PROJECT", "NEAREST_VERTEX"])
+        mode = validate_enum(
+            params.get("mode", "NEAREST_SURFACE"),
+            "mode",
+            ["NEAREST_SURFACE", "PROJECT", "NEAREST_VERTEX"],
+        )
         offset = params.get("offset", 0.0)
 
         obj = get_object_or_error(object_name)
@@ -2496,7 +2558,9 @@ class MeshEditingHandlersMixin:
                     if mode in ("NEAREST_SURFACE", "PROJECT"):
                         location, normal, idx, distance = bvh.find_nearest(local_co)
                         if location is not None:
-                            new_world = target_matrix @ (location + (Vector(normal) * offset if normal else Vector()))
+                            new_world = target_matrix @ (
+                                location + (Vector(normal) * offset if normal else Vector())
+                            )
                             v.co = obj.matrix_world.inverted() @ new_world
                             affected += 1
                     elif mode == "NEAREST_VERTEX":
@@ -2526,7 +2590,6 @@ class MeshEditingHandlersMixin:
                 "affected_vertices": affected,
             }
 
-
     def _handle_mesh_flatten(self, params: dict) -> dict:
         """Flatten selected vertices to a plane."""
         import bmesh
@@ -2534,7 +2597,9 @@ class MeshEditingHandlersMixin:
 
         object_name = require_param(params, "object_name", str)
         vertex_indices = require_param(params, "vertex_indices", list)
-        plane = validate_enum(params.get("plane", "BEST_FIT"), "plane", ["XY", "XZ", "YZ", "NORMAL", "BEST_FIT"])
+        plane = validate_enum(
+            params.get("plane", "BEST_FIT"), "plane", ["XY", "XZ", "YZ", "NORMAL", "BEST_FIT"]
+        )
 
         obj = get_object_or_error(object_name)
         if obj.type != "MESH":
@@ -2618,4 +2683,3 @@ class MeshEditingHandlersMixin:
         }
 
     # ========== Script Execution Handler ==========
-

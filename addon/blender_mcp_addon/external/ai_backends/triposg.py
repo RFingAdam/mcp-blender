@@ -42,6 +42,7 @@ class TripoSGBackend(BaseBackend):
     def _get_comfyui(self):
         if self._comfyui is None:
             from .comfyui import ComfyUIBackend
+
             self._comfyui = ComfyUIBackend(self.config)
         return self._comfyui
 
@@ -92,7 +93,9 @@ class TripoSGBackend(BaseBackend):
             template = WorkflowTemplate(WorkflowType.TRIPOSG)
         except FileNotFoundError as e:
             return GenerationResult(
-                success=False, error=str(e), status=GenerationStatus.FAILED,
+                success=False,
+                error=str(e),
+                status=GenerationStatus.FAILED,
             )
 
         workflow = template.build(image=server_name)
@@ -136,10 +139,12 @@ class TripoSGBackend(BaseBackend):
         comfyui = self._get_comfyui()
         available, status = comfyui._check_comfyui()
         has_node = comfyui.has_node("[Comfy3D] TripoSG I23D Model") if available else False
-        info.update({
-            "comfyui_host": comfyui._get_host(),
-            "comfyui_status": status,
-            "triposg_node_available": has_node,
-            "note": "Routes through ComfyUI with TripoSG pipeline node",
-        })
+        info.update(
+            {
+                "comfyui_host": comfyui._get_host(),
+                "comfyui_status": status,
+                "triposg_node_available": has_node,
+                "note": "Routes through ComfyUI with TripoSG pipeline node",
+            }
+        )
         return info

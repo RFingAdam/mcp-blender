@@ -21,16 +21,9 @@ class RenderHandlersMixin:
 
     def _handle_render_image(self, params: dict) -> dict:
         """Render current frame to file."""
-        output_path = validate_filepath(
-            require_param(params, "output_path", str),
-            "output_path"
-        )
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         valid_formats = ["PNG", "JPEG", "BMP", "TIFF", "OPEN_EXR", "HDR"]
-        file_format = validate_enum(
-            params.get("file_format", "PNG"),
-            "file_format",
-            valid_formats
-        )
+        file_format = validate_enum(params.get("file_format", "PNG"), "file_format", valid_formats)
 
         scene = bpy.context.scene
         scene.render.image_settings.file_format = file_format
@@ -39,12 +32,9 @@ class RenderHandlersMixin:
         bpy.ops.render.render(write_still=True)
         return {"output_path": output_path}
 
-
     def _handle_render_animation(self, params: dict) -> dict:
         """Render animation."""
-        output_path = validate_filepath(
-            require_param(params, "output_path", str), "output_path"
-        )
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         file_format = params.get("file_format", "PNG").upper()
 
         scene = bpy.context.scene
@@ -59,7 +49,6 @@ class RenderHandlersMixin:
         bpy.ops.render.render(animation=True)
         return {"output_path": output_path}
 
-
     def _handle_render_set_engine(self, params: dict) -> dict:
         """Set render engine."""
         engine = require_param(params, "engine", str).upper()
@@ -68,7 +57,6 @@ class RenderHandlersMixin:
 
         bpy.context.scene.render.engine = engine
         return {"engine": bpy.context.scene.render.engine}
-
 
     def _handle_render_set_resolution(self, params: dict) -> dict:
         """Set render resolution."""
@@ -82,12 +70,9 @@ class RenderHandlersMixin:
             "percentage": scene.render.resolution_percentage,
         }
 
-
     def _handle_render_screenshot(self, params: dict) -> dict:
         """Capture viewport screenshot."""
-        output_path = validate_filepath(
-            require_param(params, "output_path", str), "output_path"
-        )
+        output_path = validate_filepath(require_param(params, "output_path", str), "output_path")
         override = view3d_override()
         if override is None:
             return needs_view3d("render_screenshot")
@@ -96,7 +81,6 @@ class RenderHandlersMixin:
         return {"output_path": output_path}
 
     # ========== Export Handlers ==========
-
 
     def _handle_render_multi_angle(self, params: dict) -> dict:
         """Render an object from multiple angles for visual feedback."""
@@ -126,23 +110,25 @@ class RenderHandlersMixin:
             bbox_corners = []
             for o in bpy.context.scene.objects:
                 if o.type == "MESH":
-                    bbox_corners.extend(
-                        o.matrix_world @ mathutils.Vector(c) for c in o.bound_box
-                    )
+                    bbox_corners.extend(o.matrix_world @ mathutils.Vector(c) for c in o.bound_box)
 
         if not bbox_corners:
             return {"success": False, "error": "No mesh objects found to render"}
 
-        min_co = mathutils.Vector((
-            min(c.x for c in bbox_corners),
-            min(c.y for c in bbox_corners),
-            min(c.z for c in bbox_corners),
-        ))
-        max_co = mathutils.Vector((
-            max(c.x for c in bbox_corners),
-            max(c.y for c in bbox_corners),
-            max(c.z for c in bbox_corners),
-        ))
+        min_co = mathutils.Vector(
+            (
+                min(c.x for c in bbox_corners),
+                min(c.y for c in bbox_corners),
+                min(c.z for c in bbox_corners),
+            )
+        )
+        max_co = mathutils.Vector(
+            (
+                max(c.x for c in bbox_corners),
+                max(c.y for c in bbox_corners),
+                max(c.z for c in bbox_corners),
+            )
+        )
         center = (min_co + max_co) / 2
         bbox_size = max_co - min_co
         distance = bbox_size.length * 1.5
@@ -168,11 +154,14 @@ class RenderHandlersMixin:
                 "ortho": True,
             },
             "perspective": {
-                "location": mathutils.Vector((
-                    distance * 0.7,
-                    -distance * 0.7,
-                    distance * 0.5,
-                )) + center,
+                "location": mathutils.Vector(
+                    (
+                        distance * 0.7,
+                        -distance * 0.7,
+                        distance * 0.5,
+                    )
+                )
+                + center,
                 "rotation": None,  # Use track_to
                 "ortho": False,
             },
@@ -255,4 +244,3 @@ class RenderHandlersMixin:
         }
 
     # ========== Vision Analysis Handler ==========
-

@@ -53,9 +53,11 @@ def test_validate_enum_argument_order():
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and node.func.id == "validate_enum"):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "validate_enum"
+            ):
                 continue
             checked += 1
             if len(node.args) < 3:
@@ -86,7 +88,7 @@ def test_no_removed_blender_operators():
             dotted = _attr_path(node.func)
             if not dotted or not dotted.startswith("bpy.ops."):
                 continue
-            op = dotted[len("bpy.ops."):]
+            op = dotted[len("bpy.ops.") :]
             if op in REMOVED_OPERATORS:
                 offenders.append(
                     f"{path.relative_to(ADDON_DIR.parent)}:{node.lineno}: "

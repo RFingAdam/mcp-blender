@@ -398,12 +398,11 @@ def auto_uv_unwrap(
                 if r.type == "WINDOW":
                     region = r
                     break
-            ctx_override = bpy.context.temp_override(
-                window=window, area=area, region=region
-            )
+            ctx_override = bpy.context.temp_override(window=window, area=area, region=region)
         else:
             # Fallback: no 3D viewport found, try without override
             from contextlib import nullcontext
+
             ctx_override = nullcontext()
 
         with ctx_override:
@@ -509,11 +508,13 @@ def optimize_mesh(
     # Step 1: Cleanup
     if cleanup:
         cleanup_result = cleanup_mesh(object_name)
-        results["steps"].append({
-            "step": "cleanup",
-            "success": cleanup_result.get("success", False),
-            "details": cleanup_result,
-        })
+        results["steps"].append(
+            {
+                "step": "cleanup",
+                "success": cleanup_result.get("success", False),
+                "details": cleanup_result,
+            }
+        )
         if not cleanup_result.get("success"):
             results["success"] = False
             results["error"] = f"Cleanup failed: {cleanup_result.get('error')}"
@@ -527,11 +528,13 @@ def optimize_mesh(
             method="COLLAPSE",
             preserve_uvs=True,
         )
-        results["steps"].append({
-            "step": "decimate",
-            "success": decimate_result.get("success", False),
-            "details": decimate_result,
-        })
+        results["steps"].append(
+            {
+                "step": "decimate",
+                "success": decimate_result.get("success", False),
+                "details": decimate_result,
+            }
+        )
         if not decimate_result.get("success"):
             results["success"] = False
             results["error"] = f"Decimation failed: {decimate_result.get('error')}"
@@ -545,11 +548,13 @@ def optimize_mesh(
             angle_limit=66.0,
             island_margin=0.02,
         )
-        results["steps"].append({
-            "step": "auto_uv",
-            "success": uv_result.get("success", False),
-            "details": uv_result,
-        })
+        results["steps"].append(
+            {
+                "step": "auto_uv",
+                "success": uv_result.get("success", False),
+                "details": uv_result,
+            }
+        )
         if not uv_result.get("success"):
             # UV failure is non-critical
             pass
@@ -561,16 +566,20 @@ def optimize_mesh(
             obj.select_set(True)
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.shade_smooth()
-            results["steps"].append({
-                "step": "smooth_normals",
-                "success": True,
-            })
+            results["steps"].append(
+                {
+                    "step": "smooth_normals",
+                    "success": True,
+                }
+            )
         except Exception as e:
-            results["steps"].append({
-                "step": "smooth_normals",
-                "success": False,
-                "error": str(e),
-            })
+            results["steps"].append(
+                {
+                    "step": "smooth_normals",
+                    "success": False,
+                    "error": str(e),
+                }
+            )
 
     # Final stats
     final_verts = len(obj.data.vertices)

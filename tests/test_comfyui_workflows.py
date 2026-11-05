@@ -5,7 +5,14 @@ from pathlib import Path
 
 import pytest
 
-WORKFLOWS_DIR = Path(__file__).parent.parent / "addon" / "blender_mcp_addon" / "external" / "ai_backends" / "workflows"
+WORKFLOWS_DIR = (
+    Path(__file__).parent.parent
+    / "addon"
+    / "blender_mcp_addon"
+    / "external"
+    / "ai_backends"
+    / "workflows"
+)
 
 EXPECTED_TEMPLATES = [
     "pbr_texture",
@@ -61,9 +68,7 @@ class TestWorkflowTemplatesValid:
                 f"non-existent node '{node_id}'"
             )
             node = nodes[node_id]
-            assert "inputs" in node, (
-                f"Template {template_name}: node '{node_id}' has no 'inputs'"
-            )
+            assert "inputs" in node, f"Template {template_name}: node '{node_id}' has no 'inputs'"
             assert input_name in node["inputs"], (
                 f"Template {template_name}: param '{param_name}' references "
                 f"non-existent input '{input_name}' in node '{node_id}'"
@@ -101,6 +106,7 @@ class TestWorkflowTemplateSubstitution:
 
         # Simulate substitution
         import copy
+
         workflow = copy.deepcopy(data)
         test_prompt = "red brick wall, seamless, PBR"
         workflow[node_id]["inputs"][input_name] = test_prompt
@@ -113,8 +119,8 @@ class TestWorkflowTemplateSubstitution:
 
         params = data["_parameters"]
         assert "image" in params, "Inpaint template should have 'image' parameter"
-        assert "mask" in params or "mask_path" in params or any(
-            "mask" in v for v in params.values()
+        assert (
+            "mask" in params or "mask_path" in params or any("mask" in v for v in params.values())
         ), "Inpaint template should reference a mask input"
 
     def test_controlnet_has_control_image_param(self):
@@ -123,7 +129,9 @@ class TestWorkflowTemplateSubstitution:
             data = json.load(f)
 
         params = data["_parameters"]
-        assert "control_image" in params, "ControlNet template should have 'control_image' parameter"
+        assert "control_image" in params, (
+            "ControlNet template should have 'control_image' parameter"
+        )
 
     def test_stable_fast_3d_has_image_param(self):
         path = WORKFLOWS_DIR / "stable_fast_3d.json"
@@ -144,7 +152,8 @@ class TestPBRTextureOutputNodes:
             data = json.load(f)
 
         save_nodes = [
-            (k, v) for k, v in data.items()
+            (k, v)
+            for k, v in data.items()
             if k != "_parameters" and v.get("class_type") == "SaveImage"
         ]
         # Should have at least 3 SaveImage nodes (diffuse, roughness, metallic)

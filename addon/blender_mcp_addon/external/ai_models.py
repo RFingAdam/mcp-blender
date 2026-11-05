@@ -274,7 +274,9 @@ def generate_model_from_image(
     }
 
 
-def check_status(job_id: str, auto_import: bool = True, backend: str | None = None) -> dict[str, Any]:
+def check_status(
+    job_id: str, auto_import: bool = True, backend: str | None = None
+) -> dict[str, Any]:
     """Check the status of an AI model generation job.
 
     Args:
@@ -331,7 +333,9 @@ def check_status(job_id: str, auto_import: bool = True, backend: str | None = No
         if result.model_path:
             # Local backend - model already available
             if auto_import:
-                import_result = download_and_import(job_id, result.model_path, use_cache=True, is_local=True)
+                import_result = download_and_import(
+                    job_id, result.model_path, use_cache=True, is_local=True
+                )
                 response["imported"] = import_result
             else:
                 response["model_path"] = result.model_path
@@ -455,7 +459,10 @@ def _import_model_file(filepath: Path, job_id: str) -> dict[str, Any]:
             if hasattr(bpy.ops.wm, "usd_import"):
                 bpy.ops.wm.usd_import(filepath=str(filepath))
             else:
-                return {"success": False, "error": "USD import not available in this Blender version"}
+                return {
+                    "success": False,
+                    "error": "USD import not available in this Blender version",
+                }
         elif ext == ".ply":
             bpy.ops.wm.ply_import(filepath=str(filepath))
         else:
@@ -767,8 +774,7 @@ def refine_with_feedback(
 
     # Find or create session for this object
     existing = [
-        s for s in manager.list_sessions()
-        if s.object_name == object_name and s.status == "active"
+        s for s in manager.list_sessions() if s.object_name == object_name and s.status == "active"
     ]
     if existing:
         session = existing[0]

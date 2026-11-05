@@ -103,7 +103,20 @@ TOOLS: list[Tool] = [
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["cube", "sphere", "cylinder", "plane", "cone", "torus", "monkey", "circle", "grid", "empty", "camera", "light"],
+                    "enum": [
+                        "cube",
+                        "sphere",
+                        "cylinder",
+                        "plane",
+                        "cone",
+                        "torus",
+                        "monkey",
+                        "circle",
+                        "grid",
+                        "empty",
+                        "camera",
+                        "light",
+                    ],
                     "description": "Type of primitive to create",
                 },
                 "name": {"type": "string", "description": "Optional name for the object"},
@@ -145,7 +158,18 @@ TOOLS: list[Tool] = [
             "properties": {
                 "type_filter": {
                     "type": "string",
-                    "enum": ["MESH", "CURVE", "SURFACE", "META", "FONT", "ARMATURE", "LATTICE", "EMPTY", "CAMERA", "LIGHT"],
+                    "enum": [
+                        "MESH",
+                        "CURVE",
+                        "SURFACE",
+                        "META",
+                        "FONT",
+                        "ARMATURE",
+                        "LATTICE",
+                        "EMPTY",
+                        "CAMERA",
+                        "LIGHT",
+                    ],
                     "description": "Filter by object type",
                 },
             },
@@ -170,9 +194,21 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Name of the object"},
-                "location": {"type": "array", "items": {"type": "number"}, "description": "Location [x, y, z]"},
-                "rotation": {"type": "array", "items": {"type": "number"}, "description": "Rotation [x, y, z]"},
-                "scale": {"type": "array", "items": {"type": "number"}, "description": "Scale [x, y, z]"},
+                "location": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Location [x, y, z]",
+                },
+                "rotation": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Rotation [x, y, z]",
+                },
+                "scale": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Scale [x, y, z]",
+                },
             },
             "required": ["name"],
         },
@@ -185,7 +221,10 @@ TOOLS: list[Tool] = [
             "properties": {
                 "name": {"type": "string", "description": "Name of the object to duplicate"},
                 "new_name": {"type": "string", "description": "Name for the duplicate"},
-                "linked": {"type": "boolean", "description": "Create a linked duplicate (shares mesh data)"},
+                "linked": {
+                    "type": "boolean",
+                    "description": "Create a linked duplicate (shares mesh data)",
+                },
             },
             "required": ["name"],
         },
@@ -228,7 +267,10 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "child": {"type": "string", "description": "Name of the child object"},
-                "parent": {"type": "string", "description": "Name of the parent object (omit to clear parent)"},
+                "parent": {
+                    "type": "string",
+                    "description": "Name of the parent object (omit to clear parent)",
+                },
             },
             "required": ["child"],
         },
@@ -239,9 +281,19 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "names": {"type": "array", "items": {"type": "string"}, "description": "Object names to select"},
-                "pattern": {"type": "string", "description": "Glob pattern to match (e.g., 'Cube*')"},
-                "deselect_others": {"type": "boolean", "description": "Deselect other objects first"},
+                "names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Object names to select",
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern to match (e.g., 'Cube*')",
+                },
+                "deselect_others": {
+                    "type": "boolean",
+                    "description": "Deselect other objects first",
+                },
             },
             "required": [],
         },
@@ -295,11 +347,19 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material"},
-                "base_color": {"type": "array", "items": {"type": "number"}, "description": "Base color RGBA"},
+                "base_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Base color RGBA",
+                },
                 "metallic": {"type": "number", "description": "Metallic (0-1)"},
                 "roughness": {"type": "number", "description": "Roughness (0-1)"},
                 "specular_ior_level": {"type": "number", "description": "Specular IOR level"},
-                "emission_color": {"type": "array", "items": {"type": "number"}, "description": "Emission color RGB"},
+                "emission_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "Emission color RGB",
+                },
                 "emission_strength": {"type": "number", "description": "Emission strength"},
                 "alpha": {"type": "number", "description": "Alpha (0-1)"},
             },
@@ -314,7 +374,10 @@ TOOLS: list[Tool] = [
             "properties": {
                 "material_name": {"type": "string", "description": "Name of the material"},
                 "image_path": {"type": "string", "description": "Path to the image file"},
-                "connect_to": {"type": "string", "description": "Input to connect to (e.g., 'Base Color')"},
+                "connect_to": {
+                    "type": "string",
+                    "description": "Input to connect to (e.g., 'Base Color')",
+                },
             },
             "required": ["material_name", "image_path"],
         },
@@ -522,7 +585,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "output_path": {"type": "string", "description": "Output path (with frame placeholder)"},
+                "output_path": {
+                    "type": "string",
+                    "description": "Output path (with frame placeholder)",
+                },
                 "file_format": {"type": "string", "description": "Output format"},
                 "start_frame": {"type": "integer", "description": "Start frame"},
                 "end_frame": {"type": "integer", "description": "End frame"},
@@ -577,7 +643,11 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "filepath": {"type": "string", "description": "Output file path"},
-                "export_format": {"type": "string", "enum": ["GLB", "GLTF_SEPARATE"], "description": "Export format"},
+                "export_format": {
+                    "type": "string",
+                    "enum": ["GLB", "GLTF_SEPARATE"],
+                    "description": "Export format",
+                },
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "export_animations": {"type": "boolean", "description": "Include animations"},
                 "export_materials": {"type": "boolean", "description": "Include materials"},
@@ -594,11 +664,27 @@ TOOLS: list[Tool] = [
                 "filepath": {"type": "string", "description": "Output file path"},
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "apply_modifiers": {"type": "boolean", "description": "Apply modifiers"},
-                "scale": {"type": "number", "minimum": 0.001, "maximum": 1000, "description": "Global scale factor (0.001 to 1000)"},
-                "apply_unit_scale": {"type": "boolean", "description": "Apply the scene unit scale to the exported size"},
+                "scale": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 1000,
+                    "description": "Global scale factor (0.001 to 1000)",
+                },
+                "apply_unit_scale": {
+                    "type": "boolean",
+                    "description": "Apply the scene unit scale to the exported size",
+                },
                 "bake_anim": {"type": "boolean", "description": "Export animation"},
-                "axis_forward": {"type": "string", "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"], "description": "Forward axis (Blender default -Z)"},
-                "axis_up": {"type": "string", "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"], "description": "Up axis (Blender default Y)"},
+                "axis_forward": {
+                    "type": "string",
+                    "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"],
+                    "description": "Forward axis (Blender default -Z)",
+                },
+                "axis_up": {
+                    "type": "string",
+                    "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"],
+                    "description": "Up axis (Blender default Y)",
+                },
             },
             "required": ["filepath"],
         },
@@ -612,10 +698,26 @@ TOOLS: list[Tool] = [
                 "filepath": {"type": "string", "description": "Output file path"},
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "apply_modifiers": {"type": "boolean", "description": "Apply modifiers"},
-                "scale": {"type": "number", "minimum": 0.0001, "maximum": 10000, "description": "Global scale factor (0.0001 to 10000)"},
-                "forward_axis": {"type": "string", "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"], "description": "Forward axis (Blender default NEGATIVE_Z)"},
-                "up_axis": {"type": "string", "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"], "description": "Up axis (Blender default Y)"},
-                "export_materials": {"type": "boolean", "description": "Write the material library (.mtl)"},
+                "scale": {
+                    "type": "number",
+                    "minimum": 0.0001,
+                    "maximum": 10000,
+                    "description": "Global scale factor (0.0001 to 10000)",
+                },
+                "forward_axis": {
+                    "type": "string",
+                    "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"],
+                    "description": "Forward axis (Blender default NEGATIVE_Z)",
+                },
+                "up_axis": {
+                    "type": "string",
+                    "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"],
+                    "description": "Up axis (Blender default Y)",
+                },
+                "export_materials": {
+                    "type": "boolean",
+                    "description": "Write the material library (.mtl)",
+                },
             },
             "required": ["filepath"],
         },
@@ -630,7 +732,10 @@ TOOLS: list[Tool] = [
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "apply_modifiers": {"type": "boolean", "description": "Apply modifiers"},
                 "scale": {"type": "number", "description": "Global scale factor"},
-                "ascii": {"type": "boolean", "description": "Export as ASCII (larger file, human-readable)"},
+                "ascii": {
+                    "type": "boolean",
+                    "description": "Export as ASCII (larger file, human-readable)",
+                },
             },
             "required": ["filepath"],
         },
@@ -641,7 +746,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "filepath": {"type": "string", "description": "Output file path (.usd, .usda, .usdc)"},
+                "filepath": {
+                    "type": "string",
+                    "description": "Output file path (.usd, .usda, .usdc)",
+                },
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "export_animation": {"type": "boolean", "description": "Include animations"},
                 "export_materials": {"type": "boolean", "description": "Include materials"},
@@ -668,8 +776,16 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
-                "asset_type": {"type": "string", "enum": ["hdris", "textures", "models"], "description": "Type of asset"},
-                "categories": {"type": "array", "items": {"type": "string"}, "description": "Category filters"},
+                "asset_type": {
+                    "type": "string",
+                    "enum": ["hdris", "textures", "models"],
+                    "description": "Type of asset",
+                },
+                "categories": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Category filters",
+                },
             },
             "required": [],
         },
@@ -681,8 +797,15 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "asset_id": {"type": "string", "description": "Poly Haven asset ID"},
-                "resolution": {"type": "string", "enum": ["1k", "2k", "4k", "8k"], "description": "Resolution"},
-                "apply_to": {"type": "string", "description": "For textures: material name to apply to"},
+                "resolution": {
+                    "type": "string",
+                    "enum": ["1k", "2k", "4k", "8k"],
+                    "description": "Resolution",
+                },
+                "apply_to": {
+                    "type": "string",
+                    "description": "For textures: material name to apply to",
+                },
             },
             "required": ["asset_id"],
         },
@@ -1201,9 +1324,20 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "base_object_name": {"type": "string", "description": "Name of the base (LOD0) object"},
-                "lod_count": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Number of LOD levels (1-4, default: 4)"},
-                "auto_decimate": {"type": "boolean", "description": "Automatically decimate lower LODs (default: true)"},
+                "base_object_name": {
+                    "type": "string",
+                    "description": "Name of the base (LOD0) object",
+                },
+                "lod_count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4,
+                    "description": "Number of LOD levels (1-4, default: 4)",
+                },
+                "auto_decimate": {
+                    "type": "boolean",
+                    "description": "Automatically decimate lower LODs (default: true)",
+                },
                 "decimate_ratios": {
                     "type": "object",
                     "description": "Custom decimation ratios per LOD level (e.g., {'LOD1': 0.5, 'LOD2': 0.25})",
@@ -1219,9 +1353,20 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to decimate"},
-                "ratio": {"type": "number", "minimum": 0.01, "maximum": 1.0, "description": "Target vertex ratio (0.01-1.0)"},
-                "preserve_uvs": {"type": "boolean", "description": "Try to preserve UV seams (default: true)"},
-                "preserve_vertex_groups": {"type": "boolean", "description": "Preserve vertex group boundaries (default: true)"},
+                "ratio": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1.0,
+                    "description": "Target vertex ratio (0.01-1.0)",
+                },
+                "preserve_uvs": {
+                    "type": "boolean",
+                    "description": "Try to preserve UV seams (default: true)",
+                },
+                "preserve_vertex_groups": {
+                    "type": "boolean",
+                    "description": "Preserve vertex group boundaries (default: true)",
+                },
             },
             "required": ["object_name", "ratio"],
         },
@@ -1259,19 +1404,62 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "material_name": {"type": "string", "description": "Name of the material to configure"},
+                "material_name": {
+                    "type": "string",
+                    "description": "Name of the material to configure",
+                },
                 "msfs_type": {
                     "type": "string",
-                    "enum": ["standard", "windshield", "clear_coat", "anisotropic", "hair", "sss", "glass", "geo_decal", "fresnel_fade", "parallax_window", "fake_terrain", "invisible", "environment_occluder"],
+                    "enum": [
+                        "standard",
+                        "windshield",
+                        "clear_coat",
+                        "anisotropic",
+                        "hair",
+                        "sss",
+                        "glass",
+                        "geo_decal",
+                        "fresnel_fade",
+                        "parallax_window",
+                        "fake_terrain",
+                        "invisible",
+                        "environment_occluder",
+                    ],
                     "description": "Material type for flight simulator rendering",
                 },
-                "base_color": {"type": "array", "items": {"type": "number"}, "description": "RGBA base color"},
-                "metallic": {"type": "number", "minimum": 0, "maximum": 1, "description": "Metallic value (0-1)"},
-                "roughness": {"type": "number", "minimum": 0, "maximum": 1, "description": "Roughness value (0-1)"},
-                "emissive_color": {"type": "array", "items": {"type": "number"}, "description": "RGB emissive color"},
+                "base_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGBA base color",
+                },
+                "metallic": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Metallic value (0-1)",
+                },
+                "roughness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Roughness value (0-1)",
+                },
+                "emissive_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGB emissive color",
+                },
                 "emissive_strength": {"type": "number", "description": "Emissive intensity"},
-                "alpha": {"type": "number", "minimum": 0, "maximum": 1, "description": "Alpha/opacity (0-1)"},
-                "double_sided": {"type": "boolean", "description": "Whether material is double-sided"},
+                "alpha": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Alpha/opacity (0-1)",
+                },
+                "double_sided": {
+                    "type": "boolean",
+                    "description": "Whether material is double-sided",
+                },
             },
             "required": ["material_name"],
         },
@@ -1283,10 +1471,22 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name for the new material"},
-                "tint_color": {"type": "array", "items": {"type": "number"}, "description": "RGB tint color"},
-                "opacity": {"type": "number", "minimum": 0, "maximum": 1, "description": "Glass opacity (0 = fully transparent)"},
+                "tint_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGB tint color",
+                },
+                "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Glass opacity (0 = fully transparent)",
+                },
                 "ior": {"type": "number", "description": "Index of refraction (default: 1.45)"},
-                "is_windshield": {"type": "boolean", "description": "Enable windshield features (rain effects, wipers)"},
+                "is_windshield": {
+                    "type": "boolean",
+                    "description": "Enable windshield features (rain effects, wipers)",
+                },
             },
             "required": ["material_name"],
         },
@@ -1298,10 +1498,24 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "material_name": {"type": "string", "description": "Name for the material"},
-                "base_color": {"type": "array", "items": {"type": "number"}, "description": "RGBA base color (daytime appearance)"},
-                "emissive_color": {"type": "array", "items": {"type": "number"}, "description": "RGB emissive color"},
-                "emissive_strength": {"type": "number", "description": "Emission intensity (default: 1.0)"},
-                "is_day_night": {"type": "boolean", "description": "Emission varies with time of day (night-only glow)"},
+                "base_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGBA base color (daytime appearance)",
+                },
+                "emissive_color": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "RGB emissive color",
+                },
+                "emissive_strength": {
+                    "type": "number",
+                    "description": "Emission intensity (default: 1.0)",
+                },
+                "is_day_night": {
+                    "type": "boolean",
+                    "description": "Emission varies with time of day (night-only glow)",
+                },
             },
             "required": ["material_name"],
         },
@@ -1322,14 +1536,25 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "source_object_name": {"type": "string", "description": "Name of the source object"},
+                "source_object_name": {
+                    "type": "string",
+                    "description": "Name of the source object",
+                },
                 "collision_type": {
                     "type": "string",
                     "enum": ["none", "collider", "road", "water", "trigger"],
                     "description": "Type of collision behavior",
                 },
-                "simplify": {"type": "boolean", "description": "Simplify the collision mesh (default: true)"},
-                "simplify_ratio": {"type": "number", "minimum": 0.01, "maximum": 1.0, "description": "Simplification ratio (default: 0.3)"},
+                "simplify": {
+                    "type": "boolean",
+                    "description": "Simplify the collision mesh (default: true)",
+                },
+                "simplify_ratio": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 1.0,
+                    "description": "Simplification ratio (default: 0.3)",
+                },
             },
             "required": ["source_object_name"],
         },
@@ -1340,9 +1565,19 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "object_name": {"type": "string", "description": "Name of the object to create collision for"},
-                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
-                "padding": {"type": "number", "description": "Extra padding around the bounding box"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object to create collision for",
+                },
+                "collision_type": {
+                    "type": "string",
+                    "enum": ["none", "collider", "road", "water", "trigger"],
+                    "description": "Type of collision",
+                },
+                "padding": {
+                    "type": "number",
+                    "description": "Extra padding around the bounding box",
+                },
             },
             "required": ["object_name"],
         },
@@ -1354,7 +1589,11 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the source object"},
-                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
+                "collision_type": {
+                    "type": "string",
+                    "enum": ["none", "collider", "road", "water", "trigger"],
+                    "description": "Type of collision",
+                },
             },
             "required": ["object_name"],
         },
@@ -1366,7 +1605,11 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object"},
-                "collision_type": {"type": "string", "enum": ["none", "collider", "road", "water", "trigger"], "description": "Type of collision"},
+                "collision_type": {
+                    "type": "string",
+                    "enum": ["none", "collider", "road", "water", "trigger"],
+                    "description": "Type of collision",
+                },
             },
             "required": ["object_name", "collision_type"],
         },
@@ -1381,11 +1624,28 @@ TOOLS: list[Tool] = [
                 "object_name": {"type": "string", "description": "Name of the animated object"},
                 "tag_type": {
                     "type": "string",
-                    "enum": ["start", "end", "loop_start", "loop_end", "sound", "sound_start", "sound_stop", "effect", "effect_start", "effect_stop", "show", "hide", "event"],
+                    "enum": [
+                        "start",
+                        "end",
+                        "loop_start",
+                        "loop_end",
+                        "sound",
+                        "sound_start",
+                        "sound_stop",
+                        "effect",
+                        "effect_start",
+                        "effect_stop",
+                        "show",
+                        "hide",
+                        "event",
+                    ],
                     "description": "Type of animation tag",
                 },
                 "frame": {"type": "integer", "description": "Frame number for the tag"},
-                "tag_data": {"type": "string", "description": "Optional data string (e.g., sound file name)"},
+                "tag_data": {
+                    "type": "string",
+                    "description": "Optional data string (e.g., sound file name)",
+                },
             },
             "required": ["object_name", "tag_type", "frame"],
         },
@@ -1423,8 +1683,14 @@ TOOLS: list[Tool] = [
                     "enum": ["once", "loop", "ping_pong", "hold"],
                     "description": "Animation playback behavior",
                 },
-                "loop_start": {"type": "integer", "description": "Start frame of loop (defaults to action start)"},
-                "loop_end": {"type": "integer", "description": "End frame of loop (defaults to action end)"},
+                "loop_start": {
+                    "type": "integer",
+                    "description": "Start frame of loop (defaults to action start)",
+                },
+                "loop_end": {
+                    "type": "integer",
+                    "description": "End frame of loop (defaults to action end)",
+                },
                 "loop_count": {"type": "integer", "description": "Number of loops (0 = infinite)"},
             },
             "required": ["object_name"],
@@ -1436,7 +1702,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "object_name": {"type": "string", "description": "Filter by object name (optional)"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Filter by object name (optional)",
+                },
             },
             "required": [],
         },
@@ -1454,10 +1723,23 @@ TOOLS: list[Tool] = [
                     "items": {"type": "string"},
                     "description": "Object names to export (omit for selected/all)",
                 },
-                "include_lods": {"type": "boolean", "description": "Include LOD variants (default: true)"},
-                "include_collision": {"type": "boolean", "description": "Include collision meshes (default: true)"},
-                "include_animations": {"type": "boolean", "description": "Include animation data (default: true)"},
-                "export_format": {"type": "string", "enum": ["GLB", "GLTF"], "description": "Export format (default: GLB)"},
+                "include_lods": {
+                    "type": "boolean",
+                    "description": "Include LOD variants (default: true)",
+                },
+                "include_collision": {
+                    "type": "boolean",
+                    "description": "Include collision meshes (default: true)",
+                },
+                "include_animations": {
+                    "type": "boolean",
+                    "description": "Include animation data (default: true)",
+                },
+                "export_format": {
+                    "type": "string",
+                    "enum": ["GLB", "GLTF"],
+                    "description": "Export format (default: GLB)",
+                },
             },
             "required": ["filepath"],
         },
@@ -1468,7 +1750,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "object_name": {"type": "string", "description": "Specific object to validate (omit for all selected/all)"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Specific object to validate (omit for all selected/all)",
+                },
             },
             "required": [],
         },
@@ -1490,7 +1775,10 @@ TOOLS: list[Tool] = [
             "properties": {
                 "base_name": {"type": "string", "description": "Base name of the LOD hierarchy"},
                 "output_dir": {"type": "string", "description": "Output directory path"},
-                "separate_files": {"type": "boolean", "description": "Export each LOD as separate file (default: false)"},
+                "separate_files": {
+                    "type": "boolean",
+                    "description": "Export each LOD as separate file (default: false)",
+                },
             },
             "required": ["base_name", "output_dir"],
         },
@@ -1508,7 +1796,10 @@ TOOLS: list[Tool] = [
                     "items": {"type": "integer"},
                     "description": "Texture resolution [width, height] (default: [4096, 4096])",
                 },
-                "create_uvs": {"type": "boolean", "description": "Create UV map if none exists (default: true)"},
+                "create_uvs": {
+                    "type": "boolean",
+                    "description": "Create UV map if none exists (default: true)",
+                },
             },
             "required": ["object_name"],
         },
@@ -1541,7 +1832,10 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to template image"},
-                "object_name": {"type": "string", "description": "Object to use as reference (optional)"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Object to use as reference (optional)",
+                },
                 "opacity": {"type": "number", "description": "Overlay opacity 0-1 (default: 0.5)"},
             },
             "required": ["image_path"],
@@ -1560,8 +1854,14 @@ TOOLS: list[Tool] = [
                     "items": {"type": "integer"},
                     "description": "Output resolution [width, height]",
                 },
-                "fill_opacity": {"type": "number", "description": "Fill opacity for UV faces (default: 0)"},
-                "line_thickness": {"type": "number", "description": "UV edge line thickness (default: 1)"},
+                "fill_opacity": {
+                    "type": "number",
+                    "description": "Fill opacity for UV faces (default: 0)",
+                },
+                "line_thickness": {
+                    "type": "number",
+                    "description": "UV edge line thickness (default: 1)",
+                },
             },
             "required": ["object_name", "output_path"],
         },
@@ -1648,7 +1948,10 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to livery image"},
-                "aircraft_type": {"type": "string", "description": "Type of aircraft for region analysis (optional)"},
+                "aircraft_type": {
+                    "type": "string",
+                    "description": "Type of aircraft for region analysis (optional)",
+                },
             },
             "required": ["image_path"],
         },
@@ -1662,9 +1965,18 @@ TOOLS: list[Tool] = [
                 "source_image": {"type": "string", "description": "Path to source livery image"},
                 "source_aircraft": {"type": "string", "description": "Source aircraft ID"},
                 "target_aircraft": {"type": "string", "description": "Target aircraft ID"},
-                "output_dir": {"type": "string", "description": "Output directory for transferred livery"},
-                "preserve_colors": {"type": "boolean", "description": "Preserve original colors (default: true)"},
-                "preserve_text": {"type": "boolean", "description": "Attempt to preserve text elements (default: true)"},
+                "output_dir": {
+                    "type": "string",
+                    "description": "Output directory for transferred livery",
+                },
+                "preserve_colors": {
+                    "type": "boolean",
+                    "description": "Preserve original colors (default: true)",
+                },
+                "preserve_text": {
+                    "type": "boolean",
+                    "description": "Attempt to preserve text elements (default: true)",
+                },
             },
             "required": ["source_image", "source_aircraft", "target_aircraft", "output_dir"],
         },
@@ -1676,8 +1988,14 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "image_path": {"type": "string", "description": "Path to livery image"},
-                "num_colors": {"type": "integer", "description": "Number of colors to extract (default: 8)"},
-                "exclude_white": {"type": "boolean", "description": "Exclude white/near-white colors (default: true)"},
+                "num_colors": {
+                    "type": "integer",
+                    "description": "Number of colors to extract (default: 8)",
+                },
+                "exclude_white": {
+                    "type": "boolean",
+                    "description": "Exclude white/near-white colors (default: true)",
+                },
             },
             "required": ["image_path"],
         },
@@ -1705,14 +2023,23 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "object_name": {"type": "string", "description": "Name of the object with livery materials"},
-                "output_dir": {"type": "string", "description": "Directory to save exported textures"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object with livery materials",
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Directory to save exported textures",
+                },
                 "texture_types": {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Types to export: albedo, normal, composite, emissive (default: albedo)",
                 },
-                "format": {"type": "string", "description": "Output format: PNG, TARGA (default: PNG)"},
+                "format": {
+                    "type": "string",
+                    "description": "Output format: PNG, TARGA (default: PNG)",
+                },
             },
             "required": ["object_name", "output_dir"],
         },
@@ -1723,10 +2050,16 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "aircraft_id": {"type": "string", "description": "Aircraft identifier (e.g., 'fbw_a32nx')"},
+                "aircraft_id": {
+                    "type": "string",
+                    "description": "Aircraft identifier (e.g., 'fbw_a32nx')",
+                },
                 "livery_name": {"type": "string", "description": "Name for the livery"},
                 "output_dir": {"type": "string", "description": "Base directory for the package"},
-                "texture_dir": {"type": "string", "description": "Directory containing texture files to include"},
+                "texture_dir": {
+                    "type": "string",
+                    "description": "Directory containing texture files to include",
+                },
                 "airline": {"type": "string", "description": "Airline name for aircraft.cfg"},
                 "description": {"type": "string", "description": "Livery description"},
                 "author": {"type": "string", "description": "Author name"},
@@ -1806,10 +2139,26 @@ TOOLS: list[Tool] = [
                     "items": {"type": "integer"},
                     "description": "Indices of faces to inset",
                 },
-                "thickness": {"type": "number", "default": 0.1, "description": "Inset distance from edges"},
-                "depth": {"type": "number", "default": 0.0, "description": "Push inset faces in (+) or out (-)"},
-                "use_even_offset": {"type": "boolean", "default": True, "description": "Even thickness around corners"},
-                "use_relative_offset": {"type": "boolean", "default": False, "description": "Scale offset by face size"},
+                "thickness": {
+                    "type": "number",
+                    "default": 0.1,
+                    "description": "Inset distance from edges",
+                },
+                "depth": {
+                    "type": "number",
+                    "default": 0.0,
+                    "description": "Push inset faces in (+) or out (-)",
+                },
+                "use_even_offset": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Even thickness around corners",
+                },
+                "use_relative_offset": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Scale offset by face size",
+                },
             },
             "required": ["object_name", "face_indices"],
         },
@@ -1827,9 +2176,21 @@ TOOLS: list[Tool] = [
                     "description": "Edge indices to bevel (omit to bevel all sharp edges)",
                 },
                 "width": {"type": "number", "default": 0.1, "description": "Bevel width/offset"},
-                "segments": {"type": "integer", "default": 1, "description": "Number of bevel segments (more = smoother)"},
-                "profile": {"type": "number", "default": 0.5, "description": "Bevel profile shape (0=concave, 0.5=round, 1=convex)"},
-                "clamp_overlap": {"type": "boolean", "default": True, "description": "Prevent overlapping bevels"},
+                "segments": {
+                    "type": "integer",
+                    "default": 1,
+                    "description": "Number of bevel segments (more = smoother)",
+                },
+                "profile": {
+                    "type": "number",
+                    "default": 0.5,
+                    "description": "Bevel profile shape (0=concave, 0.5=round, 1=convex)",
+                },
+                "clamp_overlap": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Prevent overlapping bevels",
+                },
             },
             "required": ["object_name"],
         },
@@ -1841,9 +2202,16 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
-                "edge_index": {"type": "integer", "description": "Reference edge index that defines the loop direction"},
+                "edge_index": {
+                    "type": "integer",
+                    "description": "Reference edge index that defines the loop direction",
+                },
                 "cuts": {"type": "integer", "default": 1, "description": "Number of cuts to add"},
-                "smoothness": {"type": "number", "default": 0.0, "description": "Smoothing factor (0=sharp, 1=smooth)"},
+                "smoothness": {
+                    "type": "number",
+                    "default": 0.0,
+                    "description": "Smoothing factor (0=sharp, 1=smooth)",
+                },
             },
             "required": ["object_name", "edge_index"],
         },
@@ -1871,8 +2239,16 @@ TOOLS: list[Tool] = [
                     "type": "array",
                     "description": "Bezier handle config per point. String ('AUTO','VECTOR','FREE','ALIGNED') or dict with 'type', 'left':[x,y,z], 'right':[x,y,z]",
                 },
-                "cyclic": {"type": "boolean", "default": False, "description": "Close the curve into a loop"},
-                "resolution": {"type": "integer", "default": 12, "description": "Curve smoothness (segments between control points)"},
+                "cyclic": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Close the curve into a loop",
+                },
+                "resolution": {
+                    "type": "integer",
+                    "default": 12,
+                    "description": "Curve smoothness (segments between control points)",
+                },
                 "location": {
                     "type": "array",
                     "items": {"type": "number"},
@@ -1889,8 +2265,16 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "curve_name": {"type": "string", "description": "Name of the curve object"},
-                "bevel_depth": {"type": "number", "default": 0, "description": "Tube radius (0 = no tube)"},
-                "bevel_resolution": {"type": "integer", "default": 4, "description": "Tube cross-section smoothness"},
+                "bevel_depth": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Tube radius (0 = no tube)",
+                },
+                "bevel_resolution": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "Tube cross-section smoothness",
+                },
                 "extrude": {"type": "number", "default": 0, "description": "Flat extrusion depth"},
                 "fill_type": {
                     "type": "string",
@@ -1898,7 +2282,11 @@ TOOLS: list[Tool] = [
                     "default": "FULL",
                     "description": "Cap fill type. A 2D curve also accepts NONE",
                 },
-                "twist_method": {"type": "string", "default": "MINIMUM", "description": "Twist computation method"},
+                "twist_method": {
+                    "type": "string",
+                    "default": "MINIMUM",
+                    "description": "Twist computation method",
+                },
                 "apply_as_mesh": {
                     "type": "boolean",
                     "default": True,
@@ -1938,7 +2326,10 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "target": {"type": "string", "description": "Name of the object to modify"},
-                "tool": {"type": "string", "description": "Name of the object to use as boolean cutter/operand"},
+                "tool": {
+                    "type": "string",
+                    "description": "Name of the object to use as boolean cutter/operand",
+                },
                 "operation": {
                     "type": "string",
                     "enum": ["UNION", "DIFFERENCE", "INTERSECT"],
@@ -1992,7 +2383,10 @@ TOOLS: list[Tool] = [
                     "items": {"type": "number"},
                     "description": "Location [x, y, z]",
                 },
-                "smooth_shade": {"type": "boolean", "description": "Apply smooth shading (default: false)"},
+                "smooth_shade": {
+                    "type": "boolean",
+                    "description": "Apply smooth shading (default: false)",
+                },
             },
             "required": ["name", "vertices", "faces"],
         },
@@ -2006,7 +2400,12 @@ TOOLS: list[Tool] = [
                 "object_name": {"type": "string", "description": "Name of the object"},
                 "origin_type": {
                     "type": "string",
-                    "enum": ["GEOMETRY_CENTER", "ORIGIN_CURSOR", "ORIGIN_CENTER_OF_MASS", "ORIGIN_CENTER_OF_VOLUME"],
+                    "enum": [
+                        "GEOMETRY_CENTER",
+                        "ORIGIN_CURSOR",
+                        "ORIGIN_CENTER_OF_MASS",
+                        "ORIGIN_CENTER_OF_VOLUME",
+                    ],
                     "description": "How to compute the new origin",
                 },
                 "cursor_location": {
@@ -2600,7 +2999,15 @@ TOOLS: list[Tool] = [
                 },
                 "pipeline_preset": {
                     "type": "string",
-                    "enum": ["quick", "standard", "multiview_quality", "vehicle_components", "msfs_vehicle", "msfs_building", "generic"],
+                    "enum": [
+                        "quick",
+                        "standard",
+                        "multiview_quality",
+                        "vehicle_components",
+                        "msfs_vehicle",
+                        "msfs_building",
+                        "generic",
+                    ],
                     "description": "Pipeline preset: quick (SF3D fast preview), standard (TripoSG), multiview_quality (best, Zero123+InstantMesh), vehicle_components (multi-view + part separation), msfs_vehicle/msfs_building (with LOD/collision), generic (auto backend).",
                 },
                 "target_polycount": {
@@ -2743,7 +3150,15 @@ TOOLS: list[Tool] = [
                 "object_name": {"type": "string", "description": "Name of the mesh object"},
                 "trait": {
                     "type": "string",
-                    "enum": ["NON_MANIFOLD", "BOUNDARY", "LOOSE", "INTERIOR_FACES", "FACE_SIDES", "UNGROUPED", "NON_PLANAR"],
+                    "enum": [
+                        "NON_MANIFOLD",
+                        "BOUNDARY",
+                        "LOOSE",
+                        "INTERIOR_FACES",
+                        "FACE_SIDES",
+                        "UNGROUPED",
+                        "NON_PLANAR",
+                    ],
                     "description": "Geometric trait to select by",
                 },
                 "extend": {
@@ -3155,8 +3570,14 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "target_object": {"type": "string", "description": "Name of the object to cut into"},
-                "cutter_object": {"type": "string", "description": "Name of the curve/mesh to project as cutter"},
+                "target_object": {
+                    "type": "string",
+                    "description": "Name of the object to cut into",
+                },
+                "cutter_object": {
+                    "type": "string",
+                    "description": "Name of the curve/mesh to project as cutter",
+                },
                 "cut_through": {
                     "type": "boolean",
                     "default": False,
@@ -3252,7 +3673,10 @@ TOOLS: list[Tool] = [
             "type": "object",
             "properties": {
                 "object_name": {"type": "string", "description": "Name of the object to render"},
-                "reference_image": {"type": "string", "description": "Path to reference silhouette/image"},
+                "reference_image": {
+                    "type": "string",
+                    "description": "Path to reference silhouette/image",
+                },
                 "camera_angle": {
                     "type": "string",
                     "enum": ["FRONT", "RIGHT", "TOP", "PERSPECTIVE"],
@@ -3372,7 +3796,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "target_object": {"type": "string", "description": "Name of the surface object to scatter on"},
+                "target_object": {
+                    "type": "string",
+                    "description": "Name of the surface object to scatter on",
+                },
                 "source_object": {"type": "string", "description": "Name of the object to scatter"},
                 "count": {
                     "type": "number",
@@ -3413,7 +3840,10 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "collection_name": {"type": "string", "description": "Name of the collection to instance"},
+                "collection_name": {
+                    "type": "string",
+                    "description": "Name of the collection to instance",
+                },
                 "locations": {
                     "type": "array",
                     "items": {"type": "array", "items": {"type": "number"}},
@@ -3478,8 +3908,14 @@ TOOLS: list[Tool] = [
         input_schema={
             "type": "object",
             "properties": {
-                "object_name": {"type": "string", "description": "Name of the object whose vertices to snap"},
-                "target_object": {"type": "string", "description": "Name of the target surface object"},
+                "object_name": {
+                    "type": "string",
+                    "description": "Name of the object whose vertices to snap",
+                },
+                "target_object": {
+                    "type": "string",
+                    "description": "Name of the target surface object",
+                },
                 "vertex_indices": {
                     "type": "array",
                     "items": {"type": "number"},
@@ -4525,10 +4961,7 @@ TOOLS: list[Tool] = [
             "required": ["render_path", "annotations", "output_path"],
         },
     ),
-
-
     # ── Material Inspection & Manipulation (7 tools) ──
-
     # ── Material Inspection & Manipulation ──
     Tool(
         name="blender_material_inspect_graph",
@@ -4691,12 +5124,29 @@ TOOLS: list[Tool] = [
                 "preset": {
                     "type": "string",
                     "enum": [
-                        "VEHICLE_PAINT", "BRUSHED_METAL", "CHROME", "RUBBER",
-                        "CARBON_FIBER", "ASPHALT", "TARMAC", "WORN_METAL",
-                        "GLASS", "PLASTIC_GLOSSY", "PLASTIC_MATTE", "CONCRETE",
-                        "FABRIC", "REFLECTIVE_TAPE", "LED_DISPLAY", "RUST",
-                        "GOLD", "COPPER", "SCRATCHED_PAINT", "SNOW", "WATER",
-                        "WOOD", "BRICK",
+                        "VEHICLE_PAINT",
+                        "BRUSHED_METAL",
+                        "CHROME",
+                        "RUBBER",
+                        "CARBON_FIBER",
+                        "ASPHALT",
+                        "TARMAC",
+                        "WORN_METAL",
+                        "GLASS",
+                        "PLASTIC_GLOSSY",
+                        "PLASTIC_MATTE",
+                        "CONCRETE",
+                        "FABRIC",
+                        "REFLECTIVE_TAPE",
+                        "LED_DISPLAY",
+                        "RUST",
+                        "GOLD",
+                        "COPPER",
+                        "SCRATCHED_PAINT",
+                        "SNOW",
+                        "WATER",
+                        "WOOD",
+                        "BRICK",
                     ],
                     "description": "Preset type to create",
                 },
@@ -4775,9 +5225,7 @@ TOOLS: list[Tool] = [
             "required": ["material_name"],
         },
     ),
-
     # ── Measurement & Validation (7 tools) ──
-
     # ── 1. Surface Area ──────────────────────────────────────────────
     Tool(
         name="blender_measure_surface_area",
@@ -4796,9 +5244,7 @@ TOOLS: list[Tool] = [
                 "per_material": {
                     "type": "boolean",
                     "default": False,
-                    "description": (
-                        "If true, return area breakdown grouped by material slot"
-                    ),
+                    "description": ("If true, return area breakdown grouped by material slot"),
                 },
                 "world_space": {
                     "type": "boolean",
@@ -4812,7 +5258,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name"],
         },
     ),
-
     # ── 2. Volume ────────────────────────────────────────────────────
     Tool(
         name="blender_measure_volume",
@@ -4832,7 +5277,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name"],
         },
     ),
-
     # ── 3. Clearance ─────────────────────────────────────────────────
     Tool(
         name="blender_measure_clearance",
@@ -4864,7 +5308,6 @@ TOOLS: list[Tool] = [
             "required": ["object_a", "object_b"],
         },
     ),
-
     # ── 4. Validate Dimensions ───────────────────────────────────────
     Tool(
         name="blender_validate_dimensions",
@@ -4897,16 +5340,13 @@ TOOLS: list[Tool] = [
                         },
                     },
                     "description": (
-                        "Expected dimensions. Provide any subset of "
-                        "length/width/height."
+                        "Expected dimensions. Provide any subset of length/width/height."
                     ),
                 },
                 "tolerance": {
                     "type": "number",
                     "default": 0.01,
-                    "description": (
-                        "Allowed absolute deviation per axis (scene units)"
-                    ),
+                    "description": ("Allowed absolute deviation per axis (scene units)"),
                 },
                 "axis_mapping": {
                     "type": "object",
@@ -4936,7 +5376,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "expected"],
         },
     ),
-
     # ── 5. Calibrate from Reference ──────────────────────────────────
     Tool(
         name="blender_calibrate_from_reference",
@@ -4977,7 +5416,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "known_dimension", "dimension_axis"],
         },
     ),
-
     # ── 6. Edge Angle ────────────────────────────────────────────────
     Tool(
         name="blender_measure_edge_angle",
@@ -5004,22 +5442,19 @@ TOOLS: list[Tool] = [
                 "threshold_min": {
                     "type": "number",
                     "description": (
-                        "Minimum acceptable angle in degrees.  "
-                        "Edges below this are flagged."
+                        "Minimum acceptable angle in degrees.  Edges below this are flagged."
                     ),
                 },
                 "threshold_max": {
                     "type": "number",
                     "description": (
-                        "Maximum acceptable angle in degrees.  "
-                        "Edges above this are flagged."
+                        "Maximum acceptable angle in degrees.  Edges above this are flagged."
                     ),
                 },
             },
             "required": ["object_name"],
         },
     ),
-
     # ── 7. Validate Mesh Quality ─────────────────────────────────────
     Tool(
         name="blender_validate_mesh_quality",
@@ -5053,18 +5488,13 @@ TOOLS: list[Tool] = [
                             "ORIGIN_CENTERED",
                         ],
                     },
-                    "description": (
-                        "List of checks to run.  If omitted, all checks "
-                        "are executed."
-                    ),
+                    "description": ("List of checks to run.  If omitted, all checks are executed."),
                 },
             },
             "required": ["object_name"],
         },
     ),
-
     # ── Collections & System (8 tools) ──
-
     # ========== Collection Tools ==========
     Tool(
         name="blender_collection_create",
@@ -5212,9 +5642,7 @@ TOOLS: list[Tool] = [
             "required": ["filepath"],
         },
     ),
-
     # ── Baking (6 tools) ──
-
     # ── 1. Batch PBR Baking ──
     Tool(
         name="blender_bake_pbr_batch",
@@ -5236,8 +5664,14 @@ TOOLS: list[Tool] = [
                     "items": {
                         "type": "string",
                         "enum": [
-                            "DIFFUSE", "ROUGHNESS", "METALLIC", "NORMAL",
-                            "AO", "EMISSION", "DISPLACEMENT", "COMBINED",
+                            "DIFFUSE",
+                            "ROUGHNESS",
+                            "METALLIC",
+                            "NORMAL",
+                            "AO",
+                            "EMISSION",
+                            "DISPLACEMENT",
+                            "COMBINED",
                         ],
                     },
                     "description": (
@@ -5287,7 +5721,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "output_dir"],
         },
     ),
-
     # ── 2. High-poly to Low-poly Baking ──
     Tool(
         name="blender_bake_highpoly_to_lowpoly",
@@ -5312,8 +5745,14 @@ TOOLS: list[Tool] = [
                     "items": {
                         "type": "string",
                         "enum": [
-                            "DIFFUSE", "ROUGHNESS", "METALLIC", "NORMAL",
-                            "AO", "EMISSION", "DISPLACEMENT", "COMBINED",
+                            "DIFFUSE",
+                            "ROUGHNESS",
+                            "METALLIC",
+                            "NORMAL",
+                            "AO",
+                            "EMISSION",
+                            "DISPLACEMENT",
+                            "COMBINED",
                         ],
                     },
                     "description": "Channels to bake (default: [NORMAL, AO])",
@@ -5356,7 +5795,6 @@ TOOLS: list[Tool] = [
             "required": ["lowpoly_name", "highpoly_name", "output_dir"],
         },
     ),
-
     # ── 3. Multires Baking ──
     Tool(
         name="blender_bake_from_multires",
@@ -5393,7 +5831,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "output_path"],
         },
     ),
-
     # ── 4. Bake to Vertex Colors ──
     Tool(
         name="blender_bake_to_vertex_colors",
@@ -5427,7 +5864,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name"],
         },
     ),
-
     # ── 5. Curvature Map Baking ──
     Tool(
         name="blender_bake_curvature",
@@ -5464,7 +5900,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "output_path"],
         },
     ),
-
     # ── 6. ID Map Baking ──
     Tool(
         name="blender_bake_id_map",
@@ -5502,9 +5937,7 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "output_path"],
         },
     ),
-
     # ── Geometry Nodes (7 tools) ──
-
     # ── 1. Create Group ──────────────────────────────────────────────
     Tool(
         name="blender_geonode_create_group",
@@ -5523,8 +5956,7 @@ TOOLS: list[Tool] = [
                 "inputs": {
                     "type": "array",
                     "description": (
-                        "Extra input sockets to add (beyond the default "
-                        "Geometry input)"
+                        "Extra input sockets to add (beyond the default Geometry input)"
                     ),
                     "items": {
                         "type": "object",
@@ -5535,7 +5967,17 @@ TOOLS: list[Tool] = [
                             },
                             "type": {
                                 "type": "string",
-                                "enum": ["FLOAT", "INT", "VECTOR", "BOOLEAN", "OBJECT", "COLLECTION", "MATERIAL", "IMAGE", "STRING"],
+                                "enum": [
+                                    "FLOAT",
+                                    "INT",
+                                    "VECTOR",
+                                    "BOOLEAN",
+                                    "OBJECT",
+                                    "COLLECTION",
+                                    "MATERIAL",
+                                    "IMAGE",
+                                    "STRING",
+                                ],
                                 "description": "Socket data type",
                             },
                             "default": {
@@ -5551,8 +5993,7 @@ TOOLS: list[Tool] = [
                 "outputs": {
                     "type": "array",
                     "description": (
-                        "Extra output sockets to add (beyond the default "
-                        "Geometry output)"
+                        "Extra output sockets to add (beyond the default Geometry output)"
                     ),
                     "items": {
                         "type": "object",
@@ -5563,7 +6004,17 @@ TOOLS: list[Tool] = [
                             },
                             "type": {
                                 "type": "string",
-                                "enum": ["FLOAT", "INT", "VECTOR", "BOOLEAN", "OBJECT", "COLLECTION", "MATERIAL", "IMAGE", "STRING"],
+                                "enum": [
+                                    "FLOAT",
+                                    "INT",
+                                    "VECTOR",
+                                    "BOOLEAN",
+                                    "OBJECT",
+                                    "COLLECTION",
+                                    "MATERIAL",
+                                    "IMAGE",
+                                    "STRING",
+                                ],
                                 "description": "Socket data type",
                             },
                         },
@@ -5574,7 +6025,6 @@ TOOLS: list[Tool] = [
             "required": ["name"],
         },
     ),
-
     # ── 2. Apply to Object ───────────────────────────────────────────
     Tool(
         name="blender_geonode_apply",
@@ -5592,9 +6042,7 @@ TOOLS: list[Tool] = [
                 },
                 "node_group": {
                     "type": "string",
-                    "description": (
-                        "Name of an existing GeometryNodeTree in bpy.data.node_groups"
-                    ),
+                    "description": ("Name of an existing GeometryNodeTree in bpy.data.node_groups"),
                 },
                 "inputs": {
                     "type": "object",
@@ -5608,7 +6056,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "node_group"],
         },
     ),
-
     # ── 3. Scatter Instances ─────────────────────────────────────────
     Tool(
         name="blender_geonode_scatter_instances",
@@ -5670,15 +6117,12 @@ TOOLS: list[Tool] = [
                 "align_to_normal": {
                     "type": "boolean",
                     "default": True,
-                    "description": (
-                        "Rotate instances to align with the surface normal"
-                    ),
+                    "description": ("Rotate instances to align with the surface normal"),
                 },
             },
             "required": ["target_object", "instance_object"],
         },
     ),
-
     # ── 4. Array / Grid ──────────────────────────────────────────────
     Tool(
         name="blender_geonode_array_grid",
@@ -5740,7 +6184,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "instance_object", "grid_type"],
         },
     ),
-
     # ── 5. Deform Along Curve ────────────────────────────────────────
     Tool(
         name="blender_geonode_deform_curve",
@@ -5772,7 +6215,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name", "curve_name"],
         },
     ),
-
     # ── 6. Extrude Profile Along Curve ───────────────────────────────
     Tool(
         name="blender_geonode_extrude_profile",
@@ -5787,8 +6229,7 @@ TOOLS: list[Tool] = [
                 "profile_object": {
                     "type": "string",
                     "description": (
-                        "Name of the profile object (mesh or curve) to "
-                        "sweep along the path"
+                        "Name of the profile object (mesh or curve) to sweep along the path"
                     ),
                 },
                 "curve_name": {
@@ -5817,7 +6258,6 @@ TOOLS: list[Tool] = [
             "required": ["profile_object", "curve_name"],
         },
     ),
-
     # ── 7. Inspect GN Setup ──────────────────────────────────────────
     Tool(
         name="blender_geonode_inspect",
@@ -5845,7 +6285,6 @@ TOOLS: list[Tool] = [
             "required": ["object_name"],
         },
     ),
-
 ]
 
 
@@ -5859,12 +6298,14 @@ _TOOLS_DECLARING_TIMEOUT = frozenset(
 def create_server(host: str, port: int) -> Server:
     """Create and configure the MCP server."""
     server = Server("meshwire")
+
     async def handle_list_tools(
         ctx: ServerRequestContext,
         params: ListToolsRequest,
     ) -> ListToolsResult:
         """Return the list of available tools."""
         return ListToolsResult(tools=TOOLS)
+
     async def handle_call_tool(
         ctx: ServerRequestContext,
         params: CallToolRequestParams,
@@ -5888,9 +6329,12 @@ def create_server(host: str, port: int) -> Server:
                     timeout = arguments.pop("timeout", None)
             if timeout is None:
                 _long_running = {
-                    "ai_pipeline_generate", "ai_generate_model_sync",
-                    "ai_generate_texture_sync", "ai_auto_uv",
-                    "render_animation", "render_multi_angle",
+                    "ai_pipeline_generate",
+                    "ai_generate_model_sync",
+                    "ai_generate_texture_sync",
+                    "ai_auto_uv",
+                    "render_animation",
+                    "render_multi_angle",
                     "ai_generate_model",
                 }
                 timeout = 600.0 if command in _long_running else 30.0
@@ -5903,10 +6347,12 @@ def create_server(host: str, port: int) -> Server:
             return CallToolResult(content=[TextContent(type="text", text=result_text)])
         except ConnectionRefusedError:
             return CallToolResult(
-                content=[TextContent(
-                    type="text",
-                    text="Error: Could not connect to Blender. Make sure Blender is running and the MCP Server addon is enabled with the server started.",
-                )],
+                content=[
+                    TextContent(
+                        type="text",
+                        text="Error: Could not connect to Blender. Make sure Blender is running and the MCP Server addon is enabled with the server started.",
+                    )
+                ],
                 isError=True,
             )
         except Exception as e:
@@ -5915,9 +6361,11 @@ def create_server(host: str, port: int) -> Server:
                 content=[TextContent(type="text", text=f"Error: {str(e)}")],
                 isError=True,
             )
+
     server.add_request_handler("tools/list", ListToolsRequest, handle_list_tools)
     server.add_request_handler("tools/call", CallToolRequestParams, handle_call_tool)
     return server
+
 
 async def run_server(host: str, port: int):
     """Run the MCP server with stdio transport."""

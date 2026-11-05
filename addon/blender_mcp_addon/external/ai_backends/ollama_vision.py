@@ -66,13 +66,21 @@ Be specific and descriptive. The description will be used to generate a 3D model
     def __init__(self, config: BackendConfig | None = None):
         super().__init__(config)
         self._host = config.extra.get("host", self.DEFAULT_HOST) if config else self.DEFAULT_HOST
-        self._model = config.extra.get("model", self.DEFAULT_MODEL) if config else self.DEFAULT_MODEL
+        self._model = (
+            config.extra.get("model", self.DEFAULT_MODEL) if config else self.DEFAULT_MODEL
+        )
 
     def _get_host(self) -> str:
-        return self.config.extra.get("host", self.DEFAULT_HOST) if self.config else self.DEFAULT_HOST
+        return (
+            self.config.extra.get("host", self.DEFAULT_HOST) if self.config else self.DEFAULT_HOST
+        )
 
     def _get_model(self) -> str:
-        return self.config.extra.get("model", self.DEFAULT_MODEL) if self.config else self.DEFAULT_MODEL
+        return (
+            self.config.extra.get("model", self.DEFAULT_MODEL)
+            if self.config
+            else self.DEFAULT_MODEL
+        )
 
     def _check_ollama(self) -> tuple[bool, str]:
         """Check if Ollama is running and has a vision model."""
@@ -87,8 +95,13 @@ Be specific and descriptive. The description will be used to generate a 3D model
 
             # Check for vision-capable models
             vision_keywords = [
-                "llava", "bakllava", "vision", "moondream",
-                "llama3.2-vision", "minicpm-v", "cogvlm",
+                "llava",
+                "bakllava",
+                "vision",
+                "moondream",
+                "llama3.2-vision",
+                "minicpm-v",
+                "cogvlm",
             ]
             available_vision = [m for m in models if any(v in m.lower() for v in vision_keywords)]
 
@@ -274,7 +287,9 @@ Evaluate the model and respond with ONLY a valid JSON object (no markdown, no ex
 
         user_prompt = prompt
         if reference_image:
-            user_prompt = f"The first image is the reference. Compare the model renders against it. {prompt}"
+            user_prompt = (
+                f"The first image is the reference. Compare the model renders against it. {prompt}"
+            )
 
         full_prompt = self.REFINEMENT_PROMPT.format(user_prompt=user_prompt)
 
@@ -351,7 +366,8 @@ Evaluate the model and respond with ONLY a valid JSON object (no markdown, no ex
         model = self._get_model()
 
         category_criteria = self.CATEGORY_CRITERIA.get(
-            category, self.CATEGORY_CRITERIA["model"],
+            category,
+            self.CATEGORY_CRITERIA["model"],
         )
 
         all_images = []
@@ -474,13 +490,15 @@ Evaluate the model and respond with ONLY a valid JSON object (no markdown, no ex
         info = super().get_info()
         available, status = self._check_ollama()
 
-        info.update({
-            "ollama_host": self._get_host(),
-            "model": self._get_model(),
-            "ollama_status": status,
-            "usage": (
-                "Call analyze_image() to get descriptions from images, "
-                "then use descriptions with text-to-3D backends"
-            ),
-        })
+        info.update(
+            {
+                "ollama_host": self._get_host(),
+                "model": self._get_model(),
+                "ollama_status": status,
+                "usage": (
+                    "Call analyze_image() to get descriptions from images, "
+                    "then use descriptions with text-to-3D backends"
+                ),
+            }
+        )
         return info

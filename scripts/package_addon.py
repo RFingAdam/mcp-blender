@@ -20,7 +20,8 @@ def get_version():
             if '"version":' in line:
                 # Extract version tuple from line like: "version": (0, 1, 0),
                 import re
-                match = re.search(r'\((\d+),\s*(\d+),\s*(\d+)\)', line)
+
+                match = re.search(r"\((\d+),\s*(\d+),\s*(\d+)\)", line)
                 if match:
                     return f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
     return "0.0.0"
@@ -92,7 +93,8 @@ def package_addon(output_path: str | None = None):
 def main():
     parser = argparse.ArgumentParser(description="Package the Meshwire addon")
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output ZIP file path (default: dist/blender_mcp_addon-VERSION.zip)",
     )
     args = parser.parse_args()

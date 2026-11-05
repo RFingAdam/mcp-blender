@@ -204,9 +204,7 @@ class RodinBackend(BaseBackend):
 
         # Prepare request
         if image_path:
-            return self._generate_from_image(
-                image_path, prompt, style, quality, output_format
-            )
+            return self._generate_from_image(image_path, prompt, style, quality, output_format)
         else:
             return self._generate_from_text(prompt, style, quality, output_format)
 
@@ -532,9 +530,11 @@ class RodinBackend(BaseBackend):
     def get_info(self) -> dict[str, Any]:
         """Get backend info with additional Rodin-specific details."""
         info = super().get_info()
-        info.update({
-            "api_base": self.API_BASE,
-            "supported_qualities": self.SUPPORTED_QUALITIES,
-            "has_api_key": self._get_api_key() is not None,
-        })
+        info.update(
+            {
+                "api_base": self.API_BASE,
+                "supported_qualities": self.SUPPORTED_QUALITIES,
+                "has_api_key": self._get_api_key() is not None,
+            }
+        )
         return info

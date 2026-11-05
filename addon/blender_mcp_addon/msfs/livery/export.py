@@ -99,18 +99,20 @@ def export_livery_textures(
             img.file_format = format
             img.save()
 
-            exported.append({
-                "type": tex_type,
-                "filepath": str(filepath),
-                "size": list(img.size),
-                "format": format,
-            })
+            exported.append(
+                {
+                    "type": tex_type,
+                    "filepath": str(filepath),
+                    "size": list(img.size),
+                    "format": format,
+                }
+            )
 
     # Also export any layer images created by painting workflow
     layer_prefix = f"{object_name}_layer_"
     for img in bpy.data.images:
         if img.name.startswith(layer_prefix):
-            layer_name = img.name[len(layer_prefix):]
+            layer_name = img.name[len(layer_prefix) :]
             filename = f"{object_name}_layer_{layer_name}.{format.lower()}"
             filepath = output_path / filename
 
@@ -118,12 +120,14 @@ def export_livery_textures(
             img.file_format = format
             img.save()
 
-            exported.append({
-                "type": f"layer_{layer_name}",
-                "filepath": str(filepath),
-                "size": list(img.size),
-                "format": format,
-            })
+            exported.append(
+                {
+                    "type": f"layer_{layer_name}",
+                    "filepath": str(filepath),
+                    "size": list(img.size),
+                    "format": format,
+                }
+            )
 
     return {
         "object": object_name,
@@ -221,8 +225,10 @@ def convert_to_dds(
         result = subprocess.run(
             [
                 texconv,
-                "-f", dds_format,
-                "-o", str(output_file.parent),
+                "-f",
+                dds_format,
+                "-o",
+                str(output_file.parent),
                 "-y",  # Overwrite
                 str(input_file),
             ],
@@ -291,7 +297,9 @@ def create_livery_package(
 
     # Determine aircraft folder name based on aircraft type
     aircraft_folder = _get_aircraft_folder(aircraft_id)
-    texture_folder = package_path / "SimObjects" / "Airplanes" / aircraft_folder / f"TEXTURE.{safe_name}"
+    texture_folder = (
+        package_path / "SimObjects" / "Airplanes" / aircraft_folder / f"TEXTURE.{safe_name}"
+    )
 
     texture_folder.mkdir(parents=True, exist_ok=True)
 
@@ -336,11 +344,13 @@ def create_livery_package(
     for file_path in package_path.rglob("*"):
         if file_path.is_file() and file_path.name != "layout.json":
             rel_path = file_path.relative_to(package_path)
-            layout["content"].append({
-                "path": str(rel_path).replace("\\", "/"),
-                "size": file_path.stat().st_size,
-                "date": int(file_path.stat().st_mtime),
-            })
+            layout["content"].append(
+                {
+                    "path": str(rel_path).replace("\\", "/"),
+                    "size": file_path.stat().st_size,
+                    "date": int(file_path.stat().st_mtime),
+                }
+            )
 
     layout_path = package_path / "layout.json"
     with open(layout_path, "w") as f:
@@ -407,7 +417,7 @@ def _generate_aircraft_cfg(
 
 [FLTSIM.XX]  ; Replace XX with next available number
 title = "{airline} {aircraft_name}" ; {livery_name}
-description = "{description or f'{airline} livery for {aircraft_name}'}"
+description = "{description or f"{airline} livery for {aircraft_name}"}"
 ui_variation = "{livery_name}"
 ui_typerole = "Commercial Airliner"
 ui_createdby = "MCP Blender"
@@ -494,8 +504,7 @@ def validate_livery_package(package_dir: str) -> dict[str, Any]:
                 warnings.append(f"No texture files found in {tex_folder.name}")
             elif not dds_files:
                 warnings.append(
-                    f"No DDS files in {tex_folder.name}. "
-                    "MSFS prefers DDS format for performance."
+                    f"No DDS files in {tex_folder.name}. MSFS prefers DDS format for performance."
                 )
 
     # Check texture sizes
@@ -511,13 +520,9 @@ def validate_livery_package(package_dir: str) -> dict[str, Any]:
 
                         # Check power of 2
                         if not (w & (w - 1) == 0 and w != 0):
-                            warnings.append(
-                                f"{img_file.name}: width {w} is not power of 2"
-                            )
+                            warnings.append(f"{img_file.name}: width {w} is not power of 2")
                         if not (h & (h - 1) == 0 and h != 0):
-                            warnings.append(
-                                f"{img_file.name}: height {h} is not power of 2"
-                            )
+                            warnings.append(f"{img_file.name}: height {h} is not power of 2")
                     except Exception:
                         pass  # Can't verify image
 
@@ -529,8 +534,5 @@ def validate_livery_package(package_dir: str) -> dict[str, Any]:
         "valid_files": valid_files,
         "issues": issues,
         "warnings": warnings,
-        "summary": (
-            "Package is valid" if is_valid
-            else f"Package has {len(issues)} issue(s)"
-        ),
+        "summary": ("Package is valid" if is_valid else f"Package has {len(issues)} issue(s)"),
     }

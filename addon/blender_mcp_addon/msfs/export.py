@@ -204,13 +204,12 @@ def validate_for_msfs(object_name: str | None = None) -> dict[str, Any]:
         # This requires bmesh for proper check
         try:
             import bmesh
+
             bm = bmesh.new()
             bm.from_mesh(mesh)
             non_manifold_edges = [e for e in bm.edges if not e.is_manifold]
             if non_manifold_edges:
-                warnings.append(
-                    f"{obj_prefix} Has {len(non_manifold_edges)} non-manifold edges"
-                )
+                warnings.append(f"{obj_prefix} Has {len(non_manifold_edges)} non-manifold edges")
             bm.free()
         except Exception:
             pass
@@ -226,9 +225,7 @@ def validate_for_msfs(object_name: str | None = None) -> dict[str, Any]:
         # Check scale
         if obj.scale != (1, 1, 1):
             scale_str = f"({obj.scale.x:.2f}, {obj.scale.y:.2f}, {obj.scale.z:.2f})"
-            warnings.append(
-                f"{obj_prefix} Non-applied scale {scale_str} - consider applying"
-            )
+            warnings.append(f"{obj_prefix} Non-applied scale {scale_str} - consider applying")
 
         # Check rotation
         rotation = obj.rotation_euler
@@ -245,9 +242,7 @@ def validate_for_msfs(object_name: str | None = None) -> dict[str, Any]:
         # Check vertex count
         vert_count = len(mesh.vertices)
         if vert_count > 65535:
-            warnings.append(
-                f"{obj_prefix} High vertex count ({vert_count}) - consider LODs"
-            )
+            warnings.append(f"{obj_prefix} High vertex count ({vert_count}) - consider LODs")
         elif vert_count > 10000:
             info.append(f"{obj_prefix} Vertex count: {vert_count}")
 
@@ -315,9 +310,7 @@ def _validate_materials() -> dict[str, Any]:
 
                 # Check for non-power-of-2 dimensions
                 if (width & (width - 1)) != 0 or (height & (height - 1)) != 0:
-                    warnings.append(
-                        f"{mat_prefix} Texture {node.image.name} is not power-of-2"
-                    )
+                    warnings.append(f"{mat_prefix} Texture {node.image.name} is not power-of-2")
 
     return {"issues": issues, "warnings": warnings}
 
@@ -386,11 +379,13 @@ def batch_export_lods(
                 include_collision=True,
             )
             if "error" not in result:
-                exported.append({
-                    "lod_level": lod_level,
-                    "filepath": str(filepath),
-                    "vertex_count": len(obj.data.vertices),
-                })
+                exported.append(
+                    {
+                        "lod_level": lod_level,
+                        "filepath": str(filepath),
+                        "vertex_count": len(obj.data.vertices),
+                    }
+                )
     else:
         # Export all LODs in single file
         filepath = output_path / f"{base_name}.glb"
@@ -410,11 +405,13 @@ def batch_export_lods(
         )
 
         if "error" not in result:
-            exported.append({
-                "filepath": str(filepath),
-                "lod_count": len(lod_objects),
-                "objects": object_names,
-            })
+            exported.append(
+                {
+                    "filepath": str(filepath),
+                    "lod_count": len(lod_objects),
+                    "objects": object_names,
+                }
+            )
 
     return {
         "base_name": base_name,

@@ -42,9 +42,7 @@ def serialize_object(obj) -> dict[str, Any]:
             slot.material.name if slot.material else None for slot in obj.material_slots
         ]
         # Add modifiers
-        data["modifiers"] = [
-            {"name": mod.name, "type": mod.type} for mod in obj.modifiers
-        ]
+        data["modifiers"] = [{"name": mod.name, "type": mod.type} for mod in obj.modifiers]
 
     return data
 

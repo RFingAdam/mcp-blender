@@ -6,12 +6,7 @@ from pathlib import Path
 
 import pytest
 
-_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "addon"
-    / "blender_mcp_addon"
-    / "validation.py"
-)
+_PATH = Path(__file__).resolve().parents[1] / "addon" / "blender_mcp_addon" / "validation.py"
 _spec = importlib.util.spec_from_file_location("meshwire_validation", _PATH)
 validation = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(validation)
@@ -21,9 +16,7 @@ ValidationError = validation.ValidationError
 
 
 def test_validate_filepath_expands_home():
-    assert validate_filepath("~/x.png", "p") == os.path.join(
-        os.path.expanduser("~"), "x.png"
-    )
+    assert validate_filepath("~/x.png", "p") == os.path.join(os.path.expanduser("~"), "x.png")
 
 
 def test_validate_filepath_checks_existence_after_expansion(tmp_path, monkeypatch):

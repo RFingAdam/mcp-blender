@@ -1,6 +1,5 @@
 """Tests for MCP server."""
 
-
 import asyncio
 
 from mcp_types import CallToolRequestParams
@@ -33,7 +32,9 @@ class TestToolDefinitions:
         """Input schemas should be valid JSON Schema objects."""
         for tool in TOOLS:
             schema = tool.input_schema
-            assert schema.get("type") == "object", f"Tool {tool.name} schema type should be 'object'"
+            assert schema.get("type") == "object", (
+                f"Tool {tool.name} schema type should be 'object'"
+            )
             assert "properties" in schema, f"Tool {tool.name} schema missing 'properties'"
             assert "required" in schema, f"Tool {tool.name} schema missing 'required'"
 
@@ -44,7 +45,9 @@ class TestToolDefinitions:
             properties = schema.get("properties", {})
             required = schema.get("required", [])
             for req in required:
-                assert req in properties, f"Tool {tool.name}: required field '{req}' not in properties"
+                assert req in properties, (
+                    f"Tool {tool.name}: required field '{req}' not in properties"
+                )
 
     def test_tool_count(self):
         """Verify expected number of tools."""
@@ -69,7 +72,11 @@ class TestToolCategories:
 
     def test_scene_tools(self):
         """Scene tools should exist."""
-        scene_tools = [t for t in TOOLS if t.name.startswith("blender_scene_") or t.name == "blender_get_version"]
+        scene_tools = [
+            t
+            for t in TOOLS
+            if t.name.startswith("blender_scene_") or t.name == "blender_get_version"
+        ]
         assert len(scene_tools) >= 5
 
     def test_object_tools(self):
@@ -89,7 +96,13 @@ class TestToolCategories:
 
     def test_animation_tools(self):
         """Animation tools should exist."""
-        animation_tools = [t for t in TOOLS if t.name.startswith("blender_keyframe_") or t.name.startswith("blender_action_") or t.name.startswith("blender_animation_")]
+        animation_tools = [
+            t
+            for t in TOOLS
+            if t.name.startswith("blender_keyframe_")
+            or t.name.startswith("blender_action_")
+            or t.name.startswith("blender_animation_")
+        ]
         assert len(animation_tools) >= 5
 
     def test_render_tools(self):
@@ -99,28 +112,43 @@ class TestToolCategories:
 
     def test_export_tools(self):
         """Export tools should exist."""
-        export_tools = [t for t in TOOLS if t.name.startswith("blender_export_") or t.name.startswith("blender_import_")]
+        export_tools = [
+            t
+            for t in TOOLS
+            if t.name.startswith("blender_export_") or t.name.startswith("blender_import_")
+        ]
         assert len(export_tools) >= 5
 
     def test_external_tools(self):
         """External integration tools should exist."""
-        external_tools = [t for t in TOOLS if t.name.startswith("blender_polyhaven_") or t.name.startswith("blender_ai_")]
+        external_tools = [
+            t
+            for t in TOOLS
+            if t.name.startswith("blender_polyhaven_") or t.name.startswith("blender_ai_")
+        ]
         assert len(external_tools) >= 8
 
     def test_texture_tools(self):
         """AI texture generation tools should exist."""
-        texture_tools = [t for t in TOOLS if t.name in (
-            "blender_ai_generate_texture",
-            "blender_ai_generate_texture_sync",
-            "blender_ai_generate_reference_image",
-            "blender_ai_inpaint_texture",
-            "blender_ai_texture_from_render",
-        )]
+        texture_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_ai_generate_texture",
+                "blender_ai_generate_texture_sync",
+                "blender_ai_generate_reference_image",
+                "blender_ai_inpaint_texture",
+                "blender_ai_texture_from_render",
+            )
+        ]
         assert len(texture_tools) == 5, f"Expected 5 texture tools, got {len(texture_tools)}"
 
     def test_msfs_tools(self):
         """MSFS content creation tools should exist."""
-        msfs_tools = [t for t in TOOLS if t.name.startswith("blender_msfs_") and "livery" not in t.name]
+        msfs_tools = [
+            t for t in TOOLS if t.name.startswith("blender_msfs_") and "livery" not in t.name
+        ]
         # LOD (4) + Materials (4) + Collision (4) + Animation (4) + Export (4) = 20
         assert len(msfs_tools) >= 18, f"Expected at least 18 MSFS tools, got {len(msfs_tools)}"
 
@@ -128,7 +156,11 @@ class TestToolCategories:
         lod_tools = [t for t in msfs_tools if "lod" in t.name]
         assert len(lod_tools) >= 4, "Should have LOD tools"
 
-        material_tools = [t for t in msfs_tools if "material" in t.name or "glass" in t.name or "emissive" in t.name]
+        material_tools = [
+            t
+            for t in msfs_tools
+            if "material" in t.name or "glass" in t.name or "emissive" in t.name
+        ]
         assert len(material_tools) >= 3, "Should have material tools"
 
         collision_tools = [t for t in msfs_tools if "collision" in t.name]
@@ -144,73 +176,133 @@ class TestToolCategories:
         """MSFS livery tools should exist."""
         livery_tools = [t for t in TOOLS if "livery" in t.name]
         # Painting (7) + Templates (3) + Transfer (4) + Export (4) = 18
-        assert len(livery_tools) >= 16, f"Expected at least 16 livery tools, got {len(livery_tools)}"
+        assert len(livery_tools) >= 16, (
+            f"Expected at least 16 livery tools, got {len(livery_tools)}"
+        )
 
         # Verify key livery tool categories
-        paint_tools = [t for t in livery_tools if any(x in t.name for x in ["paint", "brush", "layer"])]
+        paint_tools = [
+            t for t in livery_tools if any(x in t.name for x in ["paint", "brush", "layer"])
+        ]
         assert len(paint_tools) >= 3, "Should have paint tools"
 
         template_tools = [t for t in livery_tools if "template" in t.name or "aircraft" in t.name]
         assert len(template_tools) >= 3, "Should have template tools"
 
-        transfer_tools = [t for t in livery_tools if any(x in t.name for x in ["transfer", "analyze", "extract", "map"])]
+        transfer_tools = [
+            t
+            for t in livery_tools
+            if any(x in t.name for x in ["transfer", "analyze", "extract", "map"])
+        ]
         assert len(transfer_tools) >= 4, "Should have transfer tools"
 
-        export_tools = [t for t in livery_tools if any(x in t.name for x in ["export", "package", "dds", "validate"])]
+        export_tools = [
+            t
+            for t in livery_tools
+            if any(x in t.name for x in ["export", "package", "dds", "validate"])
+        ]
         assert len(export_tools) >= 4, "Should have livery export tools"
 
     def test_vehicle_modeling_toolkit(self):
         """Vehicle modeling toolkit tools should exist."""
         # Selection tools (6)
-        selection_tools = [t for t in TOOLS if t.name in (
-            "blender_mesh_select", "blender_mesh_select_trait",
-            "blender_mesh_select_linked_flat", "blender_mesh_select_shortest_path",
-            "blender_mesh_get_selection", "blender_mesh_select_edge_loops",
-        )]
+        selection_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_mesh_select",
+                "blender_mesh_select_trait",
+                "blender_mesh_select_linked_flat",
+                "blender_mesh_select_shortest_path",
+                "blender_mesh_get_selection",
+                "blender_mesh_select_edge_loops",
+            )
+        ]
         assert len(selection_tools) == 6, f"Expected 6 selection tools, got {len(selection_tools)}"
 
         # Shading tools (4)
-        shading_tools = [t for t in TOOLS if t.name in (
-            "blender_shade_smooth", "blender_mesh_crease",
-            "blender_mesh_mark_sharp", "blender_mesh_mark_seam",
-        )]
+        shading_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_shade_smooth",
+                "blender_mesh_crease",
+                "blender_mesh_mark_sharp",
+                "blender_mesh_mark_seam",
+            )
+        ]
         assert len(shading_tools) == 4, f"Expected 4 shading tools, got {len(shading_tools)}"
 
         # Topology tools (7)
-        topology_tools = [t for t in TOOLS if t.name in (
-            "blender_mesh_dissolve", "blender_mesh_merge",
-            "blender_mesh_bridge", "blender_mesh_fill",
-            "blender_mesh_subdivide", "blender_mesh_edge_slide",
-            "blender_mesh_tris_to_quads",
-        )]
+        topology_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_mesh_dissolve",
+                "blender_mesh_merge",
+                "blender_mesh_bridge",
+                "blender_mesh_fill",
+                "blender_mesh_subdivide",
+                "blender_mesh_edge_slide",
+                "blender_mesh_tris_to_quads",
+            )
+        ]
         assert len(topology_tools) == 7, f"Expected 7 topology tools, got {len(topology_tools)}"
 
         # Cutting tools (4)
-        cutting_tools = [t for t in TOOLS if t.name in (
-            "blender_mesh_knife_project", "blender_mesh_bisect",
-            "blender_mesh_separate_selected", "blender_mesh_split",
-        )]
+        cutting_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_mesh_knife_project",
+                "blender_mesh_bisect",
+                "blender_mesh_separate_selected",
+                "blender_mesh_split",
+            )
+        ]
         assert len(cutting_tools) == 4, f"Expected 4 cutting tools, got {len(cutting_tools)}"
 
         # Reference tools (3)
-        reference_tools = [t for t in TOOLS if t.name in (
-            "blender_silhouette_compare", "blender_measure",
-            "blender_reference_image_setup",
-        )]
+        reference_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_silhouette_compare",
+                "blender_measure",
+                "blender_reference_image_setup",
+            )
+        ]
         assert len(reference_tools) == 3, f"Expected 3 reference tools, got {len(reference_tools)}"
 
         # Detail tools (3)
-        detail_tools = [t for t in TOOLS if t.name in (
-            "blender_array_along_curve", "blender_scatter_on_surface",
-            "blender_collection_instance",
-        )]
+        detail_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_array_along_curve",
+                "blender_scatter_on_surface",
+                "blender_collection_instance",
+            )
+        ]
         assert len(detail_tools) == 3, f"Expected 3 detail tools, got {len(detail_tools)}"
 
         # Transform tools (3)
-        transform_tools = [t for t in TOOLS if t.name in (
-            "blender_mesh_proportional_transform", "blender_mesh_shrinkwrap",
-            "blender_mesh_flatten",
-        )]
+        transform_tools = [
+            t
+            for t in TOOLS
+            if t.name
+            in (
+                "blender_mesh_proportional_transform",
+                "blender_mesh_shrinkwrap",
+                "blender_mesh_flatten",
+            )
+        ]
         assert len(transform_tools) == 3, f"Expected 3 transform tools, got {len(transform_tools)}"
 
 

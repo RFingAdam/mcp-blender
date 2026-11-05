@@ -271,10 +271,12 @@ def list_cached_assets(source: str | None = None) -> list[dict]:
 
     for cache_key, info in index["assets"].items():
         if source is None or info.get("source") == source:
-            assets.append({
-                "cache_key": cache_key,
-                **info,
-            })
+            assets.append(
+                {
+                    "cache_key": cache_key,
+                    **info,
+                }
+            )
 
     return assets
 

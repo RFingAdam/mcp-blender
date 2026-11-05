@@ -102,9 +102,7 @@ class SculptHandlersMixin:
             current_levels = multires_mod.total_levels
             levels_to_add = max(0, multires_levels - current_levels)
             for _ in range(levels_to_add):
-                bpy.ops.object.multires_subdivide(
-                    modifier=multires_mod.name, mode="CATMULL_CLARK"
-                )
+                bpy.ops.object.multires_subdivide(modifier=multires_mod.name, mode="CATMULL_CLARK")
 
             multires_mod.sculpt_levels = multires_mod.total_levels
             result_info["multires_levels"] = multires_mod.total_levels
@@ -148,7 +146,6 @@ class SculptHandlersMixin:
 
         return result_info
 
-
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_mesh_filter(self, params: dict) -> dict:
         """Apply global mesh filter to entire sculpted mesh."""
@@ -191,7 +188,9 @@ class SculptHandlersMixin:
         for i in range(iterations):
             try:
                 with bpy.context.temp_override(**override):
-                    bpy.ops.sculpt.mesh_filter(type=_MESH_FILTER_TYPES.get(filter_type, filter_type), strength=strength)
+                    bpy.ops.sculpt.mesh_filter(
+                        type=_MESH_FILTER_TYPES.get(filter_type, filter_type), strength=strength
+                    )
             except RuntimeError as e:
                 return {
                     "error": f"Mesh filter failed on iteration {i + 1}: {str(e)}",
@@ -207,7 +206,6 @@ class SculptHandlersMixin:
             "iterations": iterations,
             "vertex_count": len(obj.data.vertices),
         }
-
 
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_mask_by_topology(self, params: dict) -> dict:
@@ -238,7 +236,9 @@ class SculptHandlersMixin:
         # Apply mask based on type
         if mask_type in ("ALL", "NONE"):
             with bpy.context.temp_override(**override):
-                bpy.ops.paint.mask_flood_fill(mode="VALUE", value=1.0 if mask_type == "ALL" else 0.0)
+                bpy.ops.paint.mask_flood_fill(
+                    mode="VALUE", value=1.0 if mask_type == "ALL" else 0.0
+                )
         elif mask_type == "CAVITY":
             bpy.ops.sculpt.mask_from_cavity()
         elif mask_type == "RANDOM":
@@ -265,14 +265,14 @@ class SculptHandlersMixin:
             "blur_iterations": blur_iterations,
         }
 
-
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_face_set_create(self, params: dict) -> dict:
         """Create face sets by grouping faces based on criteria."""
         object_name = require_param(params, "object_name", str)
         criteria = require_param(params, "criteria", str)
         criteria = validate_enum(
-            criteria, "criteria",
+            criteria,
+            "criteria",
             ["LINKED", "MATERIAL", "NORMAL", "SHARP_EDGES", "UV_ISLAND"],
         )
 
@@ -315,14 +315,14 @@ class SculptHandlersMixin:
             "face_set_count": face_set_count,
         }
 
-
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_multires_reshape(self, params: dict) -> dict:
         """Manage multiresolution modifier levels."""
         object_name = require_param(params, "object_name", str)
         action = require_param(params, "action", str)
         action = validate_enum(
-            action, "action",
+            action,
+            "action",
             ["SUBDIVIDE", "UNSUBDIVIDE", "REBUILD", "APPLY_BASE", "DELETE_HIGHER"],
         )
 
@@ -353,9 +353,7 @@ class SculptHandlersMixin:
 
         try:
             if action == "SUBDIVIDE":
-                bpy.ops.object.multires_subdivide(
-                    modifier=mod_name, mode="CATMULL_CLARK"
-                )
+                bpy.ops.object.multires_subdivide(modifier=mod_name, mode="CATMULL_CLARK")
             elif action == "UNSUBDIVIDE":
                 bpy.ops.object.multires_unsubdivide(modifier=mod_name)
             elif action == "REBUILD":
@@ -379,7 +377,6 @@ class SculptHandlersMixin:
             "sculpt_level": multires_mod.sculpt_levels,
             "render_level": multires_mod.render_levels,
         }
-
 
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_to_retopo(self, params: dict) -> dict:
@@ -562,7 +559,6 @@ class SculptHandlersMixin:
 
         return result
 
-
     @restores_object_mode(error_replies=True)
     def _handle_sculpt_extract_mask(self, params: dict) -> dict:
         """Extract masked region as a separate mesh object."""
@@ -616,7 +612,6 @@ class SculptHandlersMixin:
 
         except RuntimeError as e:
             return {"error": f"Mask extract failed: {e}"}
-
 
     def _handle_sculpt_remesh_voxel(self, params: dict) -> dict:
         """Apply voxel remesh to create uniform topology."""
@@ -673,6 +668,4 @@ class SculptHandlersMixin:
             "polygons_after": polys_after,
         }
 
-
     # ========== Rigging & Armature Handlers ==========
-

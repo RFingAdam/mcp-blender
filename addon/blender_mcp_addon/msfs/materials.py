@@ -372,12 +372,14 @@ def get_material_presets() -> dict[str, Any]:
     """
     presets = []
     for name, config in MATERIAL_PRESETS.items():
-        presets.append({
-            "name": name,
-            "msfs_type": config.get("msfs_type", "standard"),
-            "metallic": config.get("metallic", 0.0),
-            "roughness": config.get("roughness", 0.5),
-        })
+        presets.append(
+            {
+                "name": name,
+                "msfs_type": config.get("msfs_type", "standard"),
+                "metallic": config.get("metallic", 0.0),
+                "roughness": config.get("roughness", 0.5),
+            }
+        )
 
     return {
         "presets": presets,

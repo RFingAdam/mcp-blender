@@ -38,7 +38,6 @@ class MaterialHandlersMixin:
 
         return serialize_material(mat)
 
-
     def _handle_material_assign(self, params: dict) -> dict:
         """Assign a material to an object."""
         object_name = require_param(params, "object_name", str)
@@ -60,7 +59,6 @@ class MaterialHandlersMixin:
 
         return {"object": obj.name, "material": mat.name}
 
-
     def _handle_material_set_color(self, params: dict) -> dict:
         """Set material base color."""
         material_name = require_param(params, "material_name", str)
@@ -77,7 +75,6 @@ class MaterialHandlersMixin:
                 break
 
         return {"material": mat.name, "color": list(color)}
-
 
     def _handle_material_set_principled(self, params: dict) -> dict:
         """Configure Principled BSDF parameters."""
@@ -103,7 +100,6 @@ class MaterialHandlersMixin:
                 break
 
         return serialize_material(mat)
-
 
     def _handle_material_add_texture(self, params: dict) -> dict:
         """Add image texture node to material."""
@@ -133,7 +129,6 @@ class MaterialHandlersMixin:
 
         return {"material": mat.name, "image": image.name}
 
-
     def _handle_material_list(self, params: dict) -> dict:
         """List all materials."""
         materials = [{"name": mat.name, "users": mat.users} for mat in bpy.data.materials]
@@ -143,11 +138,35 @@ class MaterialHandlersMixin:
 
     # Common modifier types supported
     MODIFIER_TYPES = [
-        "SUBSURF", "BEVEL", "SOLIDIFY", "ARRAY", "MIRROR", "BOOLEAN",
-        "DECIMATE", "SMOOTH", "WEIGHTED_NORMAL", "TRIANGULATE", "WIREFRAME",
-        "SKIN", "REMESH", "SCREW", "SHRINKWRAP", "SIMPLE_DEFORM", "WELD",
-        "EDGE_SPLIT", "MASK", "LATTICE", "CURVE", "CAST", "WAVE",
-        "DISPLACE", "BUILD", "OCEAN", "CLOTH", "COLLISION", "SOFT_BODY",
+        "SUBSURF",
+        "BEVEL",
+        "SOLIDIFY",
+        "ARRAY",
+        "MIRROR",
+        "BOOLEAN",
+        "DECIMATE",
+        "SMOOTH",
+        "WEIGHTED_NORMAL",
+        "TRIANGULATE",
+        "WIREFRAME",
+        "SKIN",
+        "REMESH",
+        "SCREW",
+        "SHRINKWRAP",
+        "SIMPLE_DEFORM",
+        "WELD",
+        "EDGE_SPLIT",
+        "MASK",
+        "LATTICE",
+        "CURVE",
+        "CAST",
+        "WAVE",
+        "DISPLACE",
+        "BUILD",
+        "OCEAN",
+        "CLOTH",
+        "COLLISION",
+        "SOFT_BODY",
     ]
 
     # Default configurations for common modifiers
@@ -162,7 +181,6 @@ class MaterialHandlersMixin:
         "WIREFRAME": {"thickness": 0.02},
         "TRIANGULATE": {"quad_method": "BEAUTY"},
     }
-
 
     def _handle_material_inspect_graph(self, params: dict) -> dict:
         """Return the full shader node graph as structured JSON."""
@@ -224,12 +242,14 @@ class MaterialHandlersMixin:
         # --- Serialise links ---
         links_out = []
         for link in tree.links:
-            links_out.append({
-                "from_node": link.from_node.name,
-                "from_output": link.from_socket.name,
-                "to_node": link.to_node.name,
-                "to_input": link.to_socket.name,
-            })
+            links_out.append(
+                {
+                    "from_node": link.from_node.name,
+                    "from_output": link.from_socket.name,
+                    "to_node": link.to_node.name,
+                    "to_input": link.to_socket.name,
+                }
+            )
 
         return {
             "material": mat.name,
@@ -240,12 +260,10 @@ class MaterialHandlersMixin:
             "links": links_out,
         }
 
-
     # =====================================================================
     # 2. material_node_add
 
     # =====================================================================
-
 
     def _handle_material_node_add(self, params: dict) -> dict:
         """Add a shader node to a material."""
@@ -296,12 +314,10 @@ class MaterialHandlersMixin:
             "location": [node.location.x, node.location.y],
         }
 
-
     # =====================================================================
     # 3. material_node_connect
 
     # =====================================================================
-
 
     def _handle_material_node_connect(self, params: dict) -> dict:
         """Connect two nodes in a material's node graph."""
@@ -331,12 +347,16 @@ class MaterialHandlersMixin:
         from_socket = from_node.outputs.get(from_output_name)
         if from_socket is None:
             available = [o.name for o in from_node.outputs]
-            return {"error": f"Output '{from_output_name}' not found on '{from_node_name}'. Available: {available}"}
+            return {
+                "error": f"Output '{from_output_name}' not found on '{from_node_name}'. Available: {available}"
+            }
 
         to_socket = to_node.inputs.get(to_input_name)
         if to_socket is None:
             available = [i.name for i in to_node.inputs]
-            return {"error": f"Input '{to_input_name}' not found on '{to_node_name}'. Available: {available}"}
+            return {
+                "error": f"Input '{to_input_name}' not found on '{to_node_name}'. Available: {available}"
+            }
 
         tree.links.new(from_socket, to_socket)
 
@@ -350,12 +370,10 @@ class MaterialHandlersMixin:
             },
         }
 
-
     # =====================================================================
     # 4. material_node_group_create
 
     # =====================================================================
-
 
     def _handle_material_node_group_create(self, params: dict) -> dict:
         """Create a reusable shader node group."""
@@ -415,12 +433,10 @@ class MaterialHandlersMixin:
             "outputs": created_outputs,
         }
 
-
     # =====================================================================
     # 5. material_procedural_preset
 
     # =====================================================================
-
 
     def _handle_material_procedural_preset(self, params: dict) -> dict:
         """Create a complex procedural material from a preset."""
@@ -428,12 +444,29 @@ class MaterialHandlersMixin:
         preset = require_param(params, "preset", str).upper()
 
         valid_presets = [
-            "VEHICLE_PAINT", "BRUSHED_METAL", "CHROME", "RUBBER",
-            "CARBON_FIBER", "ASPHALT", "TARMAC", "WORN_METAL",
-            "GLASS", "PLASTIC_GLOSSY", "PLASTIC_MATTE", "CONCRETE",
-            "FABRIC", "REFLECTIVE_TAPE", "LED_DISPLAY", "RUST",
-            "GOLD", "COPPER", "SCRATCHED_PAINT", "SNOW", "WATER",
-            "WOOD", "BRICK",
+            "VEHICLE_PAINT",
+            "BRUSHED_METAL",
+            "CHROME",
+            "RUBBER",
+            "CARBON_FIBER",
+            "ASPHALT",
+            "TARMAC",
+            "WORN_METAL",
+            "GLASS",
+            "PLASTIC_GLOSSY",
+            "PLASTIC_MATTE",
+            "CONCRETE",
+            "FABRIC",
+            "REFLECTIVE_TAPE",
+            "LED_DISPLAY",
+            "RUST",
+            "GOLD",
+            "COPPER",
+            "SCRATCHED_PAINT",
+            "SNOW",
+            "WATER",
+            "WOOD",
+            "BRICK",
         ]
         if preset not in valid_presets:
             return {"error": f"Unknown preset '{preset}'. Valid: {valid_presets}"}
@@ -467,12 +500,10 @@ class MaterialHandlersMixin:
             "link_count": len(tree.links),
         }
 
-
     # =====================================================================
     # 6. material_convert_to_pbr
 
     # =====================================================================
-
 
     def _handle_material_convert_to_pbr(self, params: dict) -> dict:
         """Convert a material to a clean Principled BSDF setup."""
@@ -552,12 +583,10 @@ class MaterialHandlersMixin:
             "node_count": len(tree.nodes),
         }
 
-
     # =====================================================================
     # 7. material_preview_render
 
     # =====================================================================
-
 
     def _handle_material_preview_render(self, params: dict) -> dict:
         """Render a material preview on a standard shape."""
@@ -566,7 +595,9 @@ class MaterialHandlersMixin:
 
         preview_shape = params.get("preview_shape", "SPHERE").upper()
         if preview_shape not in ("SPHERE", "CUBE", "PLANE", "CYLINDER"):
-            return {"error": f"Invalid preview_shape '{preview_shape}'. Must be SPHERE, CUBE, PLANE, or CYLINDER."}
+            return {
+                "error": f"Invalid preview_shape '{preview_shape}'. Must be SPHERE, CUBE, PLANE, or CYLINDER."
+            }
 
         resolution = int(params.get("resolution", 512))
         engine = params.get("engine", "EEVEE").upper()
@@ -574,7 +605,9 @@ class MaterialHandlersMixin:
             return {"error": f"Invalid engine '{engine}'. Must be EEVEE or CYCLES."}
 
         safe_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in material_name)
-        output_path = params.get("output_path", os.path.join(tempfile.gettempdir(), f"material_preview_{safe_name}.png"))
+        output_path = params.get(
+            "output_path", os.path.join(tempfile.gettempdir(), f"material_preview_{safe_name}.png")
+        )
 
         # Remember current state
         original_scene = bpy.context.window.scene
@@ -609,14 +642,18 @@ class MaterialHandlersMixin:
 
             # ── Create preview object ───────────────────────────────
             if preview_shape == "SPHERE":
-                bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=32, radius=1.0, location=(0, 0, 0))
+                bpy.ops.mesh.primitive_uv_sphere_add(
+                    segments=64, ring_count=32, radius=1.0, location=(0, 0, 0)
+                )
                 bpy.ops.object.shade_smooth()
             elif preview_shape == "CUBE":
                 bpy.ops.mesh.primitive_cube_add(size=1.6, location=(0, 0, 0))
             elif preview_shape == "PLANE":
                 bpy.ops.mesh.primitive_plane_add(size=2.0, location=(0, 0, 0))
             elif preview_shape == "CYLINDER":
-                bpy.ops.mesh.primitive_cylinder_add(radius=0.8, depth=1.6, vertices=64, location=(0, 0, 0))
+                bpy.ops.mesh.primitive_cylinder_add(
+                    radius=0.8, depth=1.6, vertices=64, location=(0, 0, 0)
+                )
                 bpy.ops.object.shade_smooth()
 
             preview_obj = bpy.context.active_object
@@ -636,7 +673,7 @@ class MaterialHandlersMixin:
             # Point at origin
             direction = cam_obj.location.copy()
             direction.negate()
-            rot_quat = direction.to_track_quat('-Z', 'Y')
+            rot_quat = direction.to_track_quat("-Z", "Y")
             cam_obj.rotation_euler = rot_quat.to_euler()
 
             # ── Create lighting ─────────────────────────────────────
@@ -695,6 +732,4 @@ class MaterialHandlersMixin:
             if "__preview_world__" in bpy.data.worlds:
                 bpy.data.worlds.remove(bpy.data.worlds["__preview_world__"])
 
-
     # ========== Measurement & Validation Handlers ==========
-
