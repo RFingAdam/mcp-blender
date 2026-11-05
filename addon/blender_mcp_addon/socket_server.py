@@ -1,12 +1,45 @@
-"""TCP socket server for the Meshwire addon using bpy.app.timers."""
+"""TCP socket server for the Meshwire addon using bpy.app.timers.
+
+Every socket is non-blocking and every client is a small state machine with a
+bounded read buffer and a bounded write buffer. A tick reads what is there, runs
+each complete request, queues the reply and sends as much of it as the socket will
+take. Nothing here ever waits on a peer.
+"""
 
 import json
 import socket
+import time
 import traceback
 
 import bpy
 
+from . import wire
 from .handlers import CommandHandlers
+
+MAX_LINE = 32 * 1024 * 1024  # largest request line accepted
+MAX_WBUF = 256 * 1024 * 1024  # most unsent reply bytes held for one client
+MAX_CLIENTS = 8
+READ_PER_TICK = 4 * 1024 * 1024  # most bytes read from one client per tick
+SEND_CHUNK = 1024 * 1024
+CLOSE_GRACE = 1.0  # seconds a closing client may take to read its last reply
+
+
+class _Client:
+    """One connection: its socket, its buffers and where it is in its life."""
+
+    def __init__(self, sock: socket.socket):
+        self.sock = sock
+        self.rbuf = bytearray()  # bytes received, not yet a complete line
+        self.wbuf = bytearray()  # reply bytes not yet sent
+        self.authed = False  # token auth sets this (nothing checks it yet)
+        self.deadline = 0.0  # monotonic time by which auth must finish; 0 means none
+        self.closing = False  # close once wbuf drains; read nothing more
+        self.close_at = 0.0  # set once wbuf drained while closing
+        self.dead = False  # drop on this tick's cleanup pass
+
+
+def _error(code: int, message: str, msg_id=None) -> dict:
+    return {"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": msg_id}
 
 
 class MCPSocketServer:
@@ -21,7 +54,7 @@ class MCPSocketServer:
         self.host = host
         self.port = port
         self.socket: socket.socket | None = None
-        self.clients: dict[socket.socket, bytes] = {}  # client -> buffer
+        self.clients: dict[socket.socket, _Client] = {}
         self.is_running = False
         self.handlers = CommandHandlers()
         self._timer_registered = False
@@ -106,81 +139,170 @@ class MCPSocketServer:
         return 0.01
 
     def _accept_clients(self):
-        """Accept any pending client connections."""
+        """Accept pending connections. Past MAX_CLIENTS the newcomer is told why and closed."""
         if self.socket is None:
             return
 
-        try:
-            while True:
-                try:
-                    client, addr = self.socket.accept()
-                    client.setblocking(False)
-                    self.clients[client] = b""
-                    print(f"MCP client connected: {addr}")
-                except BlockingIOError:
-                    # No pending connections
-                    break
-        except Exception as e:
-            print(f"Error accepting client: {e}")
+        while True:
+            try:
+                sock, addr = self.socket.accept()
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError as e:
+                print(f"Error accepting client: {e}")
+                return
+            sock.setblocking(False)
+            client = _Client(sock)
+            live = sum(1 for c in self.clients.values() if not c.closing)
+            if live >= MAX_CLIENTS:
+                self._fail(
+                    client,
+                    wire.E_TOO_MANY,
+                    f"Too many clients: this add-on serves at most {MAX_CLIENTS} at once",
+                )
+                print(f"MCP client refused (limit {MAX_CLIENTS}): {addr}")
+            else:
+                print(f"MCP client connected: {addr}")
+            self.clients[sock] = client
 
     def _process_clients(self):
-        """Process data from all connected clients."""
-        disconnected = []
-
-        for client, buffer in list(self.clients.items()):
+        """Read, run and answer every client, then drop the ones that are finished."""
+        now = time.monotonic()
+        for client in list(self.clients.values()):
             try:
-                # Try to receive data
-                try:
-                    data = client.recv(65536)
-                    if not data:
-                        # Client disconnected
-                        disconnected.append(client)
-                        continue
-                    buffer += data
-                    self.clients[client] = buffer
-                except BlockingIOError:
-                    # No data available
-                    pass
-                except ConnectionResetError:
-                    disconnected.append(client)
-                    continue
-
-                # Process complete messages (newline-delimited JSON)
-                buffer = self.clients[client]
-                while b"\n" in buffer:
-                    line, buffer = buffer.split(b"\n", 1)
-                    self.clients[client] = buffer
-
-                    if line.strip():
-                        response = self._handle_message(line)
-                        self._send_response(client, response)
-
+                self._read(client)
+                if not client.closing:
+                    self._run_lines(client)
+                self._flush(client)
+                self._finish_closing(client, now)
             except Exception as e:
                 print(f"Error processing client: {e}")
                 traceback.print_exc()
-                disconnected.append(client)
+                client.dead = True
 
-        # Clean up disconnected clients
-        for client in disconnected:
+        for sock, client in list(self.clients.items()):
+            if client.dead:
+                self._drop(sock, client)
+
+    def _read(self, client: _Client):
+        """Take up to READ_PER_TICK bytes. A closing client's input is thrown away."""
+        taken = 0
+        while taken < READ_PER_TICK and not client.dead:
             try:
-                client.close()
-            except Exception:
-                pass
-            if client in self.clients:
-                del self.clients[client]
-            print("MCP client disconnected")
+                data = client.sock.recv(min(1024 * 1024, READ_PER_TICK - taken))
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError:
+                client.dead = True
+                return
+            if not data:
+                client.dead = True  # peer closed; anything unsent has nowhere to go
+                return
+            taken += len(data)
+            if not client.closing:
+                client.rbuf += data
 
-    def _handle_message(self, data: bytes) -> dict:
-        """Handle an incoming JSON-RPC message."""
+    def _run_lines(self, client: _Client):
+        """Run each complete line in rbuf. A bad line queues an error and ends the client."""
+        while not client.closing:
+            end = client.rbuf.find(b"\n")
+            if end < 0:
+                if len(client.rbuf) > MAX_LINE:
+                    self._too_large(client)
+                return
+            if end > MAX_LINE:
+                self._too_large(client)
+                return
+            line = bytes(client.rbuf[:end])
+            del client.rbuf[: end + 1]
+            if not line.strip():
+                continue
+            self._handle_line(client, line)
+
+    def _too_large(self, client: _Client):
+        self._fail(
+            client,
+            wire.E_TOO_LARGE,
+            f"Request too large: a line may be at most {MAX_LINE} bytes",
+        )
+
+    def _handle_line(self, client: _Client, line: bytes):
         try:
-            message = json.loads(data.decode("utf-8"))
-        except json.JSONDecodeError as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32700, "message": f"Parse error: {e}"},
-                "id": None,
-            }
+            message = json.loads(line.decode("utf-8"))
+        except UnicodeDecodeError:
+            self._fail(client, wire.E_PARSE, "Parse error: request is not valid UTF-8")
+            return
+        except ValueError as e:
+            self._fail(client, wire.E_PARSE, f"Parse error: {e}")
+            return
+        if not isinstance(message, dict):
+            self._fail(client, wire.E_PARSE, "Parse error: request must be a JSON object")
+            return
+        self._queue(client, self._handle_message(message), message.get("id"))
 
+    def _fail(self, client: _Client, code: int, text: str):
+        """Queue an error reply, then close once it has been sent."""
+        client.rbuf.clear()
+        self._queue(client, _error(code, text), None)
+        client.closing = True
+
+    def _queue(self, client: _Client, response: dict, msg_id):
+        """Encode a reply into wbuf. One that would overflow MAX_WBUF becomes an error reply."""
+        try:
+            data = (json.dumps(response, default=self._json_default) + "\n").encode("utf-8")
+        except Exception as e:
+            data = None
+            problem = f"Reply could not be encoded: {e}"
+            code = -32603
+        else:
+            problem = (
+                f"Reply too large: {len(data)} bytes does not fit the {MAX_WBUF} byte write buffer"
+            )
+            code = wire.E_REPLY_TOO_LARGE
+        if data is None or len(client.wbuf) + len(data) > MAX_WBUF:
+            data = (json.dumps(_error(code, problem, msg_id)) + "\n").encode("utf-8")
+        client.wbuf += data
+
+    def _flush(self, client: _Client):
+        """Send from wbuf until the socket stops taking bytes."""
+        while client.wbuf and not client.dead:
+            try:
+                with memoryview(client.wbuf) as view:
+                    sent = client.sock.send(view[:SEND_CHUNK])
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError:
+                client.dead = True
+                client.wbuf.clear()
+                return
+            del client.wbuf[:sent]
+
+    def _finish_closing(self, client: _Client, now: float):
+        """Once a closing client's reply is out, half-close and give the peer a moment to read."""
+        if not client.closing or client.dead or client.wbuf:
+            return
+        if client.close_at == 0.0:
+            try:
+                client.sock.shutdown(socket.SHUT_WR)
+            except OSError:
+                client.dead = True
+                return
+            client.close_at = now + CLOSE_GRACE
+        elif now >= client.close_at:
+            client.dead = True
+
+    def _drop(self, sock: socket.socket, client: _Client):
+        client.wbuf.clear()
+        client.rbuf.clear()
+        try:
+            sock.close()
+        except Exception:
+            pass
+        self.clients.pop(sock, None)
+        print("MCP client disconnected")
+
+    def _handle_message(self, message: dict) -> dict:
+        """Run one parsed JSON-RPC request and return its reply."""
         msg_id = message.get("id")
         method = message.get("method")
         params = message.get("params", {})
@@ -206,14 +328,6 @@ class MCPSocketServer:
                 "error": {"code": -32603, "message": str(e)},
                 "id": msg_id,
             }
-
-    def _send_response(self, client: socket.socket, response: dict):
-        """Send a JSON response to a client."""
-        try:
-            data = json.dumps(response, default=self._json_default) + "\n"
-            client.sendall(data.encode("utf-8"))
-        except Exception as e:
-            print(f"Error sending response: {e}")
 
     @staticmethod
     def _json_default(obj):
