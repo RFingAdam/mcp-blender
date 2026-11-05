@@ -72,6 +72,7 @@ class AIHandlersMixin:
     def _handle_ai_model_status(self, params: dict) -> dict:
         """Check AI model generation status."""
         from ..external.ai_models import check_status
+        from . import CHANGED_KEY
 
         result = check_status(
             job_id=require_param(params, "job_id", str),
@@ -81,7 +82,7 @@ class AIHandlersMixin:
         # imported nothing leaves the scene alone and pushes none.
         imported = result.get("imported")
         if isinstance(imported, dict) and imported.get("success") is not False:
-            result["_pushed_changes"] = True
+            result[CHANGED_KEY] = True
         return result
 
     def _handle_ai_generate_model_sync(self, params: dict) -> dict:
