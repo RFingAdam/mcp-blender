@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The truth harness no longer lets an allowed failure hide a new one.** Each row in
+  `SOFT_FAIL_ALLOWED` and `KNOWN_UNREACHED` now carries a regex for the message the tool really returns
+  ("No AI backends are available", "needs an open 3D viewport", and so on). A `SOFT_FAIL` whose message
+  does not match its tool's pattern is classed `BUG`, so an allowed tool that starts failing for another
+  reason shows up in the next run. The README table reads the reason from the same row.
 - **The nightly harness fails on too many session crashes.** `--retry-crashes` still forgives the known
   Blender 4.2 and 4.3 segfault, which lands on a different case each run and passes alone. A run with
   more than 3 such crashes now exits non-zero, so a crash of ours that happens to pass alone cannot hide

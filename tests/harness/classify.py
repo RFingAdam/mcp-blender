@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import re
+
+from .fixtures import EXPECTED_SOFT_FAILS
+
 NETWORK_SENTINEL = "harness: network disabled"
 
 
@@ -17,7 +21,18 @@ def _sentinel_error(result) -> bool:
     )
 
 
-def classify(case_pass: str, outcome: dict | None) -> str:
+def _message(result) -> str:
+    """The error text of a failed result, or its message when it names no error."""
+    return str(result.get("error") or result.get("message") or "")
+
+
+def _expected_soft_fail(tool: str | None, result) -> bool:
+    """False only when the tool has a row and the failure is not the one the row names."""
+    row = EXPECTED_SOFT_FAILS.get(tool)
+    return row is None or re.search(row.pattern, _message(result)) is not None
+
+
+def classify(case_pass: str, outcome: dict | None, tool: str | None = None) -> str:
     if outcome is None:
         return "CRASH"
     status = outcome.get("status")
@@ -28,7 +43,10 @@ def classify(case_pass: str, outcome: dict | None) -> str:
             return "EXPECTED"
         if case_pass == "invalid":
             return "BUG"
-        return "SOFT_FAIL" if _soft_fail(outcome.get("result")) else "PASS"
+        result = outcome.get("result")
+        if not _soft_fail(result):
+            return "PASS"
+        return "SOFT_FAIL" if _expected_soft_fail(tool, result) else "BUG"
     if outcome.get("type") == "SystemExit":
         return "CRASH"
     if NETWORK_SENTINEL in str(outcome.get("message", "")):

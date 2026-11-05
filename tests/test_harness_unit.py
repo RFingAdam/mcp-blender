@@ -473,3 +473,75 @@ def test_retry_crashes_fails_past_the_cap(monkeypatch, tmp_path, capsys):
     assert "more than 3: " in capsys.readouterr().err
     # the results are still written, so the run can be inspected
     assert (out / "results.json").exists()
+
+
+def _soft(message):
+    return {"status": "ok", "result": {"error": message}}
+
+
+def test_soft_fail_with_the_expected_message_stays_soft_fail():
+    outcome = _soft("No AI backends are available")
+    assert classify("minimal", outcome, "ai_generate_model") == "SOFT_FAIL"
+
+
+def test_soft_fail_with_another_message_is_a_bug():
+    outcome = _soft("Cannot add node of type ShaderNodeMath")
+    assert classify("minimal", outcome, "ai_generate_model") == "BUG"
+
+
+def test_unreached_tool_with_another_message_is_a_bug():
+    assert classify("minimal", _soft("Job not found in any backend"), "ai_model_status") == (
+        "SOFT_FAIL"
+    )
+    assert classify("minimal", _soft("KeyError: 'job'"), "ai_model_status") == "BUG"
+
+
+def test_soft_fail_without_a_message_is_a_bug_for_a_tool_with_a_row():
+    outcome = {"status": "ok", "result": {"success": False}}
+    assert classify("minimal", outcome, "ai_generate_model") == "BUG"
+
+
+def test_tool_with_no_row_keeps_soft_fail_whatever_it_says():
+    assert classify("minimal", _soft("anything"), "scene_info") == "SOFT_FAIL"
+    assert classify("minimal", _soft("anything")) == "SOFT_FAIL"
+
+
+def test_pass_and_network_sentinel_ignore_the_row():
+    ok = {"status": "ok", "result": {"x": 1}}
+    assert classify("minimal", ok, "ai_generate_model") == "PASS"
+    assert classify("minimal", _soft("harness: network disabled"), "ai_generate_model") == (
+        "EXPECTED"
+    )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Cannot add node of type ShaderNodeMath",
+        "Not a shader or geometry node tree",
+        "Failed to build the compositor graph: Cannot add node of type ShaderNodeMath",
+    ],
+)
+def test_ai_texture_from_render_pattern_does_not_hide_the_4_2_compositor_failure(message):
+    assert classify("minimal", _soft(message), "ai_texture_from_render") == "BUG"
+
+
+def test_every_row_has_a_specific_pattern():
+    import re
+
+    from tests.harness.fixtures import EXPECTED_SOFT_FAILS
+
+    assert EXPECTED_SOFT_FAILS
+    for tool, row in EXPECTED_SOFT_FAILS.items():
+        assert row.reason, tool
+        compiled = re.compile(row.pattern)
+        assert not compiled.search(""), f"{tool}: pattern matches an empty message"
+        assert not compiled.search("some unrelated failure"), tool
+        assert len(row.pattern) >= 8, tool
+
+
+def test_pipeline_generate_names_the_stage_that_failed():
+    real = "Pipeline stage failed: generate: generation failed: No AI backends are available"
+    assert classify("minimal", _soft(real), "ai_pipeline_generate") == "SOFT_FAIL"
+    other = "Pipeline stage failed: texture: Cannot add node of type ShaderNodeMath"
+    assert classify("minimal", _soft(other), "ai_pipeline_generate") == "BUG"

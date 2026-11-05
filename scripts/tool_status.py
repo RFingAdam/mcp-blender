@@ -185,7 +185,7 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
     totals = [str(sum(map(works, states[s].values()))) for s in SERIES]
     rows.append(["**Total**", f"**{len(tools)}**", *(f"**{t}**" for t in totals), ""])
 
-    why = {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}
+    why = {t: k.reason for t, k in {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}.items()}
     for t in g["unchecked"]:
         if t not in why and any(states[s][t] == "offline" for s in SERIES):
             why[t] = "needs network access, which the harness turns off"

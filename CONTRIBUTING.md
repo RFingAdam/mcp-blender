@@ -198,9 +198,12 @@ baselines. Copy the same lines into every other `blender-*.json` baseline too, s
 passes. The nightly job flags any real difference there.
 
 If the new tool has a benign `SOFT_FAIL` case, such as no AI backend, add the tool to
-`SOFT_FAIL_ALLOWED` in `tests/harness/fixtures.py`, with a reason. A test fails until you do. A
-`SOFT_FAIL` that hides a real defect needs a fix, not a table entry: `SOFT_FAIL_DEFECTS` must
-stay empty.
+`SOFT_FAIL_ALLOWED` in `tests/harness/fixtures.py`, as a `Known(reason, pattern)`. The reason is
+for people. The pattern is a regex that names the specific cause and matches the message the tool
+really returns. The driver turns a `SOFT_FAIL` whose message does not match the pattern into a
+`BUG`, so a tool that starts failing for a new reason cannot hide behind the row. Do not widen a
+pattern to make a `BUG` go away. A test fails until the row exists. A `SOFT_FAIL` that hides a
+real defect needs a fix, not a table entry: `SOFT_FAIL_DEFECTS` must stay empty.
 
 ## Project Structure
 

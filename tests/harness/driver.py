@@ -178,7 +178,7 @@ def _run(
         _keep_crash_dumps(tmp_dir, out_dir, current if current is not None else nxt)
         nxt = max(outcomes, default=-1) + 1
 
-    return {c.id: classify(c.pass_name, outcomes.get(i)) for i, c in enumerate(cases)}
+    return {c.id: classify(c.pass_name, outcomes.get(i), c.tool) for i, c in enumerate(cases)}
 
 
 def retry_crashes(
