@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An MCP client can now see that a tool failed.** A reply from Blender that carries an error, or reports
+  `success: false`, now comes back with `isError` set, so the client treats it as a failure. The JSON text
+  is unchanged. The server's argument log also no longer holds API keys or whole scripts: values under
+  keys such as `api_key`, `token`, `secret` and `password` are logged as `<redacted>`, and any string over
+  200 characters is logged as its length.
 - **The socket lane runs nightly on 4.2, 4.3, 4.4, 5.0 and 5.1.** Before, the viewport and sculpt tools
   that the background driver cannot reach were checked on 4.5 and 5.2 only. The nightly job now runs the
   lane after the driver as a best-effort step, and `socket-lane.json` holds a baseline for all seven

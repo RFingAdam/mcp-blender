@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import re
 
 from mcp.server import (
     Server,
@@ -6358,6 +6359,41 @@ HANDLER_READS_TIMEOUT: frozenset[str] = frozenset({"ai_generate_texture_sync"})
 REPLY_MARGIN = 30.0
 
 
+_SECRET_KEY = re.compile(r"(?i)(api_?key|token|secret|password)")
+_LONG_STRING = 200
+
+
+def result_failed(result) -> bool:
+    """True when a reply reports a failure.
+
+    A reply carries ``"error": None`` on success in places (execute_script), so
+    only a truthy error counts. The add-on's ``_succeeded`` is the same rule,
+    kept as a separate copy because the add-on cannot import this package.
+    """
+    if isinstance(result, dict):
+        return bool(result.get("error")) or result.get("success") is False
+    return False
+
+
+def redact(arguments):
+    """Copy of tool arguments that is safe to log.
+
+    The value of any key that looks like a credential becomes ``<redacted>``, and
+    any string longer than 200 characters (a whole script, say) becomes
+    ``<N chars>``. The input is not modified.
+    """
+    if isinstance(arguments, dict):
+        return {
+            k: "<redacted>" if isinstance(k, str) and _SECRET_KEY.search(k) else redact(v)
+            for k, v in arguments.items()
+        }
+    if isinstance(arguments, (list, tuple)):
+        return [redact(v) for v in arguments]
+    if isinstance(arguments, str) and len(arguments) > _LONG_STRING:
+        return f"<{len(arguments)} chars>"
+    return arguments
+
+
 def create_server(host: str, port: int) -> Server:
     """Create and configure the MCP server."""
     server = Server("meshwire")
@@ -6376,7 +6412,7 @@ def create_server(host: str, port: int) -> Server:
         """Handle tool calls by forwarding to Blender."""
         name = params.name
         arguments = params.arguments or {}
-        logger.info(f"Tool call: {name} with args: {arguments}")
+        logger.info(f"Tool call: {name} with args: {redact(arguments)}")
         try:
             client = await get_client(host, port)
             # Map tool name to Blender command (remove 'blender_' prefix)
@@ -6400,7 +6436,10 @@ def create_server(host: str, port: int) -> Server:
                 result_text = json.dumps(result, indent=2)
             else:
                 result_text = str(result)
-            return CallToolResult(content=[TextContent(type="text", text=result_text)])
+            return CallToolResult(
+                content=[TextContent(type="text", text=result_text)],
+                isError=result_failed(result),
+            )
         except ConnectionRefusedError:
             return CallToolResult(
                 content=[

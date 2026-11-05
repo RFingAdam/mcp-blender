@@ -12,6 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests.result_cases import RESULT_CASES
+
 ADDON = Path(__file__).resolve().parent.parent / "addon" / "blender_mcp_addon"
 ROOT = "_undo_gating_addon"
 
@@ -42,6 +44,17 @@ def handlers(monkeypatch):
 
 def test_execute_script_reply_shape_counts_as_success(handlers):
     assert handlers.mod._succeeded({"success": True, "error": None}) is True
+
+
+def test_execute_script_success_pushes_undo(handlers):
+    h = _handlers_with(handlers, "execute_script", {"success": True, "error": None, "output": ""})
+    h.handle("execute_script", {})
+    handlers.bpy.ops.ed.undo_push.assert_called_once_with(message="execute_script")
+
+
+@pytest.mark.parametrize(("reply", "failed"), RESULT_CASES)
+def test_succeeded_matches_shared_table(handlers, reply, failed):
+    assert handlers.mod._succeeded(reply) is (not failed)
 
 
 def test_error_and_success_false_count_as_failures(handlers):
