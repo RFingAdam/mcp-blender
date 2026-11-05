@@ -1,11 +1,15 @@
 """Tests for MCP server."""
 
 import asyncio
+import json
+import logging
 
+import pytest
 from mcp_types import CallToolRequestParams
 
 from mcp_blender import server as server_module
 from mcp_blender.server import TOOLS, create_server
+from tests.result_cases import RESULT_CASES
 
 
 class TestToolDefinitions:
@@ -422,3 +426,64 @@ class TestLongRunning:
         assert server_module.HANDLER_READS_TIMEOUT <= {
             _short(t.name) for t in TOOLS if "timeout" in t.input_schema["properties"]
         }
+
+
+class _ReplyClient:
+    def __init__(self, reply):
+        self.reply = reply
+
+    async def send_command(self, command, arguments, timeout=None):
+        return self.reply
+
+
+def _call_result(monkeypatch, reply, arguments=None):
+    async def fake_get_client(host="127.0.0.1", port=9876):
+        return _ReplyClient(reply)
+
+    monkeypatch.setattr(server_module, "get_client", fake_get_client)
+    entry = create_server("127.0.0.1", 9876)._request_handlers["tools/call"]
+    params = CallToolRequestParams(name="blender_get_scene_info", arguments=arguments or {})
+    return asyncio.run(entry.handler(None, params))
+
+
+def test_error_dict_sets_is_error(monkeypatch):
+    result = _call_result(monkeypatch, {"error": "x"})
+    assert result.is_error is True
+    assert json.loads(result.content[0].text) == {"error": "x"}
+
+
+def test_success_false_sets_is_error(monkeypatch):
+    result = _call_result(monkeypatch, {"success": False, "message": "no"})
+    assert result.is_error is True
+    assert json.loads(result.content[0].text)["message"] == "no"
+
+
+def test_error_none_is_success(monkeypatch):
+    result = _call_result(monkeypatch, {"success": True, "error": None})
+    assert not result.is_error
+
+
+@pytest.mark.parametrize(("reply", "failed"), RESULT_CASES)
+def test_result_failed_matches_shared_table(reply, failed):
+    assert server_module.result_failed(reply) is failed
+
+
+def test_redact_hides_secret_keys_at_any_depth():
+    out = server_module.redact(
+        {"config": {"api_key": "sk-1", "items": [{"Token": "t"}]}, "n": 3, "SECRET": 1}
+    )
+    assert out == {
+        "config": {"api_key": "<redacted>", "items": [{"Token": "<redacted>"}]},
+        "n": 3,
+        "SECRET": "<redacted>",
+    }
+
+
+def test_argument_log_redacts_keys_and_long_strings(monkeypatch, caplog):
+    args = {"config": {"api_key": "sk-1"}, "script": "x" * 500}
+    with caplog.at_level(logging.INFO, logger="meshwire"):
+        _call_result(monkeypatch, {"success": True}, args)
+    assert "sk-1" not in caplog.text
+    assert "x" * 200 not in caplog.text
+    assert "<500 chars>" in caplog.text
+    assert args["config"]["api_key"] == "sk-1"
