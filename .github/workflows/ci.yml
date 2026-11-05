@@ -26,6 +26,9 @@ jobs:
       - name: Run Ruff
         run: uv run --locked --extra dev --python 3.11 ruff check .
 
+      - name: Check formatting
+        run: uv run --locked --extra dev --python 3.11 ruff format --check .
+
   test:
     runs-on: ubuntu-latest
     strategy:

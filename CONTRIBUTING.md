@@ -57,7 +57,9 @@ agreement. Read CLA.md before you submit if you want the full terms.
 
 ## Code Style
 
-We use [Ruff](https://github.com/astral-sh/ruff) for linting and formatting.
+We use [Ruff](https://github.com/astral-sh/ruff) for linting and formatting. CI fails if
+`ruff format --check .` would change a Python file, so run `ruff format .` before you push.
+Code blocks in Markdown are examples and are not formatted.
 
 ```bash
 # Check for issues
@@ -283,6 +285,7 @@ offered = _enum_identifiers(bpy.types.BooleanModifier, "solver")
 3. **Run tests and linting:**
    ```bash
    ruff check .
+   ruff format --check .
    pytest tests/ --ignore=tests/blender_integration_test.py
    ```
 
