@@ -313,6 +313,32 @@ def check_validator_calls(addon_dir: Path = ADDON_DIR) -> list[str]:
     return sorted(out)
 
 
+def check_validate_filepath_result_used(addon_dir: Path = ADDON_DIR) -> list[str]:
+    """``validate_filepath`` calls used as a bare statement.
+
+    The helper expands ``~`` and makes the path absolute, so discarding the
+    return value validates a path the handler then uses in its raw form.
+    """
+    out: list[str] = []
+    for path in _python_files(addon_dir):
+        rel = _rel(path, addon_dir)
+        tree = _parse(path)
+        aliases = _validator_aliases(tree)
+        for node, symbol in _enclosing_symbols(tree):
+            if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
+                continue
+            call = node.value
+            fname = _called_name(call)
+            if isinstance(call.func, ast.Name):
+                fname = aliases.get(fname, fname)
+            if fname != "validate_filepath":
+                continue
+            first = _call_arg(call, 0, "value")
+            label = ast.unparse(first) if first is not None else "?"
+            out.append(f"{rel}::{symbol}: validate_filepath result unused: {label}")
+    return sorted(out)
+
+
 # ---------------------------------------------------------------------------
 # Handler registry and schema checks
 # ---------------------------------------------------------------------------
@@ -404,6 +430,17 @@ def _param_reads(func: ast.FunctionDef) -> tuple[set[str], bool]:
         ):
             key = _const_str(node.left)
             handled.add(id(node.comparators[0]))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in ("require_param", "optional_param")
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == pname
+        ):
+            key = _const_str(node.args[1])
+            if key is not None:
+                handled.add(id(node.args[0]))
         if key is not None:
             keys.add(key)
     escapes = any(
@@ -446,6 +483,7 @@ CHECKS = {
     "relative_imports": check_relative_imports,
     "self_attributes": check_self_attributes,
     "validator_calls": check_validator_calls,
+    "validate_filepath_result_used": check_validate_filepath_result_used,
     "schema_params": check_schema_params,
     "tool_handler_parity": check_tool_handler_parity,
 }
@@ -549,6 +587,21 @@ def test_fixture_validator_calls(tmp_path):
     ]
 
 
+def test_fixture_validate_filepath_result_used(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "a.py": "def f(v):\n"
+            "    validate_filepath(v, 'p')\n"
+            "    p = validate_filepath(v, 'p')\n"
+            "    return validate_filepath(v, 'p')\n",
+        },
+    )
+    assert check_validate_filepath_result_used(addon) == [
+        "addon/pkg/a.py::f: validate_filepath result unused: v"
+    ]
+
+
 def test_fixture_two_swapped_calls_are_two_entries_and_a_third_fails(tmp_path):
     two = "def f(v):\n    validate_enum(v, ['A'], 'mode')\n    validate_enum(v, ['A'], 'size')\n"
     addon = _make_addon(tmp_path, {"a.py": two})
@@ -597,6 +650,23 @@ def test_fixture_schema_params_whole_params_escape(tmp_path):
         },
     )
     assert check_schema_params(addon, {"x": {"properties": {"size": {}}}}) == []
+
+
+def test_fixture_schema_params_require_param_reads_one_key(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY,
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        require_param(params, 'size', int)\n"
+            "        optional_param(params, 'bogus', 1)\n",
+        },
+    )
+    tools = {"x": {"properties": {"size": {}, "unused": {}}}}
+    assert check_schema_params(addon, tools) == [
+        "addon/pkg/handlers/a.py::_handle_x: reads 'bogus' not in schema",
+        "addon/pkg/handlers/a.py::_handle_x: schema 'unused' never read",
+    ]
 
 
 def test_fixture_tool_handler_parity(tmp_path):

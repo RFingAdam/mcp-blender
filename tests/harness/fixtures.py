@@ -200,6 +200,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "ai_generate_reference_image": "no AI backend is reachable offline",
     "ai_generate_texture": "no AI backend is reachable offline",
     "ai_generate_texture_sync": "no AI backend is reachable offline",
+    "ai_inpaint_texture": "no AI backend is reachable offline",
     "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
     "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
     "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
