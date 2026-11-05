@@ -994,16 +994,57 @@ def test_undo_and_redo_never_push():
     assert {"harness_reset", "harness_exec"} <= harness_only
 
 
+READ_TOOLS = frozenset(
+    {
+        "action_list",
+        "ai_get_backend_info",
+        "ai_pipeline_status",
+        "ai_queue_list",
+        "collection_list",
+        "get_version",
+        "keyframe_list",
+        "material_list",
+        "modifier_list",
+        "msfs_get_lod_info",
+        "msfs_livery_get_template_info",
+        "object_get",
+        "object_list",
+        "refine_list_sessions",
+        "scene_info",
+        "ai_model_status",
+    }
+)
+
+# Read-looking tools that are not plain reads, each with the reason.
+READ_TOOL_EXCEPTIONS = {
+    "ai_model_status": (
+        "imports the finished model when auto_import is on, so it pushes one undo "
+        "step on an import and none on a plain poll (CONDITIONALLY_MUTATING)"
+    ),
+}
+
+
 def test_read_tools_are_non_mutating():
     non_mutating = _module_frozenset("NON_MUTATING")
-    reads = [
+    conditional = _module_frozenset("CONDITIONALLY_MUTATING")
+    registered = set(_registered_handlers(ADDON_DIR))
+    assert all(reason.strip() for reason in READ_TOOL_EXCEPTIONS.values())
+    assert set(READ_TOOL_EXCEPTIONS) <= READ_TOOLS
+    assert READ_TOOLS <= registered
+    assert sorted((READ_TOOLS - set(READ_TOOL_EXCEPTIONS)) - non_mutating) == []
+    assert sorted(set(READ_TOOL_EXCEPTIONS) & non_mutating) == []
+    assert sorted(set(READ_TOOL_EXCEPTIONS) - conditional) == []
+
+
+def test_read_looking_tools_are_classified():
+    """A new *_get/_list/_info/_status handler must be classified on purpose."""
+    looks_like_read = {
         name
         for name in _registered_handlers(ADDON_DIR)
         if name.endswith(("_get", "_list", "_info", "_status"))
         or name.startswith(("get_", "list_"))
-    ]
-    assert reads
-    assert sorted(set(reads) - non_mutating) == []
+    }
+    assert sorted(looks_like_read - READ_TOOLS) == []
 
 
 def test_fixture_required_matches(tmp_path):

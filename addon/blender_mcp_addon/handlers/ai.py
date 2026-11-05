@@ -69,10 +69,16 @@ class AIHandlersMixin:
         """Check AI model generation status."""
         from ..external.ai_models import check_status
 
-        return check_status(
+        result = check_status(
             job_id=require_param(params, "job_id", str),
             auto_import=params.get("auto_import", True),
         )
+        # An import adds objects, so handle() pushes one undo step. A poll that
+        # imported nothing leaves the scene alone and pushes none.
+        imported = result.get("imported")
+        if isinstance(imported, dict) and imported.get("success") is not False:
+            result["_pushed_changes"] = True
+        return result
 
     def _handle_ai_generate_model_sync(self, params: dict) -> dict:
         """Generate 3D model and poll until complete (synchronous)."""
