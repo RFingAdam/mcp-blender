@@ -233,6 +233,9 @@ metrics (model / texture / animation).
 `refine_iteration`, `refine_create_session`, `refine_get_session`,
 `refine_list_sessions`.
 
+`execute_script` refuses every call until the user turns on **Allow Python** in the Meshwire sidebar
+tab in Blender. The switch is off at every start and cannot be set by any tool.
+
 See [`usage.md`](usage.md#scenario-iterative-3d-refinement) for a
 full walkthrough.
 

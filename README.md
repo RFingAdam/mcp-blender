@@ -81,7 +81,11 @@ python scripts/package_addon.py
 ```
 
 In Blender, open **Edit > Preferences > Add-ons**, choose **Install from Disk** from the menu at
-the top right, select the ZIP, and enable **Meshwire**.
+the top right, select the ZIP, and enable **Meshwire**. Host, port and API keys are add-on
+preferences, stored per user, so a shared `.blend` file carries none of them.
+
+`execute_script` is off until you turn it on. Open the **Meshwire** tab in the 3D Viewport sidebar and
+click **Allow Python**. It stays on until Blender closes and is off again at every start.
 
 ### 3. Configure your MCP client
 
@@ -300,15 +304,23 @@ Formats: `glb` (default), `gltf`, `fbx`, `obj`, `usdz`.
 
 ## Security
 
-The addon's socket has no authentication yet, and `blender_execute_script` runs arbitrary Python
-inside Blender. Any process on your machine that can reach the port can run code as you.
+The addon's socket has no authentication yet. `blender_execute_script` runs arbitrary Python inside
+Blender, so it is off by default: it refuses every call until you click **Allow Python** in the
+**Meshwire** sidebar tab. Only that button turns it on, and nothing a client sends or a `.blend` file
+holds can. It resets whenever Blender starts. While the socket has no authentication, any process on
+your machine that can reach the port can still use the other tools, and can run code as you once you
+allow Python.
 
 - Only start the server on a machine you trust, and stop it when you're done.
 - Keep the host set to localhost. Don't bind it to `0.0.0.0` or expose port 9876.
 - Don't run untrusted prompts or scripts against a Blender session with work you care about.
 
-Authentication and a Python execution switch are planned for the next stable release
+Authentication is planned for the next stable release
 ([#12](https://github.com/RFingAdam/meshwire/issues/12)).
+
+`blender_ai_configure_backend` accepts only `enabled`, `api_key`, `host` (an http or https URL),
+`timeout` and `device`. Paths and endpoints (ComfyUI workflow, model paths, base URLs) are set in
+**Preferences > Add-ons > Meshwire**.
 
 ---
 
@@ -337,6 +349,9 @@ request. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 are tested nightly on a best-effort 
 **"Connection refused":** make sure Blender is running, the **Meshwire** tab shows the server
 running, and the port matches.
 
+**"Python execution is off":** click **Allow Python** in the **Meshwire** sidebar tab. It resets
+whenever Blender starts.
+
 **"Tool not found":** restart your MCP client after editing its config, confirm the server command
 runs on its own with `--help`, and check the client's MCP log.
 
@@ -347,7 +362,8 @@ the ZIP.
 and check disk space.
 
 **AI generation doesn't work:** `blender_ai_list_backends` shows backend status. Check your API keys
-for cloud backends, or your models and VRAM for local ones. Follow a job with
+for cloud backends (Preferences > Add-ons > Meshwire, or the `RODIN_API_KEY` and `MESHY_API_KEY`
+environment variables), or your models and VRAM for local ones. Follow a job with
 `blender_ai_model_status`.
 
 ---
