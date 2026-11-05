@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generation, import or texture reply now marks its stage failed. `analyze_viewport` and `ai_refine`
   return `success: False` when the vision analysis fails, in place of a successful reply that
   carries a failed analysis; `refine_iteration` follows.
+- **`ai_texture_from_render` and `grease_pencil_markup` do the work they report.** The depth and
+  normal control images are now the real passes: the object renders in a throwaway scene through the
+  compositor (depth ramped so near is light with a clear background, normals mapped to 0-1 RGB), so
+  the caller's scene, view layer and compositor are never touched. A failed render or a missing object
+  returns a clear error, and the temp file comes from `tempfile.mkstemp`. `grease_pencil_markup` now
+  draws arrows, circles and rectangles into the image pixels with numpy when Pillow is missing, which
+  is always the case in Blender's Python, in place of a compositor fallback that drew nothing yet
+  reported success. Colour and thickness are honoured, `output_path` is validated, `annotations_drawn`
+  is the real count, text items are listed under `skipped` (Blender's `blf` draws nothing into an
+  image buffer), and `success` is false when nothing was drawn. The socket lane checks both from the
+  output pixels.
 - **Blender 5.x differences go through `compat.py`, by feature detection.** No handler or compat
   function compares a version number. `render_set_engine` accepts `EEVEE`, `BLENDER_EEVEE` and
   `BLENDER_EEVEE_NEXT` and sets the one this Blender registers; `ai_texture_from_render` no longer

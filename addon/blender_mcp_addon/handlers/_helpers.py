@@ -419,7 +419,7 @@ def _markup_with_pillow(render_path, annotations, output_path, Image, ImageDraw,
     result.save(output_path)
 
     return {
-        "success": True,
+        "success": annotation_count > 0,
         "output_path": output_path,
         "annotations_drawn": annotation_count,
         "image_size": list(img.size),
@@ -427,60 +427,165 @@ def _markup_with_pillow(render_path, annotations, output_path, Image, ImageDraw,
     }
 
 
-def _markup_with_compositor(render_path, annotations, output_path):
-    """Fallback: use Blender's compositor to overlay annotations.
+_MARKUP_COLORS = {
+    "red": (255, 0, 0),
+    "green": (0, 128, 0),
+    "lime": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "yellow": (255, 255, 0),
+    "orange": (255, 165, 0),
+    "purple": (128, 0, 128),
+    "magenta": (255, 0, 255),
+    "cyan": (0, 255, 255),
+    "pink": (255, 192, 203),
+    "white": (255, 255, 255),
+    "black": (0, 0, 0),
+    "gray": (128, 128, 128),
+    "grey": (128, 128, 128),
+}
 
-    This is a simplified fallback that loads the image, creates a GP overlay
-    annotation in 2D screen space, and re-renders the composite.
-    """
-    # Load the image into Blender
-    img = bpy.data.images.load(render_path)
-    width, height = img.size[0], img.size[1]
+_MARKUP_TEXT_REASON = (
+    "text cannot be drawn: blf draws nothing into an image buffer here "
+    "(checked on 4.5 and 5.2) and Pillow is not installed in Blender's Python"
+)
 
-    # Set up compositor
-    scene = bpy.context.scene
-    tree = compat.get_compositor_tree(scene)
-    tree.nodes.clear()
 
-    # Create nodes
-    image_node = tree.nodes.new('CompositorNodeImage')
-    image_node.image = img
-    image_node.location = (0, 0)
+def _parse_markup_color(value):
+    """CSS-style name or #RGB, #RRGGBB, #RRGGBBAA to (r, g, b, a) floats in 0..1."""
+    text = str(value).strip().lower()
+    if text in _MARKUP_COLORS:
+        r, g, b = _MARKUP_COLORS[text]
+        return (r / 255.0, g / 255.0, b / 255.0, 1.0)
+    if text.startswith("#"):
+        digits = text[1:]
+        if len(digits) in (3, 4):
+            digits = "".join(ch * 2 for ch in digits)
+        if len(digits) in (6, 8):
+            try:
+                parts = [int(digits[i : i + 2], 16) / 255.0 for i in range(0, len(digits), 2)]
+            except ValueError:
+                raise ValueError(f"unknown color {value!r}") from None
+            if len(parts) == 3:
+                parts.append(1.0)
+            return tuple(parts)
+    raise ValueError(f"unknown color {value!r}")
 
-    composite_node = compat.new_compositor_output(tree)
-    composite_node.location = (400, 0)
 
-    # Connect image to composite output
-    tree.links.new(image_node.outputs[0], composite_node.inputs[0])
+def _segment_mask(xx, yy, x0, y0, x1, y1, half):
+    """Boolean mask of pixels within ``half`` of the segment (x0, y0) to (x1, y1)."""
+    import numpy as np
 
-    # Set render resolution to match image
-    scene.render.resolution_x = width
-    scene.render.resolution_y = height
-    scene.render.resolution_percentage = 100
-    scene.render.filepath = output_path
-
-    # Set file format based on extension
-    ext = os.path.splitext(output_path)[1].lower()
-    if ext in ('.jpg', '.jpeg'):
-        scene.render.image_settings.file_format = 'JPEG'
+    dx, dy = x1 - x0, y1 - y0
+    length_sq = dx * dx + dy * dy
+    if length_sq == 0:
+        t = 0.0
     else:
-        scene.render.image_settings.file_format = 'PNG'
+        t = np.clip(((xx - x0) * dx + (yy - y0) * dy) / length_sq, 0.0, 1.0)
+    return np.hypot(xx - (x0 + t * dx), yy - (y0 + t * dy)) <= half
 
-    # Render composite
-    bpy.ops.render.render(write_still=True)
 
-    # Clean up
-    bpy.data.images.remove(img)
+def _markup_point(ann, key):
+    value = ann.get(key)
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        raise ValueError(f"'{key}' must be [x, y]")
+    return float(value[0]), float(value[1])
 
-    return {
-        "success": True,
-        "output_path": output_path,
-        "annotations_drawn": 0,
-        "image_size": [width, height],
-        "method": "compositor_fallback",
-        "note": "Compositor fallback does not draw markup annotations directly. "
-        "Install Pillow (pip install Pillow) in Blender's Python for full annotation support.",
-    }
+
+def _markup_mask(ann, ann_type, xx, yy):
+    """Mask for one shape, in top-left pixel coordinates. Raises ValueError if malformed."""
+    thickness = max(float(ann.get("thickness", 3)), 1.0)
+    half = max(thickness / 2.0, 0.75)
+    if ann_type in ("arrow", "rectangle"):
+        sx, sy = _markup_point(ann, "start")
+        ex, ey = _markup_point(ann, "end")
+        if ann_type == "arrow":
+            mask = _segment_mask(xx, yy, sx, sy, ex, ey, half)
+            angle = math.atan2(ey - sy, ex - sx)
+            head = max(10.0, thickness * 4)
+            for delta in (math.pi * 0.8, -math.pi * 0.8):
+                hx = ex + head * math.cos(angle + delta)
+                hy = ey + head * math.sin(angle + delta)
+                mask |= _segment_mask(xx, yy, ex, ey, hx, hy, half)
+            return mask
+        left, right = sorted((sx, ex))
+        top, bottom = sorted((sy, ey))
+        outer = (xx >= left) & (xx <= right) & (yy >= top) & (yy <= bottom)
+        inner = (
+            (xx > left + thickness - 1) & (xx < right - thickness + 1)
+            & (yy > top + thickness - 1) & (yy < bottom - thickness + 1)
+        )  # fmt: skip
+        return outer & ~inner
+    import numpy as np
+
+    cx, cy = _markup_point(ann, "center")
+    if ann.get("radius") is None:
+        raise ValueError("'radius' is required")
+    radius = float(ann["radius"])
+    return np.abs(np.hypot(xx - cx, yy - cy) - radius) <= half
+
+
+def _markup_with_pixels(render_path, annotations, output_path):
+    """Draw arrows, circles and rectangles straight into the image pixels.
+
+    Needs only Blender and numpy. The image is loaded with ``bpy.data.images.load``,
+    drawn into a numpy array and saved to ``output_path``. Annotation coordinates are
+    pixels from the top-left; Blender image rows start at the bottom, so the array is
+    viewed upside down while drawing. Text is reported in ``skipped``, never faked.
+    """
+    import numpy as np
+
+    img = bpy.data.images.load(render_path, check_existing=False)
+    try:
+        width, height = img.size[0], img.size[1]
+        channels = img.channels
+        if width == 0 or height == 0 or channels != 4:
+            raise RuntimeError(f"could not read {render_path} as an RGBA image")
+        pixels = np.empty(width * height * 4, dtype=np.float32)
+        img.pixels.foreach_get(pixels)
+        canvas = pixels.reshape(height, width, 4)
+        top_down = canvas[::-1]  # a view: row 0 is the top of the picture
+        yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+
+        drawn = 0
+        skipped = []
+        for index, ann in enumerate(annotations):
+            ann_type = str(ann.get("type", "")).lower()
+            if ann_type == "text":
+                skipped.append({"index": index, "type": "text", "reason": _MARKUP_TEXT_REASON})
+                continue
+            if ann_type not in ("arrow", "circle", "rectangle"):
+                skipped.append({"index": index, "type": ann_type, "reason": f"unknown type {ann_type!r}"})
+                continue
+            try:
+                color = _parse_markup_color(ann.get("color", "red"))
+                mask = _markup_mask(ann, ann_type, xx, yy)
+            except (ValueError, TypeError) as exc:
+                skipped.append({"index": index, "type": ann_type, "reason": str(exc)})
+                continue
+            top_down[mask] = color
+            drawn += 1
+
+        result = {
+            "success": drawn > 0,
+            "output_path": output_path,
+            "annotations_drawn": drawn,
+            "skipped": skipped,
+            "image_size": [width, height],
+            "method": "pixels",
+        }
+        if drawn == 0:
+            result["error"] = "Nothing was drawn; see 'skipped' for the reason each annotation was left out"
+            return result
+
+        img.pixels.foreach_set(pixels)
+        img.update()
+        img.filepath_raw = output_path
+        ext = os.path.splitext(output_path)[1].lower()
+        img.file_format = "JPEG" if ext in (".jpg", ".jpeg") else "PNG"
+        img.save()
+        return result
+    finally:
+        bpy.data.images.remove(img)
 
 
 # ── Preset builder helpers ────────────────────────────────────────────

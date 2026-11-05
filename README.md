@@ -18,9 +18,8 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **185 of 218 tools work on both.**
-> 31 need what a headless test cannot provide, such as a GUI, network access, or an earlier call.
-> 2 have a known failure.
+> **186 of 218 tools work on both.**
+> 32 need what a headless test cannot provide, such as a GUI, network access, or an earlier call.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -140,25 +139,23 @@ if they drift. More detail per area is in
 | Rigging | 8 | 8 | 8 | `armature_create`, `autorig_preset` |
 | Physics | 6 | 6 | 6 | `physics_rigid_body_add`, `physics_cloth_add` |
 | Collections and session | 8 | 6 | 6 | `collection_create`, `save_as` |
-| Annotations | 6 | 4 | 5 | `annotation_dimension`, `annotation_text` |
+| Annotations | 6 | 5 | 6 | `annotation_dimension`, `annotation_text` |
 | MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
 | AI generation and refinement | 29 | 13 | 13 | `ai_mesh_remesh`, `ai_auto_uv` |
 | Poly Haven | 2 | 0 | 0 |  |
-| **Total** | **218** | **185** | **186** |  |
+| **Total** | **218** | **186** | **187** |  |
 
-<details><summary>2 tools with a known failure</summary>
+<details><summary>0 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
-| `ai_texture_from_render` | 4.5, 5.2 |
-| `grease_pencil_markup` | 4.5, 5.2 |
 
 Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>31 tools that cannot be checked headless</summary>
+<details><summary>32 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -174,6 +171,7 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
 | `ai_probe_backends` | needs network access, which the harness turns off |
 | `ai_refine` | needs network access, which the harness turns off |
+| `ai_texture_from_render` | no AI backend is reachable offline |
 | `analyze_viewport` | needs network access, which the harness turns off |
 | `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |

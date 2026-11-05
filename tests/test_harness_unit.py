@@ -339,6 +339,13 @@ def test_soft_fail_tables_have_no_dead_rows():
     assert not dead, f"rows with no SOFT_FAIL line in any baseline: {dead}"
 
 
+def test_defect_tables_are_empty():
+    # M3 ends when no tool hides a defect behind SOFT_FAIL or PASS. The dicts stay
+    # so a later task can record one again.
+    assert SOFT_FAIL_DEFECTS == {}
+    assert FALSE_PASS_DEFECTS == {}
+
+
 def test_soft_fail_tables_are_disjoint_and_defects_are_real_tools():
     assert not set(SOFT_FAIL_ALLOWED) & set(SOFT_FAIL_DEFECTS)
     tools = set(load_tools())
