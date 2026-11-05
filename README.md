@@ -19,8 +19,8 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
 > **171 of 218 tools work on both.**
-> 14 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
-> 33 have a known failure.
+> 18 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 29 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -147,7 +147,7 @@ if they drift. More detail per area is in
 | Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
 | **Total** | **218** | **179** | **171** |  |
 
-<details><summary>33 tools with a known failure</summary>
+<details><summary>29 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
@@ -169,27 +169,23 @@ if they drift. More detail per area is in
 | `measure` | 4.5, 5.2 |
 | `mesh_crease` | 4.5, 5.2 |
 | `mesh_edge_slide` | 4.5, 5.2 |
-| `mesh_knife_project` | 4.5, 5.2 |
-| `mesh_loop_cut` | 4.5, 5.2 |
 | `mesh_merge` | 4.5, 5.2 |
 | `mesh_select_edge_loops` | 5.2 |
 | `mesh_subdivide` | 4.5, 5.2 |
 | `physics_fluid_quick` | 4.5, 5.2 |
 | `physics_simulate` | 4.5, 5.2 |
-| `render_screenshot` | 4.5, 5.2 |
 | `render_set_engine` | 5.2 |
 | `sculpt_extract_mask` | 4.5, 5.2 |
 | `sculpt_face_set_create` | 4.5, 5.2 |
 | `sculpt_mask_by_topology` | 4.5, 5.2 |
-| `sculpt_mesh_filter` | 4.5, 5.2 |
 | `sculpt_multires_reshape` | 4.5, 5.2 |
 | `sculpt_to_retopo` | 4.5, 5.2 |
 
-Socket checks that still fail: `mesh_knife_project_keeps_outside`, `reply_16mb_complete`, `undo_reverts`.
+Socket checks that still fail: `reply_16mb_complete`, `undo_reverts`.
 
 </details>
 
-<details><summary>14 tools that cannot be checked headless</summary>
+<details><summary>18 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -201,11 +197,15 @@ Socket checks that still fail: `mesh_knife_project_keeps_outside`, `reply_16mb_c
 | `ai_inpaint_texture` | no AI backend is reachable offline |
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
+| `mesh_knife_project` | needs a 3D viewport; socket lane covers it |
+| `mesh_loop_cut` | needs a 3D viewport; socket lane covers it |
 | `msfs_livery_convert_to_dds` | needs texconv from DirectXTex, which is not installed here |
 | `msfs_livery_export_uv_layout` | the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI |
 | `msfs_livery_set_paint_brush` | needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both |
 | `redo` | Blender disables undo in background mode |
 | `refine_get_session` | needs a session id from a prior refine_create_session call |
+| `render_screenshot` | needs a 3D viewport; socket lane covers it |
+| `sculpt_mesh_filter` | needs a 3D viewport; socket lane covers it |
 | `undo` | Blender disables undo in background mode |
 
 </details>

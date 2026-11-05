@@ -184,7 +184,6 @@ OVERRIDES.update(
 KNOWN_UNREACHED: dict[str, str] = {
     "undo": "Blender disables undo in background mode",
     "redo": "Blender disables undo in background mode",
-    "render_screenshot": "screenshot_area needs a UI area, absent in background mode",
     "ai_model_status": "needs a job id that only a live AI backend can issue",
     "ai_pipeline_status": "needs a pipeline id that only a live AI backend can issue",
     "refine_get_session": "needs a session id from a prior refine_create_session call",
@@ -204,6 +203,11 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
     "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
     "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
+    "mesh_knife_project": "needs a 3D viewport; socket lane covers it",
+    "mesh_loop_cut": "needs a 3D viewport; socket lane covers it",
+    "render_screenshot": "needs a 3D viewport; socket lane covers it",
+    "sculpt_mask_by_topology": "needs a 3D viewport; socket lane covers it",
+    "sculpt_mesh_filter": "needs a 3D viewport; socket lane covers it",
     "sculpt_multires_reshape": "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
 }
 
@@ -212,7 +216,6 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
 SOFT_FAIL_DEFECTS: dict[str, str] = {
     "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects",
     "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
-    "mesh_knife_project": "the modifier is disabled, so the apply is skipped",
     "ai_texture_from_render": "5.2 fails to render the depth and normal passes",
 }
 

@@ -15,6 +15,14 @@ from ..validation import (
     require_param,
     validate_enum,
 )
+from ._helpers import needs_view3d, view3d_override
+
+# Schema names for mesh filters whose operator identifier differs. SURFACE_NOISE is the
+# random-noise filter, which Blender calls RANDOM.
+_MESH_FILTER_TYPES = {
+    "ENHANCE_DETAIL": "ENHANCE_DETAILS",
+    "SURFACE_NOISE": "RANDOM",
+}
 
 
 class SculptHandlersMixin:
@@ -139,6 +147,10 @@ class SculptHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
+        override = view3d_override()
+        if override is None:
+            return needs_view3d("sculpt_mesh_filter")
+
         # Ensure correct mode: need sculpt mode on the target object
         if bpy.context.mode != "OBJECT":
             bpy.ops.object.mode_set(mode="OBJECT")
@@ -149,7 +161,8 @@ class SculptHandlersMixin:
         # Apply the mesh filter the requested number of iterations
         for i in range(iterations):
             try:
-                bpy.ops.sculpt.mesh_filter(type=filter_type, strength=strength)
+                with bpy.context.temp_override(**override):
+                    bpy.ops.sculpt.mesh_filter(type=_MESH_FILTER_TYPES.get(filter_type, filter_type), strength=strength)
             except RuntimeError as e:
                 return {
                     "error": f"Mesh filter failed on iteration {i + 1}: {str(e)}",
@@ -179,6 +192,11 @@ class SculptHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
+        # The flood fill reads the 3D view region; the other mask types do not
+        override = view3d_override()
+        if (mask_type in ("ALL", "NONE") or invert) and override is None:
+            return needs_view3d("sculpt_mask_by_topology")
+
         # Ensure sculpt mode
         ensure_object_selected(obj)
         if bpy.context.mode != "SCULPT":
@@ -187,10 +205,9 @@ class SculptHandlersMixin:
             bpy.ops.object.mode_set(mode="SCULPT")
 
         # Apply mask based on type
-        if mask_type == "ALL":
-            bpy.ops.paint.mask_flood_fill(mode="VALUE", value=1.0)
-        elif mask_type == "NONE":
-            bpy.ops.paint.mask_flood_fill(mode="VALUE", value=0.0)
+        if mask_type in ("ALL", "NONE"):
+            with bpy.context.temp_override(**override):
+                bpy.ops.paint.mask_flood_fill(mode="VALUE", value=1.0 if mask_type == "ALL" else 0.0)
         elif mask_type == "CAVITY":
             # dirty_mask creates a mask based on cavity/concavity
             bpy.ops.sculpt.dirty_mask(dirty_only=False)
@@ -216,7 +233,8 @@ class SculptHandlersMixin:
 
         # Invert mask if requested
         if invert:
-            bpy.ops.paint.mask_flood_fill(mode="INVERT")
+            with bpy.context.temp_override(**override):
+                bpy.ops.paint.mask_flood_fill(mode="INVERT")
 
         # Blur/smooth the mask
         for _ in range(blur_iterations):

@@ -13,6 +13,7 @@ from ..validation import (
     validate_enum,
     validate_filepath,
 )
+from ._helpers import needs_view3d, view3d_override
 
 
 class RenderHandlersMixin:
@@ -89,7 +90,11 @@ class RenderHandlersMixin:
         output_path = validate_filepath(
             require_param(params, "output_path", str), "output_path"
         )
-        bpy.ops.screen.screenshot_area(filepath=output_path)
+        override = view3d_override()
+        if override is None:
+            return needs_view3d("render_screenshot")
+        with bpy.context.temp_override(**override):
+            bpy.ops.screen.screenshot_area(filepath=output_path)
         return {"output_path": output_path}
 
     # ========== Export Handlers ==========
