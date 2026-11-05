@@ -101,14 +101,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Best effort: 4.2 segfaults at random inside Blender in two cases. Its
-  # result never gates anything and nothing may depend on this job.
-  nightly-4-2:
-    name: Blender 4.2.23 (best effort)
+  # Best effort: every series other than 4.5 and 5.2 runs nightly. 4.2 segfaults
+  # at random inside Blender in two cases. Results never gate anything and
+  # nothing may depend on this job.
+  nightly:
+    name: Blender ${{ matrix.version }} (best effort)
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {version: "4.2.23", series: "4.2"}
+          - {version: "4.3.2", series: "4.3"}
+          - {version: "4.4.3", series: "4.4"}
+          - {version: "5.0.1", series: "5.0"}
+          - {version: "5.1.2", series: "5.1"}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -126,7 +136,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/meshwire/*.tar.xz
-          key: blender-4.2.23-${{ hashFiles('scripts/fetch_blender.py') }}
+          key: blender-${{ matrix.version }}-${{ hashFiles('scripts/fetch_blender.py') }}
 
       - name: Install test dependencies
         run: uv sync --locked --extra dev --python 3.12
@@ -135,7 +145,7 @@ jobs:
         id: fetch
         run: |
           set -e
-          bin="$(uv run --locked --python 3.12 python scripts/fetch_blender.py 4.2.23 --dest "$RUNNER_TEMP/blender")"
+          bin="$(uv run --locked --python 3.12 python scripts/fetch_blender.py ${{ matrix.version }} --dest "$RUNNER_TEMP/blender")"
           test -x "$bin"
           echo "bin=$bin" >> "$GITHUB_OUTPUT"
 
@@ -145,14 +155,14 @@ jobs:
         run: >-
           xvfb-run -a uv run --locked --python 3.12 python -m tests.harness.driver
           --blender "$BLENDER_BIN"
-          --out "$RUNNER_TEMP/runs/driver-4.2"
-          --check-baseline tests/harness/baselines/blender-4.2.json
+          --out "$RUNNER_TEMP/runs/driver-${{ matrix.series }}"
+          --check-baseline tests/harness/baselines/blender-${{ matrix.series }}.json
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: harness-4.2.23
+          name: harness-${{ matrix.version }}
           path: |
             ${{ runner.temp }}/runs
             !${{ runner.temp }}/runs/**/*.blend

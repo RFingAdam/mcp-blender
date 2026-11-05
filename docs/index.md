@@ -10,8 +10,9 @@
 `meshwire` exposes 218 Blender tools via the Model Context Protocol.
 The MCP server speaks stdio; a Blender addon listens on local TCP and
 dispatches into `bpy` on the main thread via `bpy.app.timers`. Supports
-**Blender 4.5 LTS** and **Blender 5.2 LTS** (tested on every PR), and
-**Blender 4.2 LTS** (nightly, best effort).
+every Blender series from 4.2 through 5.2, and 4.2 is the minimum. **Blender 4.5 LTS** and
+**Blender 5.2 LTS** are gated on every PR. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 are tested nightly,
+best effort.
 
 ## Install
 

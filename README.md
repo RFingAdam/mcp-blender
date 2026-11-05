@@ -325,7 +325,8 @@ The **Meshwire** tab in Blender's sidebar sets the socket port and starts or sto
 
 ## Blender versions
 
-Blender 4.5 LTS and 5.2 LTS are tested on every pull request. Blender 4.2 LTS is tested nightly on a
+Meshwire supports every Blender series from 4.2 through 5.2. The minimum is Blender 4.2. Blender 4.5
+and 5.2 are gated on every pull request. Blender 4.2, 4.3, 4.4, 5.0 and 5.1 are tested nightly on a
 best-effort basis.
 
 ---
