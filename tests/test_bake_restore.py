@@ -128,3 +128,67 @@ def test_decorator_adds_warning_and_keeps_the_rest(baking, result):
     assert "render.engine" in out["warnings"][-1]
     assert out.get("error") == result.get("error")
     assert out["warnings"][:-1] == result.get("warnings", [])
+
+
+# ---- bake_curvature: cleanup and paths --------------------------------------------
+
+
+@pytest.fixture
+def curvature(baking, monkeypatch):
+    """A bake_curvature call against stubs: a mesh with a UV map, bmesh and numpy mocked."""
+    bmesh, numpy = MagicMock(), MagicMock()
+    monkeypatch.setitem(sys.modules, "bmesh", bmesh)
+    monkeypatch.setitem(sys.modules, "numpy", numpy)
+    mathutils = types.ModuleType("mathutils")
+    mathutils.Vector = MagicMock()
+    monkeypatch.setitem(sys.modules, "mathutils", mathutils)
+
+    obj = MagicMock()
+    obj.type = "MESH"
+    baking.bpy.data.objects.get.return_value = obj
+    image = MagicMock()
+    baking.bpy.data.images.new.return_value = image
+    bm = bmesh.new.return_value
+    bm.verts.__iter__.return_value = iter([])
+    bm.faces.__iter__.return_value = iter([])
+
+    def run(output_path, **params):
+        handler = baking.module.BakingHandlersMixin()
+        return handler._handle_bake_curvature(
+            {"object_name": "Cube", "output_path": output_path, "resolution": 4, **params}
+        )
+
+    return types.SimpleNamespace(run=run, bm=bm, image=image, bpy=baking.bpy, mod=baking.module)
+
+
+def test_curvature_save_failure_still_removes_image_and_frees_bmesh(curvature, tmp_path):
+    curvature.image.save.side_effect = RuntimeError("disk full")
+    result = curvature.run(str(tmp_path / "c.png"))
+    assert "error" in result
+    curvature.bpy.data.images.remove.assert_called_once_with(curvature.image)
+    curvature.bm.free.assert_called_once()
+
+
+def test_curvature_loop_failure_frees_bmesh_and_removes_image(curvature, tmp_path):
+    curvature.bm.faces.__iter__.side_effect = RuntimeError("bad face")
+    result = curvature.run(str(tmp_path / "c.png"))
+    assert "error" in result
+    curvature.bpy.data.images.remove.assert_called_once_with(curvature.image)
+    curvature.bm.free.assert_called_once()
+
+
+def test_curvature_checks_the_file_exists_after_saving(curvature, tmp_path):
+    # image.save is a mock, so nothing lands on disk: the on-disk check must catch it.
+    result = curvature.run(str(tmp_path / "c.png"))
+    assert "not written" in result["error"]
+    curvature.bpy.data.images.remove.assert_called_once_with(curvature.image)
+
+
+def test_curvature_expands_home_and_replies_with_the_resolved_path(
+    curvature, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    curvature.image.save.side_effect = lambda: (tmp_path / "out" / "c.png").write_bytes(b"x")
+    result = curvature.run("~/out/c.png")
+    assert result["output_path"] == str(tmp_path / "out" / "c.png")
+    assert not (Path.cwd() / "~").exists()

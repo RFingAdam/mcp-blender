@@ -1078,6 +1078,8 @@ class BakingHandlersMixin:
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
+        bm = None
+        image = None
         try:
             # Calculate curvature using bmesh
             bm = bmesh.new()
@@ -1164,8 +1166,6 @@ class BakingHandlersMixin:
             # Get UV layer from bmesh
             bm_uv = bm.loops.layers.uv.get(uv_layer_name)
             if bm_uv is None:
-                bm.free()
-                bpy.data.images.remove(image)
                 return {"error": "Could not find UV layer in bmesh"}
 
             # For each face, rasterize triangle by sampling curvature at vertices
@@ -1228,14 +1228,9 @@ class BakingHandlersMixin:
                             pixels[idx + 2] = curv
                             pixels[idx + 3] = 1.0
 
-            bm.free()
-
             # Write pixels to image
             image.pixels.foreach_set(pixels.tolist())
-            image.filepath_raw = output_path
-            image.file_format = "PNG"
-            image.save_render(output_path)
-            bpy.data.images.remove(image)
+            self._bake_save_image(image, output_path, "PNG")
 
             return {
                 "success": True,
@@ -1249,6 +1244,11 @@ class BakingHandlersMixin:
             return {"error": "numpy is required for curvature baking but is not available"}
         except Exception as e:
             return {"error": f"Curvature bake failed: {e}"}
+        finally:
+            if bm is not None:
+                bm.free()
+            if image is not None:
+                bpy.data.images.remove(image)
 
     # =================================================================
     # 6. bake_id_map
