@@ -117,7 +117,54 @@ def test_configure_backend_rejects_unknown_keys(ai, key):
     res = ai.mixin._handle_ai_configure_backend({"backend": "comfyui", "config": {key: "x"}})
     assert res["success"] is False
     assert key in res["error"]
+    if key != "api_base_url":
+        assert "Preferences (Meshwire add-on)" in res["error"]
+
+
+def test_rejected_python_path_names_the_triposr_field(ai):
+    res = ai.mixin._handle_ai_configure_backend(
+        {"backend": "triposr", "config": {"python_path": "/bin/sh"}}
+    )
+    assert res["success"] is False
+    assert "TripoSR Python" in res["error"]
     assert "Preferences (Meshwire add-on)" in res["error"]
+
+
+def test_rejected_api_base_url_is_not_a_setting(ai):
+    res = ai.mixin._handle_ai_configure_backend(
+        {"backend": "comfyui", "config": {"api_base_url": "http://x"}}
+    )
+    assert res["success"] is False
+    assert "api_base_url is not a setting ai_configure_backend accepts" in res["error"]
+    assert "Preferences" not in res["error"].split("Allowed keys")[0]
+
+
+def _triposr(monkeypatch, prefs):
+    mod = importlib.import_module(f"{ROOT}.external.ai_backends.triposr")
+    root = sys.modules[ROOT]
+    root.get_preferences = lambda: prefs
+    from types import SimpleNamespace as NS
+
+    backend = mod.TripoSRBackend.__new__(mod.TripoSRBackend)
+    backend.config = NS(extra={}, model_path=None)
+    return backend
+
+
+def test_triposr_uses_the_preferences_python_when_set(ai, monkeypatch):
+    prefs = types.SimpleNamespace(
+        triposr_python="/opt/py/bin/python", triposr_path="/opt/triposr", triposr_model="m"
+    )
+    backend = _triposr(monkeypatch, prefs)
+    assert backend._python_path == "/opt/py/bin/python"
+    assert backend._triposr_path == "/opt/triposr"
+
+
+def test_triposr_defaults_to_python3_without_a_preference(ai, monkeypatch):
+    assert _triposr(monkeypatch, None)._python_path == "python3"
+    empty = types.SimpleNamespace(triposr_python="", triposr_path="", triposr_model="")
+    backend = _triposr(monkeypatch, empty)
+    assert backend._python_path == "python3"
+    assert backend._triposr_path is None
 
 
 @pytest.mark.parametrize("host", ["file:///etc/passwd", "http://u:p@h", "ftp://h", "not a url"])

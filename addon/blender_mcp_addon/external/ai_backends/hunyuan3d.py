@@ -54,6 +54,17 @@ class Hunyuan3DBackend(BaseBackend):
     SUPPORTED_FORMATS = ["glb", "obj", "ply"]
     SUPPORTED_STYLES = ["realistic", "cartoon", "anime", "sculpture"]
 
+    def _model_id(self) -> str:
+        """Model id or folder from Preferences, else the config value, else the built-in id."""
+        try:
+            from ... import get_preferences
+
+            prefs = get_preferences()
+            chosen = getattr(prefs, "hunyuan3d_model", "") if prefs else ""
+        except Exception:
+            chosen = ""
+        return chosen or self.config.model_path or "tencent/Hunyuan3D-2"
+
     def __init__(self, config: BackendConfig | None = None):
         """Initialize the Hunyuan3D backend.
 
@@ -166,14 +177,14 @@ class Hunyuan3DBackend(BaseBackend):
 
                 if model_type in ("text", "both") and self._text_model is None:
                     self._text_model = Text2MeshPipeline.from_pretrained(
-                        self.config.model_path or "tencent/Hunyuan3D-2",
+                        self._model_id(),
                         torch_dtype=torch.float16,
                     )
                     self._text_model.to(device)
 
                 if model_type in ("image", "both") and self._image_model is None:
                     self._image_model = Image2MeshPipeline.from_pretrained(
-                        self.config.model_path or "tencent/Hunyuan3D-2",
+                        self._model_id(),
                         torch_dtype=torch.float16,
                     )
                     self._image_model.to(device)
@@ -187,7 +198,7 @@ class Hunyuan3DBackend(BaseBackend):
 
                     if self._model is None:
                         self._model = Hunyuan3DGenerator(
-                            model_path=self.config.model_path,
+                            model_path=self._model_id(),
                             device=device,
                         )
                     return True

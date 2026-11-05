@@ -179,7 +179,7 @@ def register_external_tools(server: "Server", get_client: "callable") -> None:
                 - device: Device to use (auto, cuda, cpu, mps)
                 - timeout: Request timeout in seconds
                 - enabled: Whether backend is enabled
-                Paths and endpoints are set in Blender's Preferences.
+                Paths and local model locations are set in Blender's Preferences.
 
         Returns:
             Confirmation of configuration

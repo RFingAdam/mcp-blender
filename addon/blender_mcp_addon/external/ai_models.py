@@ -622,6 +622,29 @@ def get_backend_info(backend: str) -> dict[str, Any]:
 # (workflow, python_path, model_path, api_base_url) is set only in Preferences.
 CONFIGURE_KEYS = frozenset({"enabled", "api_key", "host", "timeout", "device"})
 
+# Rejected keys that have a Preferences field, mapped to its label.
+PREFERENCE_FIELDS = {
+    "workflow": "ComfyUI workflow",
+    "python_path": "TripoSR Python",
+    "triposr_path": "TripoSR folder",
+    "model_path": "TripoSR model or Hunyuan3D model",
+}
+
+
+def _rejection_message(rejected: list[str]) -> str:
+    parts = []
+    for key in rejected:
+        field = PREFERENCE_FIELDS.get(key)
+        if field:
+            parts.append(
+                f"{key} cannot be set through ai_configure_backend. "
+                f"Set {field} in Blender's Preferences (Meshwire add-on)."
+            )
+        else:
+            parts.append(f"{key} is not a setting ai_configure_backend accepts.")
+    parts.append(f"Allowed keys: {', '.join(sorted(CONFIGURE_KEYS))}.")
+    return " ".join(parts)
+
 
 def _is_plain_http_url(value: Any) -> bool:
     if not isinstance(value, str):
@@ -654,14 +677,7 @@ def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
 
     rejected = sorted(str(key) for key in config if key not in CONFIGURE_KEYS)
     if rejected:
-        return {
-            "success": False,
-            "error": (
-                f"Cannot set {', '.join(rejected)} through ai_configure_backend. "
-                "Set it in Blender's Preferences (Meshwire add-on). "
-                f"Allowed keys: {', '.join(sorted(CONFIGURE_KEYS))}."
-            ),
-        }
+        return {"success": False, "error": _rejection_message(rejected)}
     if "host" in config and not _is_plain_http_url(config["host"]):
         return {
             "success": False,

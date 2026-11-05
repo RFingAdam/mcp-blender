@@ -93,6 +93,29 @@ class MeshwirePreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    triposr_python: bpy.props.StringProperty(
+        name="TripoSR Python",
+        description="System Python with torch for TripoSR. Empty uses python3",
+        subtype="FILE_PATH",
+        default="",
+    )
+    triposr_path: bpy.props.StringProperty(
+        name="TripoSR folder",
+        description="TripoSR install folder",
+        subtype="DIR_PATH",
+        default="",
+    )
+    triposr_model: bpy.props.StringProperty(
+        name="TripoSR model",
+        description="Model id or folder for TripoSR. Empty uses the built-in model",
+        default="",
+    )
+    hunyuan3d_model: bpy.props.StringProperty(
+        name="Hunyuan3D model",
+        description="Model id or folder for Hunyuan3D. Empty uses the built-in model",
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "host")
@@ -100,6 +123,10 @@ class MeshwirePreferences(bpy.types.AddonPreferences):
         layout.prop(self, "rodin_api_key")
         layout.prop(self, "meshy_api_key")
         layout.prop(self, "comfyui_workflow")
+        layout.prop(self, "triposr_python")
+        layout.prop(self, "triposr_path")
+        layout.prop(self, "triposr_model")
+        layout.prop(self, "hunyuan3d_model")
 
 
 class MCP_OT_StartServer(bpy.types.Operator):

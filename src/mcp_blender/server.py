@@ -912,7 +912,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_ai_configure_backend",
-        description="Configure a specific AI backend. Accepts only enabled, api_key, host (an http or https URL), timeout and device. File paths and endpoints such as workflow, python_path, model_path and api_base_url are set in Blender's Preferences (Meshwire add-on)",
+        description="Configure a specific AI backend. Accepts only enabled, api_key, host (an http or https URL), timeout and device. The ComfyUI workflow, TripoSR Python and folder, and TripoSR and Hunyuan3D model are set in Blender's Preferences (Meshwire add-on), not here",
         input_schema={
             "type": "object",
             "properties": {

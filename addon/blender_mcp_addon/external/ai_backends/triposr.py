@@ -69,9 +69,29 @@ class TripoSRBackend(BaseBackend):
         self._model = None
         self._jobs: dict[str, dict] = {}
         self._output_dir = self._get_output_dir()
-        # System Python path (not Blender's bundled Python)
-        self._python_path = config.extra.get("python_path", "python3") if config else "python3"
-        self._triposr_path = config.extra.get("triposr_path") if config else None
+
+    @staticmethod
+    def _preference(name: str) -> str:
+        """A text setting from Preferences, or "" when unset or Preferences is unavailable."""
+        try:
+            from ... import get_preferences
+
+            prefs = get_preferences()
+            return (getattr(prefs, name, "") or "") if prefs else ""
+        except Exception:
+            return ""
+
+    @property
+    def _python_path(self) -> str:
+        """System Python (not Blender's bundled Python). Preferences, else python3."""
+        fallback = self.config.extra.get("python_path", "python3") if self.config else "python3"
+        return self._preference("triposr_python") or fallback
+
+    @property
+    def _triposr_path(self) -> str | None:
+        """TripoSR install dir from Preferences, if set."""
+        fallback = self.config.extra.get("triposr_path") if self.config else None
+        return self._preference("triposr_path") or fallback
 
     def _get_output_dir(self) -> Path:
         """Get the output directory for generated models."""
@@ -286,7 +306,9 @@ class TripoSRBackend(BaseBackend):
 
         quality_map = {"draft": 128, "medium": 256, "high": 512}
         mc_resolution = quality_map.get(job["quality"], 256)
-        model_name = self.config.model_path or self.DEFAULT_MODEL_NAME
+        model_name = (
+            self._preference("triposr_model") or self.config.model_path or self.DEFAULT_MODEL_NAME
+        )
 
         # Build a self-contained Python script for the subprocess
         gen_script = textwrap.dedent(f"""\
