@@ -13,7 +13,7 @@ from ..validation import (
     validate_filepath,
     validate_vector3,
 )
-from ._helpers import _markup_with_compositor, _markup_with_pillow
+from ._helpers import _markup_with_pillow, _markup_with_pixels
 
 
 class AnnotationHandlersMixin:
@@ -408,7 +408,8 @@ class AnnotationHandlersMixin:
         annotations = require_param(params, "annotations", list)
         output_path = require_param(params, "output_path", str)
 
-        render_path = validate_filepath(render_path, "render_path", must_exist=True)
+        render_path = bpy.path.abspath(validate_filepath(render_path, "render_path", must_exist=True))
+        output_path = bpy.path.abspath(validate_filepath(output_path, "output_path"))
 
         if len(annotations) == 0:
             return {"error": "At least one annotation is required"}
@@ -428,8 +429,8 @@ class AnnotationHandlersMixin:
         except ImportError:
             pass
 
-        # Fallback: use Blender compositor nodes
-        return _markup_with_compositor(render_path, annotations, output_path)
+        # Blender's Python has no Pillow: draw into the pixels with numpy instead
+        return _markup_with_pixels(render_path, annotations, output_path)
 
 
     # ========== Material Inspection & Manipulation Handlers ==========

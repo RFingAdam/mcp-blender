@@ -101,7 +101,7 @@ FIXTURES: dict[str, Any] = {
     "tag_type": "start",
     "collision_type": "collider",
     "strokes": [{"points": [[0, 0, 0], [1, 0, 0], [1, 1, 0]]}],
-    "annotations": [{"type": "text", "text": "note", "position": [8, 8]}],
+    "annotations": [{"type": "rectangle", "start": [2, 2], "end": [12, 12], "color": "red"}],
 }
 
 # Per-tool replacements for the whole minimal arg dict, keyed by bare tool name.
@@ -212,6 +212,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "ai_generate_texture_sync": "no AI backend is reachable offline",
     "ai_inpaint_texture": "no AI backend is reachable offline",
     "ai_pipeline_generate": "no AI backend is reachable offline",
+    "ai_texture_from_render": "no AI backend is reachable offline",
     "annotation_add": "Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
     "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
     "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
@@ -228,11 +229,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
 
 # Tools whose SOFT_FAIL hides a real defect. A tool with both benign and
 # defective cases belongs here.
-SOFT_FAIL_DEFECTS: dict[str, str] = {
-    "ai_texture_from_render": "depth and normal control types send a beauty render, not a depth or normal pass",
-}
+SOFT_FAIL_DEFECTS: dict[str, str] = {}
 
 # Tools that report success shape but hide a failure in the payload.
-FALSE_PASS_DEFECTS: dict[str, str] = {
-    "grease_pencil_markup": "the compositor fallback draws nothing (annotations_drawn: 0) yet reports success",
-}
+FALSE_PASS_DEFECTS: dict[str, str] = {}

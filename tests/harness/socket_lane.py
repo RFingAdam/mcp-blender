@@ -932,6 +932,215 @@ def check_annotation_add_draws_or_says_why(ctx: Ctx) -> str:
     return "annotation_add explained why it cannot draw and left no layer"
 
 
+PASS_SETUP = MAKE_CUBE + """
+import bmesh, numpy as np
+from blender_mcp_addon import compat
+from blender_mcp_addon.handlers import CommandHandlers
+
+def make_sphere(name):
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=1.0)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    return ob
+
+def load_rgba(path):
+    img = bpy.data.images.load(path, check_existing=False)
+    w, h = img.size
+    flat = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(flat)
+    bpy.data.images.remove(img)
+    return flat.reshape(h, w, 4)[::-1]  # row 0 is the top
+
+def compositor_state(sc):
+    tree = sc.compositing_node_group if hasattr(sc, 'compositing_node_group') else sc.node_tree
+    return {
+        'use_nodes': sc.use_nodes if hasattr(sc, 'use_nodes') else None,
+        'has_tree': tree is not None,
+        'nodes': sorted(n.name for n in tree.nodes) if tree else [],
+        'z': sc.view_layers[0].use_pass_z,
+        'normal': sc.view_layers[0].use_pass_normal,
+        'engine': sc.render.engine,
+        'film': sc.render.film_transparent,
+        'res': [sc.render.resolution_x, sc.render.resolution_y],
+        'filepath': sc.render.filepath,
+        'scenes': len(bpy.data.scenes),
+        'groups': len(bpy.data.node_groups),
+        'objects': sorted(o.name for o in bpy.data.objects),
+        'cameras': len(bpy.data.cameras),
+    }
+"""
+
+
+def check_ai_texture_passes_are_real(ctx: Ctx) -> str:
+    out = ctx.out_dir / "passes"
+    out.mkdir(parents=True, exist_ok=True)
+    got = ctx.conn.exec(
+        PASS_SETUP
+        + f"""
+sc = bpy.context.scene
+make_sphere('LanePass')
+tree = compat.get_compositor_tree(sc)
+tree.nodes.new('CompositorNodeBlur').name = 'LaneKeep'
+before = compositor_state(sc)
+h = CommandHandlers()
+depth_path = h._render_control_image('LanePass', 'depth', 128)
+normal_path = h._render_control_image('LanePass', 'normal', 128)
+after = compositor_state(sc)
+depth = load_rgba(depth_path)
+normal = load_rgba(normal_path)
+sc.render.resolution_x = sc.render.resolution_y = 128
+sc.render.filepath = {str(out / "combined.png")!r}
+sc.render.image_settings.file_format = 'PNG'
+sc.render.use_compositing = False
+bpy.ops.render.render(write_still=True)
+combined = load_rgba({str(out / "combined.png")!r})
+inside = depth[..., 3] > 0.5
+d = depth[..., 0][inside]
+n = normal[inside][:, :3]
+result = {{
+    'unchanged': before == after,
+    'before': before, 'after': after,
+    'keep_node': 'LaneKeep' in after['nodes'],
+    'size': list(depth.shape[:2]),
+    'covered': float(inside.mean()),
+    'depth_grey': bool(np.allclose(depth[..., 0], depth[..., 1], atol=0.01) and np.allclose(depth[..., 0], depth[..., 2], atol=0.01)),
+    'depth_distinct': int(len(np.unique(np.round(d, 2)))),
+    'depth_min': float(d.min()), 'depth_max': float(d.max()),
+    'background_clear': bool((depth[[0, 0, -1, -1], [0, -1, 0, -1]] == 0).all() and depth[..., :3][depth[..., 3] == 0].max() == 0),
+    'depth_vs_combined': float(np.abs(depth[..., :3] - combined[..., :3]).mean()),
+    'normal_vs_combined': float(np.abs(normal[..., :3] - combined[..., :3]).mean()),
+    'normal_distinct': int(len(np.unique(np.round(n, 2), axis=0))),
+    'normal_std': [float(x) for x in n.std(axis=0)],
+    'normal_in_range': bool(n.min() >= 0.0 and n.max() <= 1.0),
+    'normal_coloured': bool(np.abs(n[:, 0] - n[:, 2]).mean() > 0.02),
+}}
+import os
+os.unlink(depth_path)
+os.unlink(normal_path)
+"""
+    )
+    if not got["unchanged"]:
+        raise CheckFailed(f"the render changed scene state: {got['before']} -> {got['after']}")
+    if not got["keep_node"]:
+        raise CheckFailed("the existing compositor node did not survive")
+    if got["size"] != [128, 128] or got["covered"] < 0.05:
+        raise CheckFailed(f"object barely visible in the control image: {got['size']} {got['covered']}")
+    if not got["depth_grey"] or got["depth_distinct"] < 20 or got["depth_max"] - got["depth_min"] < 0.2:
+        raise CheckFailed(f"depth image has no gradient across the object: {got}")
+    if got["depth_max"] < 0.5:
+        raise CheckFailed(f"nearest surface is not light: {got['depth_max']}")
+    if not got["background_clear"]:
+        raise CheckFailed("depth background is not black and transparent")
+    if got["depth_vs_combined"] < 0.05 or got["normal_vs_combined"] < 0.05:
+        raise CheckFailed(f"pass images look like a Combined render: {got}")
+    if got["normal_distinct"] < 50 or min(got["normal_std"]) < 0.03 or not got["normal_in_range"]:
+        raise CheckFailed(f"normal image has no distinct colours per direction: {got}")
+    if not got["normal_coloured"]:
+        raise CheckFailed("normal image is grey, so it is not an RGB normal map")
+    reply = ctx.conn.call("ai_texture_from_render", {"object_name": "NoSuchLaneObject", "prompt": "x"})
+    if reply.get("success") is not False or "NoSuchLaneObject" not in str(reply.get("error")):
+        raise CheckFailed(f"missing object did not give a clear error: {str(reply)[:200]}")
+    return (
+        f"depth {got['depth_distinct']} levels in {got['depth_min']:.2f}-{got['depth_max']:.2f}, "
+        f"normal {got['normal_distinct']} colours, scene and compositor untouched"
+    )
+
+
+def check_grease_pencil_markup_draws_pixels(ctx: Ctx) -> str:
+    out = ctx.out_dir / "markup"
+    out.mkdir(parents=True, exist_ok=True)
+    src, dst, text_dst = out / "src.png", out / "marked.png", out / "text_only.png"
+    dst.unlink(missing_ok=True)
+    text_dst.unlink(missing_ok=True)
+    ctx.conn.exec(
+        PASS_SETUP
+        + f"""
+yy, xx = np.mgrid[0:64, 0:64]
+base = np.zeros((64, 64, 4), dtype=np.float32)
+base[..., 0] = (xx * 3 + 20) / 255.0
+base[..., 1] = (yy * 3 + 20) / 255.0
+base[..., 2] = 100 / 255.0
+base[..., 3] = 1.0
+img = bpy.data.images.new('lane_src', 64, 64, alpha=True)
+img.pixels.foreach_set(base[::-1].reshape(-1))
+img.filepath_raw = {str(src)!r}
+img.file_format = 'PNG'
+img.save()
+bpy.data.images.remove(img)
+"""
+    )
+    annotations = [
+        {"type": "rectangle", "start": [10, 10], "end": [30, 25], "color": "red", "thickness": 2},
+        {"type": "circle", "center": [45, 45], "radius": 10, "color": "#0000ff", "thickness": 3},
+        {"type": "arrow", "start": [5, 55], "end": [50, 58], "color": "lime", "thickness": 2},
+        {"type": "text", "text": "note", "position": [4, 4]},
+    ]
+    reply = ctx.conn.call(
+        "grease_pencil_markup",
+        {"render_path": str(src), "annotations": annotations, "output_path": str(dst)},
+    )
+    if reply.get("success") is not True or reply.get("annotations_drawn") != 3:
+        raise CheckFailed(f"expected 3 shapes drawn: {str(reply)[:300]}")
+    if [item.get("type") for item in reply.get("skipped", [])] != ["text"]:
+        raise CheckFailed(f"text was neither drawn nor reported as skipped: {str(reply)[:300]}")
+    got = ctx.conn.exec(
+        PASS_SETUP
+        + f"""
+before = load_rgba({str(src)!r})
+after = load_rgba({str(dst)!r})
+changed = np.abs(after - before).max(axis=2) > 0.003
+def at(x, y):
+    return [round(float(v), 2) for v in after[y, x, :3]]
+boxes = [(6, 7, 34, 29), (32, 32, 58, 58), (2, 44, 63, 63)]
+allowed = np.zeros_like(changed)
+for x0, y0, x1, y1 in boxes:
+    allowed[y0:y1 + 1, x0:x1 + 1] = True
+result = {{
+    'size': list(after.shape[:2]),
+    'rect_edge': at(20, 10), 'rect_inside': bool(not changed[12:24, 12:29].any()),
+    'circle_top': at(45, 35), 'circle_centre_same': bool(not changed[40:51, 40:51].any()),
+    'arrow_mid': at(27, 56),
+    'outside_changed': int(changed[~allowed].sum()),
+    'per_box': [int(changed[y0:y1 + 1, x0:x1 + 1].sum()) for x0, y0, x1, y1 in boxes],
+}}
+"""
+    )
+    if got["size"] != [64, 64]:
+        raise CheckFailed(f"output size changed: {got['size']}")
+    if got["rect_edge"][:2] != [1.0, 0.0] or got["circle_top"][2] != 1.0 or got["arrow_mid"][1] != 1.0:
+        raise CheckFailed(f"shapes not where top-left coordinates put them: {got}")
+    if not got["rect_inside"] or not got["circle_centre_same"]:
+        raise CheckFailed("pixels inside the outlines changed")
+    if got["outside_changed"] or min(got["per_box"]) == 0:
+        raise CheckFailed(f"pixels changed away from the shapes, or a shape is missing: {got}")
+    only_text = ctx.conn.call(
+        "grease_pencil_markup",
+        {
+            "render_path": str(src),
+            "annotations": [{"type": "text", "text": "x", "position": [1, 1]}],
+            "output_path": str(text_dst),
+        },
+    )
+    if only_text.get("success") is not False or only_text.get("annotations_drawn") != 0:
+        raise CheckFailed(f"a text-only call must report failure: {str(only_text)[:300]}")
+    if text_dst.exists():
+        raise CheckFailed("a call that drew nothing still wrote an output file")
+    try:
+        ctx.conn.call(
+            "grease_pencil_markup",
+            {"render_path": str(src), "annotations": annotations[:1], "output_path": ""},
+        )
+    except RpcError:
+        pass
+    else:
+        raise CheckFailed("an empty output_path was accepted")
+    return f"3 shapes drawn in place ({got['per_box']} pixels changed), none outside, text reported skipped"
+
+
 def check_undo_reverts(ctx: Ctx) -> str:
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoA"})
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoB"})
@@ -1497,6 +1706,8 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("msfs_uv_layout_writes_file", check_msfs_uv_layout_writes_file, 60.0),
     ("msfs_paint_brush_after_setup", check_msfs_paint_brush_after_setup, 60.0),
     ("annotation_add_draws_or_says_why", check_annotation_add_draws_or_says_why, CHECK_TIMEOUT),
+    ("ai_texture_passes_are_real", check_ai_texture_passes_are_real, 120.0),
+    ("grease_pencil_markup_draws_pixels", check_grease_pencil_markup_draws_pixels, 60.0),
     ("undo_reverts", check_undo_reverts, CHECK_TIMEOUT),
     ("failed_call_adds_no_undo_step", check_failed_call_adds_no_undo_step, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),

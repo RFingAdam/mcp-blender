@@ -193,12 +193,17 @@ def tools_section(states: dict[str, dict[str, str]], lane_fails: list[str]) -> s
         [f"`{t}`", ", ".join(s for s in SERIES if states[s][t] == "fail")] for t in g["fail"]
     ]
     lines = [_table(head, rows, numeric=range(1, 2 + len(SERIES))), ""]
-    lines += _details(
-        f"{len(g['fail'])} tools with a known failure", _table(["Tool", "Fails on"], fail_rows)
-    )
+    known = [_table(["Tool", "Fails on"], fail_rows)] if fail_rows else []
     if lane_fails:
         named = ", ".join(f"`{c}`" for c in lane_fails)
-        lines[-2:-2] = [f"Socket checks that still fail: {named}.", ""]
+        known.append(f"Socket checks that still fail: {named}.")
+    if known:
+        summary = (
+            f"{len(g['fail'])} tools with a known failure"
+            if fail_rows
+            else "No tool has a known failure; some socket checks do"
+        )
+        lines += _details(summary, "\n\n".join(known))
     if g["loose"]:
         lines += _details(
             f"{len(g['loose'])} tools that accept a call with a required argument missing",

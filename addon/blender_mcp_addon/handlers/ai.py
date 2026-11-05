@@ -203,9 +203,13 @@ class AIHandlersMixin:
         validate_enum(control_type, "control_type", ["depth", "normal"])
 
         # Render the object to get control image
-        render_path = self._render_control_image(object_name, control_type)
-        if not render_path:
-            return {"success": False, "error": f"Failed to render {control_type} pass for '{object_name}'"}
+        try:
+            render_path = self._render_control_image(object_name, control_type)
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": f"Failed to render {control_type} pass for '{object_name}': {exc}",
+            }
 
         return generate_texture(
             prompt=require_param(params, "prompt", str),
@@ -219,50 +223,159 @@ class AIHandlersMixin:
         )
 
 
-    def _render_control_image(self, object_name: str, control_type: str) -> str | None:
-        """Render a depth or normal pass of an object for ControlNet input."""
+    def _render_control_image(
+        self, object_name: str, control_type: str, size: int = 1024
+    ) -> str:
+        """Render a real depth or normal pass of an object and return the PNG path.
+
+        The render happens in a throwaway scene that holds only the object and a
+        camera framing it, so the caller's scene, view layer and compositor are
+        never touched. Raises ``ValidationError`` for a missing or unrenderable
+        object and ``RuntimeError`` when the render itself fails.
+        """
+        import math
+        import os
+
+        from mathutils import Vector
+
         obj = bpy.data.objects.get(object_name)
-        if not obj:
-            return None
+        if obj is None:
+            raise ValidationError(f"Object not found: {object_name}")
+        if obj.type not in {"MESH", "CURVE", "SURFACE", "FONT", "META"}:
+            raise ValidationError(
+                f"Object '{object_name}' is a {obj.type} and has no surface to render"
+            )
 
-        scene = bpy.context.scene
-        render = scene.render
+        # World-space vertices of the evaluated surface (modifiers applied), for a tight frame.
+        import numpy as np
 
-        # Save current settings
-        old_engine = render.engine
-        old_film = render.film_transparent
-        old_filepath = render.filepath
-        old_res_x = render.resolution_x
-        old_res_y = render.resolution_y
-
+        mesh = bpy.data.meshes.new_from_object(
+            obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        )
         try:
-            render.engine = compat.get_eevee_engine_name()
-            render.film_transparent = True
-            render.resolution_x = 1024
-            render.resolution_y = 1024
+            flat = np.empty(len(mesh.vertices) * 3, dtype=np.float64)
+            mesh.vertices.foreach_get("co", flat)
+        finally:
+            bpy.data.meshes.remove(mesh)
+        if flat.size == 0:
+            raise ValidationError(f"Object '{object_name}' has no geometry to render")
+        local = flat.reshape(-1, 3)
+        world = np.asarray(obj.matrix_world)
+        points = local @ world[:3, :3].T + world[:3, 3]
+        lo, hi = points.min(axis=0), points.max(axis=0)
+        center = Vector(((lo + hi) / 2.0).tolist())
+        radius = float(np.linalg.norm(points - np.asarray(center), axis=1).max()) or 0.5
 
-            output_path = tempfile.mktemp(suffix=".png", prefix=f"control_{control_type}_")
-            render.filepath = output_path
+        fd, output_path = tempfile.mkstemp(suffix=".png", prefix=f"control_{control_type}_")
+        os.close(fd)
 
-            # Enable the appropriate render pass via view layer
-            scene.use_nodes = True
-            view_layer = bpy.context.view_layer
+        scene = None
+        cam_obj = cam_data = group = None
+        try:
+            scene = bpy.data.scenes.new("mcp_control_pass")
+            scene.render.engine = compat.get_eevee_engine_name()
+            scene.render.film_transparent = True
+            scene.render.resolution_x = size
+            scene.render.resolution_y = size
+            scene.render.resolution_percentage = 100
+            scene.render.dither_intensity = 0.0
+            scene.render.use_compositing = True
+            scene.render.filepath = output_path
+            image_settings = scene.render.image_settings
+            image_settings.file_format = "PNG"
+            image_settings.color_mode = "RGBA"
+            image_settings.color_depth = "8"
+            # Pass values must reach the file as written, not through a view transform.
+            # The enum is built at runtime, so ask Blender by assigning, not by listing.
+            with contextlib.suppress(TypeError):
+                scene.view_settings.view_transform = "Raw"
+            scene.view_settings.look = "None"
+            scene.view_settings.exposure = 0.0
+            scene.view_settings.gamma = 1.0
+            scene.collection.objects.link(obj)
+
+            cam_data = bpy.data.cameras.new("mcp_control_cam")
+            cam_obj = bpy.data.objects.new("mcp_control_cam", cam_data)
+            scene.collection.objects.link(cam_obj)
+            scene.camera = cam_obj
+            distance = radius / math.sin(cam_data.angle / 2.0) * 1.15
+            direction = Vector((1.0, -1.0, 0.7)).normalized()
+            cam_obj.location = center + direction * distance
+            cam_obj.rotation_euler = (center - cam_obj.location).to_track_quat("-Z", "Y").to_euler()
+            # Depth along the camera axis, so the ramp spans the surface actually seen.
+            axis = np.asarray(direction)
+            depths = distance - (points - np.asarray(center)) @ axis
+            near, far = float(depths.min()), float(depths.max())
+            if far - near < 1e-6:
+                far = near + 1e-6
+            cam_data.clip_start = max(distance - radius * 2.0, 0.001)
+            cam_data.clip_end = distance + radius * 2.0
+
+            view_layer = scene.view_layers[0]
             if control_type == "depth":
                 view_layer.use_pass_z = True
-            elif control_type == "normal":
+                pass_name = "Depth"
+            else:
                 view_layer.use_pass_normal = True
+                pass_name = "Normal"
 
-            bpy.ops.render.render(write_still=True)
+            tree = compat.get_compositor_tree(scene)
+            if not tree.is_embedded_data:
+                group = tree  # a node group made for this scene; removed below
+            tree.nodes.clear()
+            layers = tree.nodes.new("CompositorNodeRLayers")
+            layers.scene = scene
+            layers.layer = view_layer.name
+            source = layers.outputs.get(pass_name)
+            if source is None:
+                raise RuntimeError(
+                    f"this Blender does not offer a {pass_name} pass for the "
+                    f"{scene.render.engine} engine"
+                )
+            if control_type == "depth":
+                # near is light: 1 at the nearest surface, 0 at the farthest, 0 for the
+                # background (its depth is huge, so the clamp lands on 0).
+                scale = 1.0 / (far - near)
+                ramp = tree.nodes.new("ShaderNodeMath")
+                ramp.operation = "MULTIPLY_ADD"
+                ramp.use_clamp = True
+                ramp.inputs[1].default_value = -scale
+                ramp.inputs[2].default_value = far * scale
+                tree.links.new(source, ramp.inputs[0])
+                color = ramp.outputs[0]
+            else:
+                # world-space normal in -1..1 to 0..1 RGB
+                remap = tree.nodes.new("ShaderNodeVectorMath")
+                remap.operation = "MULTIPLY_ADD"
+                remap.inputs[1].default_value = (0.5, 0.5, 0.5)
+                remap.inputs[2].default_value = (0.5, 0.5, 0.5)
+                tree.links.new(source, remap.inputs[0])
+                color = remap.outputs[0]
+            alpha = tree.nodes.new("CompositorNodeSetAlpha")
+            tree.links.new(color, alpha.inputs[0])
+            tree.links.new(layers.outputs["Alpha"], alpha.inputs[1])
+            output = compat.new_compositor_output(tree)
+            tree.links.new(alpha.outputs[0], output.inputs[0])
+
+            result = bpy.ops.render.render(write_still=True, scene=scene.name)
+            if "FINISHED" not in result:
+                raise RuntimeError(f"the render did not finish ({sorted(result)})")
+            if os.path.getsize(output_path) == 0:
+                raise RuntimeError("the render wrote no image")
             return output_path
-
-        except Exception:
-            return None
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(output_path)
+            raise
         finally:
-            render.engine = old_engine
-            render.film_transparent = old_film
-            render.filepath = old_filepath
-            render.resolution_x = old_res_x
-            render.resolution_y = old_res_y
+            if scene is not None:
+                bpy.data.scenes.remove(scene)
+            if group is not None:
+                bpy.data.node_groups.remove(group)
+            if cam_obj is not None:
+                bpy.data.objects.remove(cam_obj)
+            if cam_data is not None:
+                bpy.data.cameras.remove(cam_data)
 
     # ========== New AI Backend Management Handlers ==========
 

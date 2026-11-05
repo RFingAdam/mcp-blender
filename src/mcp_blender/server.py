@@ -4282,7 +4282,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_grease_pencil_markup",
-        description="Overlay markup annotations (arrows, circles, rectangles, text) on a rendered image. Uses Pillow if available, otherwise falls back to Blender compositor.",
+        description="Overlay markup annotations (arrows, circles, rectangles, text) on a rendered image. Arrows, circles and rectangles are drawn into the pixels with numpy. Text needs Pillow in Blender's Python; without it text items are listed in `skipped`, and `success` is false when nothing was drawn.",
         input_schema={
             "type": "object",
             "properties": {
