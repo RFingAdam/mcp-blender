@@ -161,7 +161,11 @@ class BakingHandlersMixin:
         """
         scene = bpy.context.scene
         owners = [
-            ("render", scene.render, self._bake_settable(scene.render, lambda n: n == "engine" or "bake" in n)),
+            (
+                "render",
+                scene.render,
+                self._bake_settable(scene.render, lambda n: n == "engine" or "bake" in n),
+            ),
             ("render.bake", scene.render.bake, self._bake_settable(scene.render.bake)),
         ]
         if hasattr(scene, "cycles"):
@@ -275,7 +279,8 @@ class BakingHandlersMixin:
         mats = self._bake_materials(obj)
         if not mats:
             raise ValueError(
-                self._bake_material_problem(obj) or f"Object '{obj.name}' has no material to bake onto"
+                self._bake_material_problem(obj)
+                or f"Object '{obj.name}' has no material to bake onto"
             )
         for mat in mats:
             nodes = mat.node_tree.nodes
@@ -396,7 +401,8 @@ class BakingHandlersMixin:
         mats = self._bake_materials(obj)
         if not mats:
             raise ValueError(
-                self._bake_material_problem(obj) or f"Object '{obj.name}' has no material with nodes"
+                self._bake_material_problem(obj)
+                or f"Object '{obj.name}' has no material with nodes"
             )
         info = []
         try:
@@ -528,7 +534,6 @@ class BakingHandlersMixin:
     def _handle_bake_pbr_batch(self, params: dict) -> dict:
         """Bake all requested PBR channels in one call."""
 
-
         object_name = require_param(params, "object_name", str)
         output_dir = require_param(params, "output_dir", str)
         channels = params.get("channels", _ALL_CHANNELS)
@@ -645,11 +650,9 @@ class BakingHandlersMixin:
 
     # =================================================================
 
-
     @_restores_scene
     def _handle_bake_highpoly_to_lowpoly(self, params: dict) -> dict:
         """Bake detail from high-poly onto low-poly using selected_to_active."""
-
 
         lowpoly_name = require_param(params, "lowpoly_name", str)
         highpoly_name = require_param(params, "highpoly_name", str)
@@ -803,11 +806,9 @@ class BakingHandlersMixin:
 
     # =================================================================
 
-
     @_restores_scene
     def _handle_bake_from_multires(self, params: dict) -> dict:
         """Bake normals or displacement from a Multiresolution modifier."""
-
 
         object_name = require_param(params, "object_name", str)
         output_path = require_param(params, "output_path", str)
@@ -928,12 +929,10 @@ class BakingHandlersMixin:
 
     # =================================================================
 
-
     @_restores_scene
     def _handle_bake_to_vertex_colors(self, params: dict) -> dict:
         """Bake to a temporary image then transfer pixel data to vertex colors."""
         import numpy as np
-
 
         object_name = require_param(params, "object_name", str)
         bake_type = params.get("bake_type", "AO").upper()
@@ -1050,13 +1049,11 @@ class BakingHandlersMixin:
 
     # =================================================================
 
-
     def _handle_bake_curvature(self, params: dict) -> dict:
         """Calculate per-vertex curvature via bmesh and bake to an image."""
         import bmesh
         import numpy as np
         from mathutils import Vector
-
 
         object_name = require_param(params, "object_name", str)
         output_path = require_param(params, "output_path", str)
@@ -1152,8 +1149,9 @@ class BakingHandlersMixin:
                 vert_curvature[vert.index] = value
 
             # Create output image
-            image = bpy.data.images.new("__bake_curvature__", width=resolution,
-                                        height=resolution, alpha=False)
+            image = bpy.data.images.new(
+                "__bake_curvature__", width=resolution, height=resolution, alpha=False
+            )
             pixel_count = resolution * resolution
             pixels = np.full(pixel_count * 4, 0.5, dtype=np.float32)
             # Set alpha to 1
@@ -1202,15 +1200,18 @@ class BakingHandlersMixin:
                             p = (px / resolution, py / resolution)
 
                             # Barycentric coordinates
-                            denom = ((uv1.y - uv2.y) * (uv0.x - uv2.x) +
-                                     (uv2.x - uv1.x) * (uv0.y - uv2.y))
+                            denom = (uv1.y - uv2.y) * (uv0.x - uv2.x) + (uv2.x - uv1.x) * (
+                                uv0.y - uv2.y
+                            )
                             if abs(denom) < 1e-10:
                                 continue
 
-                            w0 = ((uv1.y - uv2.y) * (p[0] - uv2.x) +
-                                   (uv2.x - uv1.x) * (p[1] - uv2.y)) / denom
-                            w1 = ((uv2.y - uv0.y) * (p[0] - uv2.x) +
-                                   (uv0.x - uv2.x) * (p[1] - uv2.y)) / denom
+                            w0 = (
+                                (uv1.y - uv2.y) * (p[0] - uv2.x) + (uv2.x - uv1.x) * (p[1] - uv2.y)
+                            ) / denom
+                            w1 = (
+                                (uv2.y - uv0.y) * (p[0] - uv2.x) + (uv0.x - uv2.x) * (p[1] - uv2.y)
+                            ) / denom
                             w2 = 1.0 - w0 - w1
 
                             if w0 < -0.001 or w1 < -0.001 or w2 < -0.001:
@@ -1253,13 +1254,10 @@ class BakingHandlersMixin:
 
     # =================================================================
 
-
     @_restores_scene
     def _handle_bake_id_map(self, params: dict) -> dict:
         """Bake a color ID map with distinct colors per material/object/face set."""
         import random
-
-
 
         object_name = require_param(params, "object_name", str)
         output_path = require_param(params, "output_path", str)
@@ -1267,7 +1265,9 @@ class BakingHandlersMixin:
         color_mode = params.get("color_mode", "PER_MATERIAL").upper()
 
         if color_mode not in ("PER_MATERIAL", "PER_OBJECT", "PER_FACE_SET"):
-            return {"error": f"color_mode must be PER_MATERIAL, PER_OBJECT, or PER_FACE_SET, got '{color_mode}'"}
+            return {
+                "error": f"color_mode must be PER_MATERIAL, PER_OBJECT, or PER_FACE_SET, got '{color_mode}'"
+            }
 
         obj = bpy.data.objects.get(object_name)
         if obj is None:
@@ -1293,6 +1293,7 @@ class BakingHandlersMixin:
                 hue = (hue + golden_ratio) % 1.0
                 # HSV to RGB (saturation=0.85, value=0.9 for vivid distinct colors)
                 import colorsys
+
                 r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.9)
                 colors.append((r, g, b, 1.0))
             return colors
@@ -1417,7 +1418,9 @@ class BakingHandlersMixin:
                     face_set_layer = bm.faces.layers.int.get(".sculpt_face_set")
                     face_sets = {}
                     for face in bm.faces:
-                        key = face.material_index if face_set_layer is None else face[face_set_layer]
+                        key = (
+                            face.material_index if face_set_layer is None else face[face_set_layer]
+                        )
                         face_sets.setdefault(key, []).append(face.index)
                 finally:
                     bm.free()
@@ -1457,6 +1460,4 @@ class BakingHandlersMixin:
                     for mat in temp_materials:
                         bpy.data.materials.remove(mat)
 
-
     # ========== Geometry Nodes Handlers ==========
-

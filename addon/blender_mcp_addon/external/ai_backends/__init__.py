@@ -263,9 +263,7 @@ class BackendManager:
 
         # Prefer local if requested
         if prefer_local:
-            local_candidates = [
-                b for b in candidates if BackendCapability.LOCAL in b.capabilities
-            ]
+            local_candidates = [b for b in candidates if BackendCapability.LOCAL in b.capabilities]
             if local_candidates:
                 candidates = local_candidates
 
@@ -328,9 +326,7 @@ class BackendManager:
             try:
                 selected_backend = self.select_backend(capabilities)
             except NoBackendAvailableError as e:
-                return GenerationResult(
-                    success=False, error=str(e), status=GenerationStatus.FAILED
-                )
+                return GenerationResult(success=False, error=str(e), status=GenerationStatus.FAILED)
 
         # Generate
         return selected_backend.generate(
@@ -381,11 +377,14 @@ class BackendManager:
                 )
             except NoBackendAvailableError as e:
                 return GenerationResult(
-                    success=False, error=str(e), status=GenerationStatus.FAILED,
+                    success=False,
+                    error=str(e),
+                    status=GenerationStatus.FAILED,
                 )
 
         # Convert string workflow_type to backend's enum if possible
         from .comfyui import WorkflowType
+
         if isinstance(workflow_type, str):
             try:
                 workflow_type = WorkflowType(workflow_type)

@@ -56,6 +56,10 @@ packages = ["src/mcp_blender"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.format]
+# Code blocks in the docs are illustrative fragments, not modules.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]  # Line length handled pragmatically for readability

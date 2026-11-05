@@ -11,21 +11,17 @@ ANIMATION_TAGS = {
     "end": "ANIM_END",
     "loop_start": "ANIM_LOOP_START",
     "loop_end": "ANIM_LOOP_END",
-
     # Sound triggers
     "sound": "ANIM_SOUND",
     "sound_start": "ANIM_SOUND_START",
     "sound_stop": "ANIM_SOUND_STOP",
-
     # Effect triggers
     "effect": "ANIM_EFFECT",
     "effect_start": "ANIM_EFFECT_START",
     "effect_stop": "ANIM_EFFECT_STOP",
-
     # Visibility
     "show": "ANIM_VISIBILITY_SHOW",
     "hide": "ANIM_VISIBILITY_HIDE",
-
     # Custom event
     "event": "ANIM_EVENT",
 }
@@ -327,10 +323,12 @@ def list_animation_tags(object_name: str | None = None) -> dict[str, Any]:
     # Get markers
     for marker in scene.timeline_markers:
         if object_name is None or marker.name.startswith(object_name):
-            result["markers"].append({
-                "name": marker.name,
-                "frame": marker.frame,
-            })
+            result["markers"].append(
+                {
+                    "name": marker.name,
+                    "frame": marker.frame,
+                }
+            )
 
     # Get tags from objects
     for obj in bpy.data.objects:
@@ -340,13 +338,15 @@ def list_animation_tags(object_name: str | None = None) -> dict[str, Any]:
         if "MSFS_animation_tags" in obj:
             tags = obj["MSFS_animation_tags"]
             for key, tag_data in tags.items():
-                result["tags"].append({
-                    "object": obj.name,
-                    "key": key,
-                    "type": tag_data.get("type"),
-                    "frame": tag_data.get("frame"),
-                    "data": tag_data.get("data"),
-                })
+                result["tags"].append(
+                    {
+                        "object": obj.name,
+                        "key": key,
+                        "type": tag_data.get("type"),
+                        "frame": tag_data.get("frame"),
+                        "data": tag_data.get("data"),
+                    }
+                )
 
     result["tag_count"] = len(result["tags"])
     result["marker_count"] = len(result["markers"])

@@ -43,6 +43,7 @@ class StableFast3DBackend(BaseBackend):
         """Lazily get the ComfyUI backend instance."""
         if self._comfyui is None:
             from .comfyui import ComfyUIBackend
+
             self._comfyui = ComfyUIBackend(self.config)
         return self._comfyui
 
@@ -104,6 +105,7 @@ class StableFast3DBackend(BaseBackend):
         workflow = template.build(image=server_name)
 
         import uuid
+
         client_id = str(uuid.uuid4())
         result = comfyui._queue_workflow(workflow, client_id)
 
@@ -142,10 +144,12 @@ class StableFast3DBackend(BaseBackend):
         comfyui = self._get_comfyui()
         available, status = comfyui._check_comfyui()
         has_sf3d = comfyui.has_node("StableFast3DLoader") if available else False
-        info.update({
-            "comfyui_host": comfyui._get_host(),
-            "comfyui_status": status,
-            "sf3d_node_available": has_sf3d,
-            "note": "Routes through ComfyUI with StableFast3DLoader node",
-        })
+        info.update(
+            {
+                "comfyui_host": comfyui._get_host(),
+                "comfyui_status": status,
+                "sf3d_node_available": has_sf3d,
+                "note": "Routes through ComfyUI with StableFast3DLoader node",
+            }
+        )
         return info

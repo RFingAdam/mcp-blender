@@ -158,6 +158,7 @@ class ComfyUIBackend(BaseBackend):
     def _get_output_dir(self) -> Path:
         try:
             import bpy
+
             user_path = Path(bpy.utils.resource_path("USER"))
             output_dir = user_path / "mcp_blender_cache" / "ai_models" / "comfyui"
         except Exception:
@@ -166,7 +167,9 @@ class ComfyUIBackend(BaseBackend):
         return output_dir
 
     def _get_host(self) -> str:
-        return self.config.extra.get("host", self.DEFAULT_HOST) if self.config else self.DEFAULT_HOST
+        return (
+            self.config.extra.get("host", self.DEFAULT_HOST) if self.config else self.DEFAULT_HOST
+        )
 
     def _check_comfyui(self) -> tuple[bool, str]:
         """Check if ComfyUI is running and accessible."""
@@ -191,7 +194,7 @@ class ComfyUIBackend(BaseBackend):
         """Check if a specific node type is available in ComfyUI."""
         host = self._get_host()
         try:
-            encoded = urllib.parse.quote(class_type, safe='')
+            encoded = urllib.parse.quote(class_type, safe="")
             req = urllib.request.Request(f"{host}/object_info/{encoded}")
             with urllib.request.urlopen(req, timeout=5) as response:
                 data = json.loads(response.read().decode())
@@ -225,10 +228,14 @@ class ComfyUIBackend(BaseBackend):
             image_data = f.read()
 
         body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="image"; filename="{upload_name}"\r\n'
-            f"Content-Type: application/octet-stream\r\n\r\n"
-        ).encode() + image_data + f"\r\n--{boundary}--\r\n".encode()
+            (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="image"; filename="{upload_name}"\r\n'
+                f"Content-Type: application/octet-stream\r\n\r\n"
+            ).encode()
+            + image_data
+            + f"\r\n--{boundary}--\r\n".encode()
+        )
 
         try:
             req = urllib.request.Request(
@@ -243,7 +250,9 @@ class ComfyUIBackend(BaseBackend):
         except Exception:
             return None
 
-    def _download_image(self, filename: str, subfolder: str = "", output_path: Path | None = None) -> Path | None:
+    def _download_image(
+        self, filename: str, subfolder: str = "", output_path: Path | None = None
+    ) -> Path | None:
         """Download an image from ComfyUI's output directory.
 
         Args:
@@ -255,11 +264,13 @@ class ComfyUIBackend(BaseBackend):
             Local path to downloaded file, or None on failure.
         """
         host = self._get_host()
-        params = urllib.parse.urlencode({
-            "filename": filename,
-            "subfolder": subfolder,
-            "type": "output",
-        })
+        params = urllib.parse.urlencode(
+            {
+                "filename": filename,
+                "subfolder": subfolder,
+                "type": "output",
+            }
+        )
 
         dest = output_path or (self._output_dir / filename)
         try:
@@ -279,7 +290,15 @@ class ComfyUIBackend(BaseBackend):
             Dict mapping map type (e.g. "diffuse") to local file path.
         """
         texture_maps: dict[str, str] = {}
-        known_prefixes = ["diffuse", "roughness", "normal", "metallic", "inpaint", "reference", "controlnet_texture"]
+        known_prefixes = [
+            "diffuse",
+            "roughness",
+            "normal",
+            "metallic",
+            "inpaint",
+            "reference",
+            "controlnet_texture",
+        ]
 
         for _node_id, output in history_outputs.items():
             images = output.get("images", [])
@@ -634,11 +653,13 @@ class ComfyUIBackend(BaseBackend):
                 filename = mesh_info.get("filename")
                 subfolder = mesh_info.get("subfolder", "")
                 try:
-                    params = urllib.parse.urlencode({
-                        "filename": filename,
-                        "subfolder": subfolder,
-                        "type": "output",
-                    })
+                    params = urllib.parse.urlencode(
+                        {
+                            "filename": filename,
+                            "subfolder": subfolder,
+                            "type": "output",
+                        }
+                    )
                     urllib.request.urlretrieve(f"{host}/view?{params}", output_path)
                     return GenerationResult(
                         success=True,
@@ -664,9 +685,11 @@ class ComfyUIBackend(BaseBackend):
     def get_info(self) -> dict[str, Any]:
         info = super().get_info()
         available, status = self._check_comfyui()
-        info.update({
-            "comfyui_host": self._get_host(),
-            "comfyui_status": status,
-            "supported_workflow_types": [wt.value for wt in WorkflowType],
-        })
+        info.update(
+            {
+                "comfyui_host": self._get_host(),
+                "comfyui_status": status,
+                "supported_workflow_types": [wt.value for wt in WorkflowType],
+            }
+        )
         return info

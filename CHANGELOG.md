@@ -178,6 +178,12 @@ Thanks to Muhammet Ali (`muhammetali`) for this fix.
   join 4.2.23 as nightly series, each with its own harness baseline. 4.5 and 5.2 stay gated on every
   pull request. The nightly job is now a matrix over the five best-effort series. The baseline sync
   test finds baselines by glob, so a new series needs no test edit.
+- **The code is formatted with `ruff format`, and CI checks it.** The lint job fails on an
+  unformatted Python file. `.git-blame-ignore-revs` lets `git blame` skip the format commit.
+- **The harness driver takes `--retry-crashes`.** It reruns each crashed case alone. A case that
+  passes alone is reported as a session crash instead of a regression. Only the nightly job uses it,
+  because Blender 4.2 and 4.3 crash inside Blender late in a full run, on a different case each time.
+  The 4.2 baseline is re-recorded with every repair so far.
 - `tests/test_handler_signatures.py`: Blender-free static checks that guard
   against `validate_enum` argument-order regressions and against calling
   Blender operators removed in 4.x.

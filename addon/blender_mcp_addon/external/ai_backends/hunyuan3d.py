@@ -510,13 +510,15 @@ class Hunyuan3DBackend(BaseBackend):
         info = super().get_info()
         available, dep_status = self._check_dependencies()
 
-        info.update({
-            "dependencies_status": dep_status,
-            "device": self._get_device(),
-            "model_loaded": any([self._model, self._text_model, self._image_model]),
-            "output_directory": str(self._output_dir),
-            "recommended_vram": "16GB+",
-        })
+        info.update(
+            {
+                "dependencies_status": dep_status,
+                "device": self._get_device(),
+                "model_loaded": any([self._model, self._text_model, self._image_model]),
+                "output_directory": str(self._output_dir),
+                "recommended_vram": "16GB+",
+            }
+        )
         return info
 
     def initialize(self) -> bool:

@@ -45,7 +45,6 @@ class AnimationHandlersMixin:
             "index": index,
         }
 
-
     def _handle_keyframe_delete(self, params: dict) -> dict:
         """Delete keyframe from an object property."""
         object_name = require_param(params, "object_name", str)
@@ -64,7 +63,6 @@ class AnimationHandlersMixin:
             "deleted": success,
         }
 
-
     def _handle_keyframe_list(self, params: dict) -> dict:
         """List all keyframes for an object."""
         object_name = require_param(params, "object_name", str)
@@ -75,10 +73,11 @@ class AnimationHandlersMixin:
         return {
             "object": obj.name,
             "has_animation": obj.animation_data is not None,
-            "action": obj.animation_data.action.name if obj.animation_data and obj.animation_data.action else None,
+            "action": obj.animation_data.action.name
+            if obj.animation_data and obj.animation_data.action
+            else None,
             "keyframes": keyframes,
         }
-
 
     def _handle_action_create(self, params: dict) -> dict:
         """Create a new action and optionally assign to object."""
@@ -97,12 +96,10 @@ class AnimationHandlersMixin:
 
         return result
 
-
     def _handle_action_list(self, params: dict) -> dict:
         """List all actions in the file."""
         actions = compat.list_actions()
         return {"actions": actions, "count": len(actions)}
-
 
     def _handle_animation_play(self, params: dict) -> dict:
         """Play or pause the animation playback."""
@@ -115,7 +112,6 @@ class AnimationHandlersMixin:
             "playing": play,
             "frame": bpy.context.scene.frame_current,
         }
-
 
     def _handle_animation_goto_frame(self, params: dict) -> dict:
         """Jump to a specific frame."""
@@ -131,4 +127,3 @@ class AnimationHandlersMixin:
         }
 
     # ========== Render Handlers ==========
-

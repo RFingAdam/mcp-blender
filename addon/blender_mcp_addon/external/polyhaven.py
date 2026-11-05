@@ -23,6 +23,7 @@ POLYHAVEN_TIMEOUT = 30
 
 class PolyHavenError(Exception):
     """Error from Poly Haven API."""
+
     pass
 
 
@@ -101,10 +102,7 @@ def search_polyhaven(
                 query_lower = query.lower()
                 name_match = query_lower in asset_id.lower()
                 name_field_match = query_lower in asset_info.get("name", "").lower()
-                tag_match = any(
-                    query_lower in tag.lower()
-                    for tag in asset_info.get("tags", [])
-                )
+                tag_match = any(query_lower in tag.lower() for tag in asset_info.get("tags", []))
                 if not (name_match or name_field_match or tag_match):
                     continue
 
@@ -114,14 +112,16 @@ def search_polyhaven(
                 if not any(cat.lower() in [c.lower() for c in asset_cats] for cat in categories):
                     continue
 
-            results.append({
-                "id": asset_id,
-                "name": asset_info.get("name", asset_id),
-                "type": asset_info.get("type"),
-                "categories": asset_info.get("categories", []),
-                "tags": asset_info.get("tags", [])[:10],  # Limit tags
-                "download_count": asset_info.get("download_count", 0),
-            })
+            results.append(
+                {
+                    "id": asset_id,
+                    "name": asset_info.get("name", asset_id),
+                    "type": asset_info.get("type"),
+                    "categories": asset_info.get("categories", []),
+                    "tags": asset_info.get("tags", [])[:10],  # Limit tags
+                    "download_count": asset_info.get("download_count", 0),
+                }
+            )
 
             if len(results) >= limit:
                 break
@@ -339,8 +339,11 @@ def _download_hdri(
     # Cache the file
     if use_cache:
         cached_path = cache_asset(
-            "polyhaven", asset_id, filepath, resolution,
-            metadata={"type": "hdri", "resolution": resolution}
+            "polyhaven",
+            asset_id,
+            filepath,
+            resolution,
+            metadata={"type": "hdri", "resolution": resolution},
         )
         filepath = str(cached_path)
 
@@ -434,8 +437,15 @@ def _download_texture(
     # Cache the texture directory
     if use_cache:
         cached_dir = cache_directory(
-            "polyhaven", asset_id, temp_dir, resolution,
-            metadata={"type": "texture", "resolution": resolution, "maps": list(texture_files.keys())}
+            "polyhaven",
+            asset_id,
+            temp_dir,
+            resolution,
+            metadata={
+                "type": "texture",
+                "resolution": resolution,
+                "maps": list(texture_files.keys()),
+            },
         )
         # Update file paths to cached locations
         for map_type in texture_files:
@@ -568,8 +578,11 @@ def _download_model(
     # Cache the file
     if use_cache:
         cached_path = cache_asset(
-            "polyhaven", asset_id, filepath, resolution,
-            metadata={"type": "model", "resolution": resolution}
+            "polyhaven",
+            asset_id,
+            filepath,
+            resolution,
+            metadata={"type": "model", "resolution": resolution},
         )
         filepath = str(cached_path)
 

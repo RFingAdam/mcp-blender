@@ -101,9 +101,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Best effort: every series other than 4.5 and 5.2 runs nightly. 4.2 segfaults
-  # at random inside Blender in two cases. Results never gate anything and
-  # nothing may depend on this job.
+  # Best effort: every series other than 4.5 and 5.2 runs nightly. Late in a full
+  # run, 4.2 and 4.3 sometimes segfault inside Blender, on a different heavy case
+  # each time, and the case passes alone. --retry-crashes reruns each crash alone
+  # and names it as a session crash when it passes. The gated jobs never pass it.
+  # Results never gate anything and nothing may depend on this job.
   nightly:
     name: Blender ${{ matrix.version }} (best effort)
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
@@ -157,6 +159,7 @@ jobs:
           --blender "$BLENDER_BIN"
           --out "$RUNNER_TEMP/runs/driver-${{ matrix.series }}"
           --check-baseline tests/harness/baselines/blender-${{ matrix.series }}.json
+          --retry-crashes
 
       - name: Upload results
         if: always()

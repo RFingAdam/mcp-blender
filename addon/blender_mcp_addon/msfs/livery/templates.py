@@ -185,13 +185,15 @@ def get_aircraft_templates() -> dict[str, Any]:
     """
     templates = []
     for aircraft_id, info in SUPPORTED_AIRCRAFT.items():
-        templates.append({
-            "id": aircraft_id,
-            "name": info["name"],
-            "developer": info.get("developer", "Unknown"),
-            "has_public_template": info.get("has_public_template", False),
-            "variants": info.get("variants", []),
-        })
+        templates.append(
+            {
+                "id": aircraft_id,
+                "name": info["name"],
+                "developer": info.get("developer", "Unknown"),
+                "has_public_template": info.get("has_public_template", False),
+                "variants": info.get("variants", []),
+            }
+        )
 
     return {
         "aircraft": templates,
@@ -288,11 +290,13 @@ def download_template(
                 img.file_format = "PNG"
                 img.save()
 
-                result["generated_blanks"].append({
-                    "type": tex_type,
-                    "filepath": str(filepath),
-                    "size": [width, height],
-                })
+                result["generated_blanks"].append(
+                    {
+                        "type": tex_type,
+                        "filepath": str(filepath),
+                        "size": [width, height],
+                    }
+                )
 
     return result
 

@@ -92,7 +92,9 @@ def validate_vector3(value: Any, name: str) -> list[float]:
         ValidationError: If not a valid vector
     """
     if not isinstance(value, (list, tuple)):
-        raise ValidationError(f"Parameter '{name}' must be a list/tuple, got {type(value).__name__}")
+        raise ValidationError(
+            f"Parameter '{name}' must be a list/tuple, got {type(value).__name__}"
+        )
 
     if len(value) != 3:
         raise ValidationError(f"Parameter '{name}' must have 3 elements, got {len(value)}")
@@ -118,7 +120,9 @@ def validate_color(value: Any, name: str) -> list[float]:
         ValidationError: If not a valid color
     """
     if not isinstance(value, (list, tuple)):
-        raise ValidationError(f"Parameter '{name}' must be a list/tuple, got {type(value).__name__}")
+        raise ValidationError(
+            f"Parameter '{name}' must be a list/tuple, got {type(value).__name__}"
+        )
 
     if len(value) not in (3, 4):
         raise ValidationError(f"Parameter '{name}' must have 3 or 4 elements (RGB/RGBA)")
@@ -135,9 +139,7 @@ def validate_color(value: Any, name: str) -> list[float]:
     # Validate range
     for i, v in enumerate(color):
         if not 0.0 <= v <= 1.0:
-            raise ValidationError(
-                f"Parameter '{name}' values must be 0-1, got {v} at index {i}"
-            )
+            raise ValidationError(f"Parameter '{name}' values must be 0-1, got {v} at index {i}")
 
     return color
 
@@ -164,9 +166,7 @@ def validate_enum(value: Any, name: str, allowed: list[str]) -> str:
     upper_allowed = [a.upper() for a in allowed]
 
     if upper_value not in upper_allowed:
-        raise ValidationError(
-            f"Parameter '{name}' must be one of {allowed}, got '{value}'"
-        )
+        raise ValidationError(f"Parameter '{name}' must be one of {allowed}, got '{value}'")
 
     return upper_value
 

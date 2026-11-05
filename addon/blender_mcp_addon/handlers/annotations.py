@@ -81,7 +81,6 @@ class AnnotationHandlersMixin:
             "frame": current_frame,
         }
 
-
     def _handle_annotation_text(self, params: dict) -> dict:
         """Add a text object at a 3D location as an annotation."""
         text_content = require_param(params, "text", str)
@@ -93,11 +92,11 @@ class AnnotationHandlersMixin:
         color = validate_color(color, "color")
 
         # Create a new text curve data block
-        text_data = bpy.data.curves.new(name=f"Annotation_{text_content[:20]}", type='FONT')
+        text_data = bpy.data.curves.new(name=f"Annotation_{text_content[:20]}", type="FONT")
         text_data.body = text_content
         text_data.size = size
-        text_data.align_x = 'LEFT'
-        text_data.align_y = 'BOTTOM'
+        text_data.align_x = "LEFT"
+        text_data.align_y = "BOTTOM"
 
         # Create the object
         text_obj = bpy.data.objects.new(name=f"Text_{text_content[:20]}", object_data=text_data)
@@ -114,13 +113,19 @@ class AnnotationHandlersMixin:
         # Set the Principled BSDF base color
         if mat.node_tree:
             for node in mat.node_tree.nodes:
-                if node.type == 'BSDF_PRINCIPLED':
+                if node.type == "BSDF_PRINCIPLED":
                     node.inputs["Base Color"].default_value = (
-                        color[0], color[1], color[2], color[3]
+                        color[0],
+                        color[1],
+                        color[2],
+                        color[3],
                     )
                     # Make it emissive so it's always visible
                     node.inputs["Emission Color"].default_value = (
-                        color[0], color[1], color[2], 1.0
+                        color[0],
+                        color[1],
+                        color[2],
+                        1.0,
                     )
                     node.inputs["Emission Strength"].default_value = 1.0
                     break
@@ -137,7 +142,6 @@ class AnnotationHandlersMixin:
             "material": mat_name,
         }
 
-
     def _handle_annotation_dimension(self, params: dict) -> dict:
         """Add a dimension line between two points with distance measurement."""
         point_a = require_param(params, "point_a", list)
@@ -148,9 +152,7 @@ class AnnotationHandlersMixin:
 
         point_a = validate_vector3(point_a, "point_a")
         point_b = validate_vector3(point_b, "point_b")
-        units = validate_enum(
-            units, "units", ["METERS", "CM", "MM", "INCHES", "FEET"]
-        )
+        units = validate_enum(units, "units", ["METERS", "CM", "MM", "INCHES", "FEET"])
 
         # Calculate distance
         dx = point_b[0] - point_a[0]
@@ -223,10 +225,10 @@ class AnnotationHandlersMixin:
         # Create the dimension line mesh
         # Vertices: A, A_offset, B_offset, B (for the connecting lines + main dimension line)
         verts = [
-            tuple(point_a),    # 0: endpoint A
-            tuple(a_off),      # 1: offset A
-            tuple(b_off),      # 2: offset B
-            tuple(point_b),    # 3: endpoint B
+            tuple(point_a),  # 0: endpoint A
+            tuple(a_off),  # 1: offset A
+            tuple(b_off),  # 2: offset B
+            tuple(point_b),  # 3: endpoint B
         ]
         edges = [
             (0, 1),  # Extension line A
@@ -247,7 +249,7 @@ class AnnotationHandlersMixin:
         mat.use_nodes = True
         if mat.node_tree:
             for node in mat.node_tree.nodes:
-                if node.type == 'BSDF_PRINCIPLED':
+                if node.type == "BSDF_PRINCIPLED":
                     node.inputs["Base Color"].default_value = (1, 1, 0, 1)
                     node.inputs["Emission Color"].default_value = (1, 1, 0, 1)
                     node.inputs["Emission Strength"].default_value = 2.0
@@ -255,14 +257,14 @@ class AnnotationHandlersMixin:
         dim_obj.data.materials.append(mat)
 
         # Set display as wire for visibility
-        dim_obj.display_type = 'WIRE'
+        dim_obj.display_type = "WIRE"
 
         # Create text label
-        text_data = bpy.data.curves.new(name=f"DimText_{label_text}", type='FONT')
+        text_data = bpy.data.curves.new(name=f"DimText_{label_text}", type="FONT")
         text_data.body = label_text
         text_data.size = max(0.1, distance * 0.08)
-        text_data.align_x = 'CENTER'
-        text_data.align_y = 'BOTTOM'
+        text_data.align_x = "CENTER"
+        text_data.align_y = "BOTTOM"
 
         text_obj = bpy.data.objects.new(name=f"DimLabel_{label_text}", object_data=text_data)
         text_obj.location = tuple(label_pos)
@@ -273,7 +275,7 @@ class AnnotationHandlersMixin:
         text_mat.use_nodes = True
         if text_mat.node_tree:
             for node in text_mat.node_tree.nodes:
-                if node.type == 'BSDF_PRINCIPLED':
+                if node.type == "BSDF_PRINCIPLED":
                     node.inputs["Base Color"].default_value = (1, 1, 0, 1)
                     node.inputs["Emission Color"].default_value = (1, 1, 0, 1)
                     node.inputs["Emission Strength"].default_value = 2.0
@@ -299,7 +301,6 @@ class AnnotationHandlersMixin:
             "point_b": point_b,
             "offset_direction": perp,
         }
-
 
     def _handle_annotation_clear(self, params: dict) -> dict:
         """Clear annotation layers."""
@@ -340,7 +341,6 @@ class AnnotationHandlersMixin:
             "removed": removed_layers,
         }
 
-
     def _handle_grease_pencil_create(self, params: dict) -> dict:
         """Create a grease pencil object with strokes."""
         name = params.get("name", "GPencil")
@@ -363,9 +363,7 @@ class AnnotationHandlersMixin:
 
             validated_pts = []
             for i, pt in enumerate(pts):
-                validated_pts.append(
-                    validate_vector3(pt, f"strokes[{s_idx}].points[{i}]")
-                )
+                validated_pts.append(validate_vector3(pt, f"strokes[{s_idx}].points[{i}]"))
             valid_strokes.append((validated_pts, stroke_thickness))
 
         if not valid_strokes:
@@ -377,9 +375,7 @@ class AnnotationHandlersMixin:
         # Create the data, one layer, and the strokes on the current frame
         gpd = compat.new_grease_pencil(name)
         current_frame = bpy.context.scene.frame_current
-        gpl = compat.add_grease_pencil_strokes(
-            gpd, valid_strokes, color, current_frame
-        )
+        gpl = compat.add_grease_pencil_strokes(gpd, valid_strokes, color, current_frame)
 
         # Create the grease pencil object and link to scene
         gp_obj = bpy.data.objects.new(name, gpd)
@@ -401,14 +397,15 @@ class AnnotationHandlersMixin:
             "frame": current_frame,
         }
 
-
     def _handle_grease_pencil_markup(self, params: dict) -> dict:
         """Overlay markup annotations on a rendered image."""
         render_path = require_param(params, "render_path", str)
         annotations = require_param(params, "annotations", list)
         output_path = require_param(params, "output_path", str)
 
-        render_path = bpy.path.abspath(validate_filepath(render_path, "render_path", must_exist=True))
+        render_path = bpy.path.abspath(
+            validate_filepath(render_path, "render_path", must_exist=True)
+        )
         output_path = bpy.path.abspath(validate_filepath(output_path, "output_path"))
 
         if len(annotations) == 0:
@@ -432,6 +429,4 @@ class AnnotationHandlersMixin:
         # Blender's Python has no Pillow: draw into the pixels with numpy instead
         return _markup_with_pixels(render_path, annotations, output_path)
 
-
     # ========== Material Inspection & Manipulation Handlers ==========
-

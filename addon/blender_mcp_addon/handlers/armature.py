@@ -25,7 +25,8 @@ class ArmatureHandlersMixin:
         bones_data = require_param(params, "bones")
         display_type = params.get("display_type", "OCTAHEDRAL")
         display_type = validate_enum(
-            display_type, "display_type",
+            display_type,
+            "display_type",
             ["OCTAHEDRAL", "STICK", "BBONE", "WIRE", "ENVELOPE"],
         )
 
@@ -104,16 +105,22 @@ class ArmatureHandlersMixin:
             "bones": bone_names_created,
         }
 
-
     def _handle_autorig_preset(self, params: dict) -> dict:
         """Generate a complete rig from a preset type."""
         object_name = require_param(params, "object_name", str)
         preset = require_param(params, "preset", str)
         preset = validate_enum(
-            preset, "preset",
+            preset,
+            "preset",
             [
-                "BIPED", "QUADRUPED", "VEHICLE", "MECHANICAL_ARM",
-                "TURRET", "WHEEL_ASSEMBLY", "DOOR_HINGE", "PISTON",
+                "BIPED",
+                "QUADRUPED",
+                "VEHICLE",
+                "MECHANICAL_ARM",
+                "TURRET",
+                "WHEEL_ASSEMBLY",
+                "DOOR_HINGE",
+                "PISTON",
                 "LANDING_GEAR",
             ],
         )
@@ -139,79 +146,224 @@ class ArmatureHandlersMixin:
             h = sz  # height
             bones = [
                 {"name": f"{pfx}root", "head": [0, 0, 0], "tail": [0, 0, h * 0.1]},
-                {"name": f"{pfx}spine", "head": [0, 0, h * 0.1], "tail": [0, 0, h * 0.3],
-                 "parent": f"{pfx}root", "connected": True},
-                {"name": f"{pfx}chest", "head": [0, 0, h * 0.3], "tail": [0, 0, h * 0.55],
-                 "parent": f"{pfx}spine", "connected": True},
-                {"name": f"{pfx}neck", "head": [0, 0, h * 0.55], "tail": [0, 0, h * 0.65],
-                 "parent": f"{pfx}chest", "connected": True},
-                {"name": f"{pfx}head", "head": [0, 0, h * 0.65], "tail": [0, 0, h * 0.85],
-                 "parent": f"{pfx}neck", "connected": True},
+                {
+                    "name": f"{pfx}spine",
+                    "head": [0, 0, h * 0.1],
+                    "tail": [0, 0, h * 0.3],
+                    "parent": f"{pfx}root",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}chest",
+                    "head": [0, 0, h * 0.3],
+                    "tail": [0, 0, h * 0.55],
+                    "parent": f"{pfx}spine",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}neck",
+                    "head": [0, 0, h * 0.55],
+                    "tail": [0, 0, h * 0.65],
+                    "parent": f"{pfx}chest",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}head",
+                    "head": [0, 0, h * 0.65],
+                    "tail": [0, 0, h * 0.85],
+                    "parent": f"{pfx}neck",
+                    "connected": True,
+                },
                 # Left arm
-                {"name": f"{pfx}shoulder.L", "head": [0, 0, h * 0.55], "tail": [sx * 0.2, 0, h * 0.55],
-                 "parent": f"{pfx}chest"},
-                {"name": f"{pfx}upper_arm.L", "head": [sx * 0.2, 0, h * 0.55], "tail": [sx * 0.35, 0, h * 0.35],
-                 "parent": f"{pfx}shoulder.L", "connected": True},
-                {"name": f"{pfx}forearm.L", "head": [sx * 0.35, 0, h * 0.35], "tail": [sx * 0.5, 0, h * 0.15],
-                 "parent": f"{pfx}upper_arm.L", "connected": True},
-                {"name": f"{pfx}hand.L", "head": [sx * 0.5, 0, h * 0.15], "tail": [sx * 0.55, 0, h * 0.1],
-                 "parent": f"{pfx}forearm.L", "connected": True},
+                {
+                    "name": f"{pfx}shoulder.L",
+                    "head": [0, 0, h * 0.55],
+                    "tail": [sx * 0.2, 0, h * 0.55],
+                    "parent": f"{pfx}chest",
+                },
+                {
+                    "name": f"{pfx}upper_arm.L",
+                    "head": [sx * 0.2, 0, h * 0.55],
+                    "tail": [sx * 0.35, 0, h * 0.35],
+                    "parent": f"{pfx}shoulder.L",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}forearm.L",
+                    "head": [sx * 0.35, 0, h * 0.35],
+                    "tail": [sx * 0.5, 0, h * 0.15],
+                    "parent": f"{pfx}upper_arm.L",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}hand.L",
+                    "head": [sx * 0.5, 0, h * 0.15],
+                    "tail": [sx * 0.55, 0, h * 0.1],
+                    "parent": f"{pfx}forearm.L",
+                    "connected": True,
+                },
                 # Right arm
-                {"name": f"{pfx}shoulder.R", "head": [0, 0, h * 0.55], "tail": [-sx * 0.2, 0, h * 0.55],
-                 "parent": f"{pfx}chest"},
-                {"name": f"{pfx}upper_arm.R", "head": [-sx * 0.2, 0, h * 0.55], "tail": [-sx * 0.35, 0, h * 0.35],
-                 "parent": f"{pfx}shoulder.R", "connected": True},
-                {"name": f"{pfx}forearm.R", "head": [-sx * 0.35, 0, h * 0.35], "tail": [-sx * 0.5, 0, h * 0.15],
-                 "parent": f"{pfx}upper_arm.R", "connected": True},
-                {"name": f"{pfx}hand.R", "head": [-sx * 0.5, 0, h * 0.15], "tail": [-sx * 0.55, 0, h * 0.1],
-                 "parent": f"{pfx}forearm.R", "connected": True},
+                {
+                    "name": f"{pfx}shoulder.R",
+                    "head": [0, 0, h * 0.55],
+                    "tail": [-sx * 0.2, 0, h * 0.55],
+                    "parent": f"{pfx}chest",
+                },
+                {
+                    "name": f"{pfx}upper_arm.R",
+                    "head": [-sx * 0.2, 0, h * 0.55],
+                    "tail": [-sx * 0.35, 0, h * 0.35],
+                    "parent": f"{pfx}shoulder.R",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}forearm.R",
+                    "head": [-sx * 0.35, 0, h * 0.35],
+                    "tail": [-sx * 0.5, 0, h * 0.15],
+                    "parent": f"{pfx}upper_arm.R",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}hand.R",
+                    "head": [-sx * 0.5, 0, h * 0.15],
+                    "tail": [-sx * 0.55, 0, h * 0.1],
+                    "parent": f"{pfx}forearm.R",
+                    "connected": True,
+                },
                 # Left leg
-                {"name": f"{pfx}thigh.L", "head": [sx * 0.1, 0, h * 0.1], "tail": [sx * 0.1, 0.02, -h * 0.15],
-                 "parent": f"{pfx}root"},
-                {"name": f"{pfx}shin.L", "head": [sx * 0.1, 0.02, -h * 0.15], "tail": [sx * 0.1, 0, -h * 0.45],
-                 "parent": f"{pfx}thigh.L", "connected": True},
-                {"name": f"{pfx}foot.L", "head": [sx * 0.1, 0, -h * 0.45], "tail": [sx * 0.1, -0.08 * h, -h * 0.48],
-                 "parent": f"{pfx}shin.L", "connected": True},
+                {
+                    "name": f"{pfx}thigh.L",
+                    "head": [sx * 0.1, 0, h * 0.1],
+                    "tail": [sx * 0.1, 0.02, -h * 0.15],
+                    "parent": f"{pfx}root",
+                },
+                {
+                    "name": f"{pfx}shin.L",
+                    "head": [sx * 0.1, 0.02, -h * 0.15],
+                    "tail": [sx * 0.1, 0, -h * 0.45],
+                    "parent": f"{pfx}thigh.L",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}foot.L",
+                    "head": [sx * 0.1, 0, -h * 0.45],
+                    "tail": [sx * 0.1, -0.08 * h, -h * 0.48],
+                    "parent": f"{pfx}shin.L",
+                    "connected": True,
+                },
                 # Right leg
-                {"name": f"{pfx}thigh.R", "head": [-sx * 0.1, 0, h * 0.1], "tail": [-sx * 0.1, 0.02, -h * 0.15],
-                 "parent": f"{pfx}root"},
-                {"name": f"{pfx}shin.R", "head": [-sx * 0.1, 0.02, -h * 0.15], "tail": [-sx * 0.1, 0, -h * 0.45],
-                 "parent": f"{pfx}thigh.R", "connected": True},
-                {"name": f"{pfx}foot.R", "head": [-sx * 0.1, 0, -h * 0.45], "tail": [-sx * 0.1, -0.08 * h, -h * 0.48],
-                 "parent": f"{pfx}shin.R", "connected": True},
+                {
+                    "name": f"{pfx}thigh.R",
+                    "head": [-sx * 0.1, 0, h * 0.1],
+                    "tail": [-sx * 0.1, 0.02, -h * 0.15],
+                    "parent": f"{pfx}root",
+                },
+                {
+                    "name": f"{pfx}shin.R",
+                    "head": [-sx * 0.1, 0.02, -h * 0.15],
+                    "tail": [-sx * 0.1, 0, -h * 0.45],
+                    "parent": f"{pfx}thigh.R",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}foot.R",
+                    "head": [-sx * 0.1, 0, -h * 0.45],
+                    "tail": [-sx * 0.1, -0.08 * h, -h * 0.48],
+                    "parent": f"{pfx}shin.R",
+                    "connected": True,
+                },
             ]
 
         elif preset == "QUADRUPED":
             bones = [
                 {"name": f"{pfx}root", "head": [0, 0, sz * 0.5], "tail": [0, sy * 0.1, sz * 0.5]},
-                {"name": f"{pfx}spine_front", "head": [0, sy * 0.3, sz * 0.5], "tail": [0, sy * 0.45, sz * 0.55],
-                 "parent": f"{pfx}root"},
-                {"name": f"{pfx}spine_back", "head": [0, -sy * 0.3, sz * 0.5], "tail": [0, -sy * 0.45, sz * 0.5],
-                 "parent": f"{pfx}root"},
-                {"name": f"{pfx}neck", "head": [0, sy * 0.45, sz * 0.55], "tail": [0, sy * 0.5, sz * 0.75],
-                 "parent": f"{pfx}spine_front", "connected": True},
-                {"name": f"{pfx}head", "head": [0, sy * 0.5, sz * 0.75], "tail": [0, sy * 0.6, sz * 0.8],
-                 "parent": f"{pfx}neck", "connected": True},
-                {"name": f"{pfx}tail", "head": [0, -sy * 0.45, sz * 0.5], "tail": [0, -sy * 0.6, sz * 0.55],
-                 "parent": f"{pfx}spine_back", "connected": True},
+                {
+                    "name": f"{pfx}spine_front",
+                    "head": [0, sy * 0.3, sz * 0.5],
+                    "tail": [0, sy * 0.45, sz * 0.55],
+                    "parent": f"{pfx}root",
+                },
+                {
+                    "name": f"{pfx}spine_back",
+                    "head": [0, -sy * 0.3, sz * 0.5],
+                    "tail": [0, -sy * 0.45, sz * 0.5],
+                    "parent": f"{pfx}root",
+                },
+                {
+                    "name": f"{pfx}neck",
+                    "head": [0, sy * 0.45, sz * 0.55],
+                    "tail": [0, sy * 0.5, sz * 0.75],
+                    "parent": f"{pfx}spine_front",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}head",
+                    "head": [0, sy * 0.5, sz * 0.75],
+                    "tail": [0, sy * 0.6, sz * 0.8],
+                    "parent": f"{pfx}neck",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}tail",
+                    "head": [0, -sy * 0.45, sz * 0.5],
+                    "tail": [0, -sy * 0.6, sz * 0.55],
+                    "parent": f"{pfx}spine_back",
+                    "connected": True,
+                },
                 # Front legs
-                {"name": f"{pfx}front_upper.L", "head": [sx * 0.15, sy * 0.35, sz * 0.4], "tail": [sx * 0.15, sy * 0.35, sz * 0.2],
-                 "parent": f"{pfx}spine_front"},
-                {"name": f"{pfx}front_lower.L", "head": [sx * 0.15, sy * 0.35, sz * 0.2], "tail": [sx * 0.15, sy * 0.35, 0],
-                 "parent": f"{pfx}front_upper.L", "connected": True},
-                {"name": f"{pfx}front_upper.R", "head": [-sx * 0.15, sy * 0.35, sz * 0.4], "tail": [-sx * 0.15, sy * 0.35, sz * 0.2],
-                 "parent": f"{pfx}spine_front"},
-                {"name": f"{pfx}front_lower.R", "head": [-sx * 0.15, sy * 0.35, sz * 0.2], "tail": [-sx * 0.15, sy * 0.35, 0],
-                 "parent": f"{pfx}front_upper.R", "connected": True},
+                {
+                    "name": f"{pfx}front_upper.L",
+                    "head": [sx * 0.15, sy * 0.35, sz * 0.4],
+                    "tail": [sx * 0.15, sy * 0.35, sz * 0.2],
+                    "parent": f"{pfx}spine_front",
+                },
+                {
+                    "name": f"{pfx}front_lower.L",
+                    "head": [sx * 0.15, sy * 0.35, sz * 0.2],
+                    "tail": [sx * 0.15, sy * 0.35, 0],
+                    "parent": f"{pfx}front_upper.L",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}front_upper.R",
+                    "head": [-sx * 0.15, sy * 0.35, sz * 0.4],
+                    "tail": [-sx * 0.15, sy * 0.35, sz * 0.2],
+                    "parent": f"{pfx}spine_front",
+                },
+                {
+                    "name": f"{pfx}front_lower.R",
+                    "head": [-sx * 0.15, sy * 0.35, sz * 0.2],
+                    "tail": [-sx * 0.15, sy * 0.35, 0],
+                    "parent": f"{pfx}front_upper.R",
+                    "connected": True,
+                },
                 # Rear legs
-                {"name": f"{pfx}rear_upper.L", "head": [sx * 0.15, -sy * 0.35, sz * 0.4], "tail": [sx * 0.15, -sy * 0.35, sz * 0.2],
-                 "parent": f"{pfx}spine_back"},
-                {"name": f"{pfx}rear_lower.L", "head": [sx * 0.15, -sy * 0.35, sz * 0.2], "tail": [sx * 0.15, -sy * 0.35, 0],
-                 "parent": f"{pfx}rear_upper.L", "connected": True},
-                {"name": f"{pfx}rear_upper.R", "head": [-sx * 0.15, -sy * 0.35, sz * 0.4], "tail": [-sx * 0.15, -sy * 0.35, sz * 0.2],
-                 "parent": f"{pfx}spine_back"},
-                {"name": f"{pfx}rear_lower.R", "head": [-sx * 0.15, -sy * 0.35, sz * 0.2], "tail": [-sx * 0.15, -sy * 0.35, 0],
-                 "parent": f"{pfx}rear_upper.R", "connected": True},
+                {
+                    "name": f"{pfx}rear_upper.L",
+                    "head": [sx * 0.15, -sy * 0.35, sz * 0.4],
+                    "tail": [sx * 0.15, -sy * 0.35, sz * 0.2],
+                    "parent": f"{pfx}spine_back",
+                },
+                {
+                    "name": f"{pfx}rear_lower.L",
+                    "head": [sx * 0.15, -sy * 0.35, sz * 0.2],
+                    "tail": [sx * 0.15, -sy * 0.35, 0],
+                    "parent": f"{pfx}rear_upper.L",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}rear_upper.R",
+                    "head": [-sx * 0.15, -sy * 0.35, sz * 0.4],
+                    "tail": [-sx * 0.15, -sy * 0.35, sz * 0.2],
+                    "parent": f"{pfx}spine_back",
+                },
+                {
+                    "name": f"{pfx}rear_lower.R",
+                    "head": [-sx * 0.15, -sy * 0.35, sz * 0.2],
+                    "tail": [-sx * 0.15, -sy * 0.35, 0],
+                    "parent": f"{pfx}rear_upper.R",
+                    "connected": True,
+                },
             ]
 
         elif preset == "VEHICLE":
@@ -223,28 +375,68 @@ class ArmatureHandlersMixin:
             susp_top = sz * 0.4
             bones = [
                 {"name": f"{pfx}body", "head": [0, 0, sz * 0.3], "tail": [0, sy * 0.2, sz * 0.3]},
-                {"name": f"{pfx}steering", "head": [0, wb_f, susp_top], "tail": [0, wb_f + 0.05, susp_top],
-                 "parent": f"{pfx}body"},
+                {
+                    "name": f"{pfx}steering",
+                    "head": [0, wb_f, susp_top],
+                    "tail": [0, wb_f + 0.05, susp_top],
+                    "parent": f"{pfx}body",
+                },
                 # Front left
-                {"name": f"{pfx}suspension_fl", "head": [hw, wb_f, susp_top], "tail": [hw, wb_f, wh],
-                 "parent": f"{pfx}steering"},
-                {"name": f"{pfx}wheel_fl", "head": [hw, wb_f, wh], "tail": [hw + 0.05, wb_f, wh],
-                 "parent": f"{pfx}suspension_fl", "connected": True},
+                {
+                    "name": f"{pfx}suspension_fl",
+                    "head": [hw, wb_f, susp_top],
+                    "tail": [hw, wb_f, wh],
+                    "parent": f"{pfx}steering",
+                },
+                {
+                    "name": f"{pfx}wheel_fl",
+                    "head": [hw, wb_f, wh],
+                    "tail": [hw + 0.05, wb_f, wh],
+                    "parent": f"{pfx}suspension_fl",
+                    "connected": True,
+                },
                 # Front right
-                {"name": f"{pfx}suspension_fr", "head": [-hw, wb_f, susp_top], "tail": [-hw, wb_f, wh],
-                 "parent": f"{pfx}steering"},
-                {"name": f"{pfx}wheel_fr", "head": [-hw, wb_f, wh], "tail": [-hw - 0.05, wb_f, wh],
-                 "parent": f"{pfx}suspension_fr", "connected": True},
+                {
+                    "name": f"{pfx}suspension_fr",
+                    "head": [-hw, wb_f, susp_top],
+                    "tail": [-hw, wb_f, wh],
+                    "parent": f"{pfx}steering",
+                },
+                {
+                    "name": f"{pfx}wheel_fr",
+                    "head": [-hw, wb_f, wh],
+                    "tail": [-hw - 0.05, wb_f, wh],
+                    "parent": f"{pfx}suspension_fr",
+                    "connected": True,
+                },
                 # Rear left
-                {"name": f"{pfx}suspension_rl", "head": [hw, wb_r, susp_top], "tail": [hw, wb_r, wh],
-                 "parent": f"{pfx}body"},
-                {"name": f"{pfx}wheel_rl", "head": [hw, wb_r, wh], "tail": [hw + 0.05, wb_r, wh],
-                 "parent": f"{pfx}suspension_rl", "connected": True},
+                {
+                    "name": f"{pfx}suspension_rl",
+                    "head": [hw, wb_r, susp_top],
+                    "tail": [hw, wb_r, wh],
+                    "parent": f"{pfx}body",
+                },
+                {
+                    "name": f"{pfx}wheel_rl",
+                    "head": [hw, wb_r, wh],
+                    "tail": [hw + 0.05, wb_r, wh],
+                    "parent": f"{pfx}suspension_rl",
+                    "connected": True,
+                },
                 # Rear right
-                {"name": f"{pfx}suspension_rr", "head": [-hw, wb_r, susp_top], "tail": [-hw, wb_r, wh],
-                 "parent": f"{pfx}body"},
-                {"name": f"{pfx}wheel_rr", "head": [-hw, wb_r, wh], "tail": [-hw - 0.05, wb_r, wh],
-                 "parent": f"{pfx}suspension_rr", "connected": True},
+                {
+                    "name": f"{pfx}suspension_rr",
+                    "head": [-hw, wb_r, susp_top],
+                    "tail": [-hw, wb_r, wh],
+                    "parent": f"{pfx}body",
+                },
+                {
+                    "name": f"{pfx}wheel_rr",
+                    "head": [-hw, wb_r, wh],
+                    "tail": [-hw - 0.05, wb_r, wh],
+                    "parent": f"{pfx}suspension_rr",
+                    "connected": True,
+                },
             ]
 
         elif preset == "MECHANICAL_ARM":
@@ -252,83 +444,158 @@ class ArmatureHandlersMixin:
             seg_len = sz * 0.25
             bones = [
                 {"name": f"{pfx}arm_base", "head": [0, 0, 0], "tail": [0, 0, seg_len]},
-                {"name": f"{pfx}arm_seg1", "head": [0, 0, seg_len], "tail": [0, 0, seg_len * 2],
-                 "parent": f"{pfx}arm_base", "connected": True},
-                {"name": f"{pfx}arm_seg2", "head": [0, 0, seg_len * 2], "tail": [0, 0, seg_len * 3],
-                 "parent": f"{pfx}arm_seg1", "connected": True},
-                {"name": f"{pfx}arm_seg3", "head": [0, 0, seg_len * 3], "tail": [0, 0, seg_len * 4],
-                 "parent": f"{pfx}arm_seg2", "connected": True},
-                {"name": f"{pfx}arm_tip", "head": [0, 0, seg_len * 4], "tail": [0, 0, seg_len * 4.2],
-                 "parent": f"{pfx}arm_seg3", "connected": True},
-                {"name": f"{pfx}arm_ik_target", "head": [0, seg_len, seg_len * 3], "tail": [0, seg_len, seg_len * 3.2]},
+                {
+                    "name": f"{pfx}arm_seg1",
+                    "head": [0, 0, seg_len],
+                    "tail": [0, 0, seg_len * 2],
+                    "parent": f"{pfx}arm_base",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}arm_seg2",
+                    "head": [0, 0, seg_len * 2],
+                    "tail": [0, 0, seg_len * 3],
+                    "parent": f"{pfx}arm_seg1",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}arm_seg3",
+                    "head": [0, 0, seg_len * 3],
+                    "tail": [0, 0, seg_len * 4],
+                    "parent": f"{pfx}arm_seg2",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}arm_tip",
+                    "head": [0, 0, seg_len * 4],
+                    "tail": [0, 0, seg_len * 4.2],
+                    "parent": f"{pfx}arm_seg3",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}arm_ik_target",
+                    "head": [0, seg_len, seg_len * 3],
+                    "tail": [0, seg_len, seg_len * 3.2],
+                },
             ]
-            constraints.append({
-                "bone": f"{pfx}arm_tip",
-                "type": "IK",
-                "target_bone": f"{pfx}arm_ik_target",
-                "chain_count": 4,
-            })
+            constraints.append(
+                {
+                    "bone": f"{pfx}arm_tip",
+                    "type": "IK",
+                    "target_bone": f"{pfx}arm_ik_target",
+                    "chain_count": 4,
+                }
+            )
 
         elif preset == "TURRET":
             base_h = sz * 0.3
             barrel_len = sy * 0.4
             bones = [
                 {"name": f"{pfx}turret_base", "head": [0, 0, 0], "tail": [0, 0, base_h]},
-                {"name": f"{pfx}turret_rotation", "head": [0, 0, base_h], "tail": [0, 0.05, base_h],
-                 "parent": f"{pfx}turret_base", "connected": True},
-                {"name": f"{pfx}turret_elevation", "head": [0, 0, base_h], "tail": [0, barrel_len, base_h],
-                 "parent": f"{pfx}turret_rotation"},
+                {
+                    "name": f"{pfx}turret_rotation",
+                    "head": [0, 0, base_h],
+                    "tail": [0, 0.05, base_h],
+                    "parent": f"{pfx}turret_base",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}turret_elevation",
+                    "head": [0, 0, base_h],
+                    "tail": [0, barrel_len, base_h],
+                    "parent": f"{pfx}turret_rotation",
+                },
             ]
 
         elif preset == "WHEEL_ASSEMBLY":
             axle_len = sx * 0.3
             bones = [
                 {"name": f"{pfx}axle", "head": [0, 0, 0], "tail": [axle_len, 0, 0]},
-                {"name": f"{pfx}wheel", "head": [axle_len, 0, 0], "tail": [axle_len + 0.05, 0, 0],
-                 "parent": f"{pfx}axle", "connected": True},
+                {
+                    "name": f"{pfx}wheel",
+                    "head": [axle_len, 0, 0],
+                    "tail": [axle_len + 0.05, 0, 0],
+                    "parent": f"{pfx}axle",
+                    "connected": True,
+                },
             ]
 
         elif preset == "DOOR_HINGE":
             door_h = sz * 0.8
             bones = [
                 {"name": f"{pfx}hinge", "head": [0, 0, 0], "tail": [0, 0, door_h]},
-                {"name": f"{pfx}door", "head": [0, 0, door_h * 0.5], "tail": [sx * 0.5, 0, door_h * 0.5],
-                 "parent": f"{pfx}hinge"},
-            ]
-            constraints.append({
-                "bone": f"{pfx}hinge",
-                "type": "LIMIT_ROTATION",
-                "settings": {
-                    "use_limit_z": True,
-                    "min_z": math.radians(-120),
-                    "max_z": 0,
-                    "owner_space": "LOCAL",
+                {
+                    "name": f"{pfx}door",
+                    "head": [0, 0, door_h * 0.5],
+                    "tail": [sx * 0.5, 0, door_h * 0.5],
+                    "parent": f"{pfx}hinge",
                 },
-            })
+            ]
+            constraints.append(
+                {
+                    "bone": f"{pfx}hinge",
+                    "type": "LIMIT_ROTATION",
+                    "settings": {
+                        "use_limit_z": True,
+                        "min_z": math.radians(-120),
+                        "max_z": 0,
+                        "owner_space": "LOCAL",
+                    },
+                }
+            )
 
         elif preset == "PISTON":
             piston_len = sy * 0.4
             bones = [
-                {"name": f"{pfx}piston_cylinder", "head": [0, 0, 0], "tail": [0, piston_len * 0.6, 0]},
-                {"name": f"{pfx}piston_rod", "head": [0, piston_len * 0.4, 0], "tail": [0, piston_len, 0]},
+                {
+                    "name": f"{pfx}piston_cylinder",
+                    "head": [0, 0, 0],
+                    "tail": [0, piston_len * 0.6, 0],
+                },
+                {
+                    "name": f"{pfx}piston_rod",
+                    "head": [0, piston_len * 0.4, 0],
+                    "tail": [0, piston_len, 0],
+                },
             ]
-            constraints.append({
-                "bone": f"{pfx}piston_rod",
-                "type": "STRETCH_TO",
-                "target_bone": f"{pfx}piston_cylinder",
-            })
+            constraints.append(
+                {
+                    "bone": f"{pfx}piston_rod",
+                    "type": "STRETCH_TO",
+                    "target_bone": f"{pfx}piston_cylinder",
+                }
+            )
 
         elif preset == "LANDING_GEAR":
             gear_h = sz * 0.6
             bones = [
                 {"name": f"{pfx}gear_mount", "head": [0, 0, gear_h], "tail": [0, 0.02, gear_h]},
-                {"name": f"{pfx}gear_strut_upper", "head": [0, 0, gear_h], "tail": [0, 0, gear_h * 0.6],
-                 "parent": f"{pfx}gear_mount", "connected": True},
-                {"name": f"{pfx}gear_strut_lower", "head": [0, 0, gear_h * 0.6], "tail": [0, 0, gear_h * 0.15],
-                 "parent": f"{pfx}gear_strut_upper", "connected": True},
-                {"name": f"{pfx}gear_wheel", "head": [0, 0, gear_h * 0.15], "tail": [0.05, 0, gear_h * 0.15],
-                 "parent": f"{pfx}gear_strut_lower", "connected": True},
-                {"name": f"{pfx}gear_retract_target", "head": [0, sy * 0.3, gear_h], "tail": [0, sy * 0.3 + 0.05, gear_h]},
+                {
+                    "name": f"{pfx}gear_strut_upper",
+                    "head": [0, 0, gear_h],
+                    "tail": [0, 0, gear_h * 0.6],
+                    "parent": f"{pfx}gear_mount",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}gear_strut_lower",
+                    "head": [0, 0, gear_h * 0.6],
+                    "tail": [0, 0, gear_h * 0.15],
+                    "parent": f"{pfx}gear_strut_upper",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}gear_wheel",
+                    "head": [0, 0, gear_h * 0.15],
+                    "tail": [0.05, 0, gear_h * 0.15],
+                    "parent": f"{pfx}gear_strut_lower",
+                    "connected": True,
+                },
+                {
+                    "name": f"{pfx}gear_retract_target",
+                    "head": [0, sy * 0.3, gear_h],
+                    "tail": [0, sy * 0.3 + 0.05, gear_h],
+                },
             ]
 
         else:
@@ -422,7 +689,6 @@ class ArmatureHandlersMixin:
             "msfs_compatible": msfs_compatible,
         }
 
-
     def _handle_constraint_add(self, params: dict) -> dict:
         """Add a constraint to a bone or object."""
         armature_name = params.get("armature_name")
@@ -430,11 +696,20 @@ class ArmatureHandlersMixin:
         object_name = params.get("object_name")
         constraint_type = require_param(params, "constraint_type", str)
         constraint_type = validate_enum(
-            constraint_type, "constraint_type",
+            constraint_type,
+            "constraint_type",
             [
-                "IK", "COPY_ROTATION", "COPY_LOCATION", "COPY_SCALE",
-                "TRACK_TO", "DAMPED_TRACK", "STRETCH_TO",
-                "LIMIT_ROTATION", "LIMIT_LOCATION", "FLOOR", "CHILD_OF",
+                "IK",
+                "COPY_ROTATION",
+                "COPY_LOCATION",
+                "COPY_SCALE",
+                "TRACK_TO",
+                "DAMPED_TRACK",
+                "STRETCH_TO",
+                "LIMIT_ROTATION",
+                "LIMIT_LOCATION",
+                "FLOOR",
+                "CHILD_OF",
             ],
         )
         target_object_name = params.get("target_object")
@@ -517,13 +792,13 @@ class ArmatureHandlersMixin:
             "influence": influence,
         }
 
-
     def _handle_constraint_preset(self, params: dict) -> dict:
         """Apply preset constraint setups requiring multiple coordinated constraints."""
         armature_name = require_param(params, "armature_name", str)
         preset = require_param(params, "preset", str)
         preset = validate_enum(
-            preset, "preset",
+            preset,
+            "preset",
             ["IK_ARM", "IK_LEG", "PISTON_PAIR", "WHEEL_SPIN", "DOOR_SWING", "TURRET_TRACK"],
         )
         bones = require_param(params, "bones")
@@ -566,7 +841,9 @@ class ArmatureHandlersMixin:
                 c.pole_subtarget = pole_target_name
                 c.pole_angle = math.radians(90)
 
-            constraints_added.append({"bone": ik_bone_name, "type": "IK", "chain_count": chain_count})
+            constraints_added.append(
+                {"bone": ik_bone_name, "type": "IK", "chain_count": chain_count}
+            )
 
         elif preset == "IK_LEG":
             ik_bone_name = require_param(bones, "ik_bone", str)
@@ -583,7 +860,9 @@ class ArmatureHandlersMixin:
                 c.pole_subtarget = pole_target_name
                 c.pole_angle = math.radians(-90)
 
-            constraints_added.append({"bone": ik_bone_name, "type": "IK", "chain_count": chain_count})
+            constraints_added.append(
+                {"bone": ik_bone_name, "type": "IK", "chain_count": chain_count}
+            )
 
             # Add copy rotation to foot bone for foot roll
             if foot_bone_name:
@@ -612,13 +891,17 @@ class ArmatureHandlersMixin:
             sa.subtarget = bone_b_name
             sa.rest_length = 0
             sa.bulge = 1.0
-            constraints_added.append({"bone": bone_a_name, "type": "STRETCH_TO", "target": bone_b_name})
+            constraints_added.append(
+                {"bone": bone_a_name, "type": "STRETCH_TO", "target": bone_b_name}
+            )
 
             # bone_b tracks bone_a
             tb = bone_b.constraints.new(type="DAMPED_TRACK")
             tb.target = arm_obj
             tb.subtarget = bone_a_name
-            constraints_added.append({"bone": bone_b_name, "type": "DAMPED_TRACK", "target": bone_a_name})
+            constraints_added.append(
+                {"bone": bone_b_name, "type": "DAMPED_TRACK", "target": bone_a_name}
+            )
 
         elif preset == "WHEEL_SPIN":
             wheel_bone_name = require_param(bones, "wheel_bone", str)
@@ -631,9 +914,9 @@ class ArmatureHandlersMixin:
             # Add a limit rotation to prevent unwanted rotation on other axes
             lr = wheel_bone.constraints.new(type="LIMIT_ROTATION")
             lr.owner_space = "LOCAL"
-            lr.use_limit_x = (axis != "X")
-            lr.use_limit_y = (axis != "Y")
-            lr.use_limit_z = (axis != "Z")
+            lr.use_limit_x = axis != "X"
+            lr.use_limit_y = axis != "Y"
+            lr.use_limit_z = axis != "Z"
             if axis != "X":
                 lr.min_x = 0
                 lr.max_x = 0
@@ -644,11 +927,13 @@ class ArmatureHandlersMixin:
                 lr.min_z = 0
                 lr.max_z = 0
 
-            constraints_added.append({
-                "bone": wheel_bone_name,
-                "type": "LIMIT_ROTATION",
-                "free_axis": axis,
-            })
+            constraints_added.append(
+                {
+                    "bone": wheel_bone_name,
+                    "type": "LIMIT_ROTATION",
+                    "free_axis": axis,
+                }
+            )
 
         elif preset == "DOOR_SWING":
             hinge_bone_name = require_param(bones, "hinge_bone", str)
@@ -688,13 +973,15 @@ class ArmatureHandlersMixin:
                 lr.min_z = 0
                 lr.max_z = 0
 
-            constraints_added.append({
-                "bone": hinge_bone_name,
-                "type": "LIMIT_ROTATION",
-                "axis": axis,
-                "min_angle": min_angle,
-                "max_angle": max_angle,
-            })
+            constraints_added.append(
+                {
+                    "bone": hinge_bone_name,
+                    "type": "LIMIT_ROTATION",
+                    "axis": axis,
+                    "min_angle": min_angle,
+                    "max_angle": max_angle,
+                }
+            )
 
         elif preset == "TURRET_TRACK":
             base_bone_name = require_param(bones, "base_bone", str)
@@ -756,14 +1043,14 @@ class ArmatureHandlersMixin:
             "total_constraints": len(constraints_added),
         }
 
-
     def _handle_bone_shape_assign(self, params: dict) -> dict:
         """Assign a custom wireframe control shape to a bone."""
         armature_name = require_param(params, "armature_name", str)
         bone_name = require_param(params, "bone_name", str)
         shape = require_param(params, "shape", str)
         shape = validate_enum(
-            shape, "shape",
+            shape,
+            "shape",
             ["CIRCLE", "SQUARE", "CUBE", "SPHERE", "ARROW", "DIAMOND", "CROSS"],
         )
         scale = float(params.get("scale", 1.0))
@@ -775,9 +1062,7 @@ class ArmatureHandlersMixin:
         # Check bone exists
         if bone_name not in arm_obj.data.bones:
             available = [b.name for b in arm_obj.data.bones]
-            raise ValidationError(
-                f"Bone '{bone_name}' not found. Available: {available}"
-            )
+            raise ValidationError(f"Bone '{bone_name}' not found. Available: {available}")
 
         # Create or find the shape widget object
         widget_name = f"WGT_{shape.lower()}"
@@ -810,16 +1095,31 @@ class ArmatureHandlersMixin:
             elif shape == "CUBE":
                 # Wireframe cube
                 coords = [
-                    (-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
-                    (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),
+                    (-1, -1, -1),
+                    (1, -1, -1),
+                    (1, 1, -1),
+                    (-1, 1, -1),
+                    (-1, -1, 1),
+                    (1, -1, 1),
+                    (1, 1, 1),
+                    (-1, 1, 1),
                 ]
                 for c in coords:
                     bm.verts.new(c)
                 bm.verts.ensure_lookup_table()
                 edges_idx = [
-                    (0, 1), (1, 2), (2, 3), (3, 0),
-                    (4, 5), (5, 6), (6, 7), (7, 4),
-                    (0, 4), (1, 5), (2, 6), (3, 7),
+                    (0, 1),
+                    (1, 2),
+                    (2, 3),
+                    (3, 0),
+                    (4, 5),
+                    (5, 6),
+                    (6, 7),
+                    (7, 4),
+                    (0, 4),
+                    (1, 5),
+                    (2, 6),
+                    (3, 7),
                 ]
                 for a, b in edges_idx:
                     bm.edges.new((bm.verts[a], bm.verts[b]))
@@ -862,9 +1162,18 @@ class ArmatureHandlersMixin:
                     bm.verts.new((0, 0, -1)),
                 ]
                 edges_idx = [
-                    (0, 1), (1, 2), (2, 3), (3, 0),
-                    (0, 4), (1, 4), (2, 4), (3, 4),
-                    (0, 5), (1, 5), (2, 5), (3, 5),
+                    (0, 1),
+                    (1, 2),
+                    (2, 3),
+                    (3, 0),
+                    (0, 4),
+                    (1, 4),
+                    (2, 4),
+                    (3, 4),
+                    (0, 5),
+                    (1, 5),
+                    (2, 5),
+                    (3, 5),
                 ]
                 for a, b in edges_idx:
                     bm.edges.new((verts[a], verts[b]))
@@ -930,7 +1239,6 @@ class ArmatureHandlersMixin:
             "scale": scale,
         }
 
-
     def _handle_pose_library_save(self, params: dict) -> dict:
         """Save the current pose as a named pose in custom properties."""
         armature_name = require_param(params, "armature_name", str)
@@ -987,7 +1295,6 @@ class ArmatureHandlersMixin:
             "all_saved_poses": existing_index,
         }
 
-
     def _handle_pose_library_apply(self, params: dict) -> dict:
         """Apply a previously saved pose to an armature."""
         from mathutils import Euler, Quaternion, Vector
@@ -1008,9 +1315,7 @@ class ArmatureHandlersMixin:
             # List available poses
             index_key = "_pose_lib_index"
             available = json.loads(arm_obj.get(index_key, "[]"))
-            raise ValidationError(
-                f"Pose '{pose_name}' not found. Available poses: {available}"
-            )
+            raise ValidationError(f"Pose '{pose_name}' not found. Available poses: {available}")
 
         pose_data = json.loads(pose_json)
 
@@ -1062,11 +1367,13 @@ class ArmatureHandlersMixin:
                     saved_euler = Euler(transforms["rotation_euler"])
                     # Linear interpolation for Euler angles
                     pose_bone.rotation_mode = saved_rot_mode
-                    pose_bone.rotation_euler = Euler((
-                        current_euler.x + (saved_euler.x - current_euler.x) * blend_factor,
-                        current_euler.y + (saved_euler.y - current_euler.y) * blend_factor,
-                        current_euler.z + (saved_euler.z - current_euler.z) * blend_factor,
-                    ))
+                    pose_bone.rotation_euler = Euler(
+                        (
+                            current_euler.x + (saved_euler.x - current_euler.x) * blend_factor,
+                            current_euler.y + (saved_euler.y - current_euler.y) * blend_factor,
+                            current_euler.z + (saved_euler.z - current_euler.z) * blend_factor,
+                        )
+                    )
 
             bones_applied.append(bone_name)
 
@@ -1080,7 +1387,6 @@ class ArmatureHandlersMixin:
             "bones_applied": bones_applied,
             "bones_skipped": bones_skipped,
         }
-
 
     def _handle_rig_validate(self, params: dict) -> dict:
         """Validate an armature rig for export compatibility."""
@@ -1119,9 +1425,7 @@ class ArmatureHandlersMixin:
         # Check rotation
         rot = arm_obj.rotation_euler
         if abs(rot.x) > 0.01 or abs(rot.y) > 0.01 or abs(rot.z) > 0.01:
-            warnings.append(
-                "Armature has non-zero rotation. Apply rotation before export."
-            )
+            warnings.append("Armature has non-zero rotation. Apply rotation before export.")
 
         # Check for bones without deform flag
         deform_bones = [b for b in arm_data.bones if b.use_deform]
@@ -1132,7 +1436,9 @@ class ArmatureHandlersMixin:
         root_bones = [b for b in arm_data.bones if b.parent is None]
         if len(root_bones) > 1:
             root_names = [b.name for b in root_bones]
-            warnings.append(f"Multiple root bones found: {root_names}. Most formats expect a single root.")
+            warnings.append(
+                f"Multiple root bones found: {root_names}. Most formats expect a single root."
+            )
 
         # Check constraints
         constraint_count = 0
@@ -1195,29 +1501,27 @@ class ArmatureHandlersMixin:
                 info.append(f"MSFS-prefixed bones: {len(msfs_bones)}")
 
         # Check attached meshes
-        child_meshes = [
-            child for child in arm_obj.children
-            if child.type == "MESH"
-        ]
+        child_meshes = [child for child in arm_obj.children if child.type == "MESH"]
         mesh_info = []
         for mesh_obj in child_meshes:
             # Check for armature modifier
             has_armature_mod = any(
-                mod.type == "ARMATURE" and mod.object == arm_obj
-                for mod in mesh_obj.modifiers
+                mod.type == "ARMATURE" and mod.object == arm_obj for mod in mesh_obj.modifiers
             )
             # Check vertex groups match bones
             vg_names = [vg.name for vg in mesh_obj.vertex_groups]
             matching_bones = [name for name in vg_names if name in arm_data.bones]
             unmatched_groups = [name for name in vg_names if name not in arm_data.bones]
 
-            mesh_info.append({
-                "mesh": mesh_obj.name,
-                "has_armature_modifier": has_armature_mod,
-                "vertex_groups": len(vg_names),
-                "matching_bone_groups": len(matching_bones),
-                "unmatched_groups": len(unmatched_groups),
-            })
+            mesh_info.append(
+                {
+                    "mesh": mesh_obj.name,
+                    "has_armature_modifier": has_armature_mod,
+                    "vertex_groups": len(vg_names),
+                    "matching_bone_groups": len(matching_bones),
+                    "unmatched_groups": len(unmatched_groups),
+                }
+            )
 
             if not has_armature_mod:
                 warnings.append(f"Mesh '{mesh_obj.name}' is child but has no Armature modifier")
@@ -1249,6 +1553,4 @@ class ArmatureHandlersMixin:
             "info": info,
         }
 
-
     # ========== Physics Simulation Handlers ==========
-

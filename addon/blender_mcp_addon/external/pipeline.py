@@ -77,24 +77,30 @@ PRESET_CONFIGS = {
     "standard": {
         "backend": "triposg",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.UV,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.UV,
         ],
         "description": "Good single-image quality via TripoSG",
     },
     "multiview_quality": {
         "backend": "multiview",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.UV,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.UV,
         ],
         "description": "Best quality via Zero123Plus + InstantMesh",
     },
     "vehicle_components": {
         "backend": "multiview",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.COMPONENT_SEPARATION,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.COMPONENT_SEPARATION,
             PipelineStage.UV,
         ],
         "description": "Vehicle with part separation via multi-view",
@@ -102,8 +108,10 @@ PRESET_CONFIGS = {
     "msfs_vehicle": {
         "backend": "multiview",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.UV,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.UV,
             PipelineStage.MSFS_PREP,
         ],
         "description": "MSFS vehicle with LOD/collision via multi-view",
@@ -111,8 +119,10 @@ PRESET_CONFIGS = {
     "msfs_building": {
         "backend": "triposg",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.UV,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.UV,
             PipelineStage.MSFS_PREP,
         ],
         "description": "MSFS building via TripoSG",
@@ -120,8 +130,10 @@ PRESET_CONFIGS = {
     "generic": {
         "backend": "auto",
         "stages": [
-            PipelineStage.GENERATE, PipelineStage.IMPORT,
-            PipelineStage.CLEANUP, PipelineStage.UV,
+            PipelineStage.GENERATE,
+            PipelineStage.IMPORT,
+            PipelineStage.CLEANUP,
+            PipelineStage.UV,
         ],
         "description": "Default pipeline with best available backend",
     },
@@ -176,9 +188,7 @@ def run_pipeline(params, handlers):
     # Initialize stage results
     for stage in stages_to_run:
         if stage.value in skip:
-            run.stages[stage.value] = StageResult(
-                stage=stage, status=StageStatus.SKIPPED
-            )
+            run.stages[stage.value] = StageResult(stage=stage, status=StageStatus.SKIPPED)
         else:
             run.stages[stage.value] = StageResult(stage=stage)
 
@@ -220,9 +230,7 @@ def run_pipeline(params, handlers):
                     }
                 )
                 target = int(params.get("target_polycount", 10000))
-                stats = handlers._handle_ai_mesh_stats(
-                    {"object_name": run.object_name}
-                )
+                stats = handlers._handle_ai_mesh_stats({"object_name": run.object_name})
                 current_faces = stats.get("faces", 0)
                 if current_faces > target:
                     ratio = target / current_faces
@@ -279,18 +287,14 @@ def run_pipeline(params, handlers):
                 sr.result = {"uv_results": uv_results}
 
             elif stage == PipelineStage.TEXTURE:
-                texture_prompt = params.get("texture_prompt") or params.get(
-                    "prompt", ""
-                )
+                texture_prompt = params.get("texture_prompt") or params.get("prompt", "")
                 if texture_prompt and run.object_name:
                     try:
                         result = handlers._handle_ai_generate_texture_sync(
                             {
                                 "object_name": run.object_name,
                                 "prompt": texture_prompt,
-                                "resolution": int(
-                                    params.get("texture_resolution", 1024)
-                                ),
+                                "resolution": int(params.get("texture_resolution", 1024)),
                             }
                         )
                         sr.result = result
@@ -314,19 +318,16 @@ def run_pipeline(params, handlers):
                     # Update object name to LOD0 after hierarchy creation
                     lod0_name = f"{run.object_name}_LOD0"
                     import bpy as _bpy
+
                     if _bpy.data.objects.get(lod0_name):
                         run.object_name = lod0_name
-                    handlers._handle_msfs_create_collision_box(
-                        {"object_name": run.object_name}
-                    )
+                    handlers._handle_msfs_create_collision_box({"object_name": run.object_name})
                     validation = handlers._handle_msfs_validate_for_export(
                         {"object_name": run.object_name}
                     )
                     output_dir = params.get("output_dir")
                     if output_dir:
-                        handlers._handle_msfs_export_model(
-                            {"output_dir": output_dir}
-                        )
+                        handlers._handle_msfs_export_model({"output_dir": output_dir})
                     sr.result = {
                         "lod": lod_result,
                         "validation": validation,

@@ -43,6 +43,7 @@ class MultiviewBackend(BaseBackend):
     def _get_comfyui(self):
         if self._comfyui is None:
             from .comfyui import ComfyUIBackend
+
             self._comfyui = ComfyUIBackend(self.config)
         return self._comfyui
 
@@ -52,9 +53,8 @@ class MultiviewBackend(BaseBackend):
         comfyui = self._get_comfyui()
         if not comfyui.is_available():
             return False
-        return (
-            comfyui.has_node("[Comfy3D] Zero123Plus Diffusion Model")
-            and comfyui.has_node("[Comfy3D] Load InstantMesh Reconstruction Model")
+        return comfyui.has_node("[Comfy3D] Zero123Plus Diffusion Model") and comfyui.has_node(
+            "[Comfy3D] Load InstantMesh Reconstruction Model"
         )
 
     def generate(
@@ -96,7 +96,9 @@ class MultiviewBackend(BaseBackend):
             template = WorkflowTemplate(WorkflowType.MULTIVIEW_TO_3D)
         except FileNotFoundError as e:
             return GenerationResult(
-                success=False, error=str(e), status=GenerationStatus.FAILED,
+                success=False,
+                error=str(e),
+                status=GenerationStatus.FAILED,
             )
 
         workflow = template.build(image=server_name)
@@ -139,13 +141,21 @@ class MultiviewBackend(BaseBackend):
         info = super().get_info()
         comfyui = self._get_comfyui()
         available, status = comfyui._check_comfyui()
-        has_zero123 = comfyui.has_node("[Comfy3D] Zero123Plus Diffusion Model") if available else False
-        has_instantmesh = comfyui.has_node("[Comfy3D] Load InstantMesh Reconstruction Model") if available else False
-        info.update({
-            "comfyui_host": comfyui._get_host(),
-            "comfyui_status": status,
-            "zero123plus_available": has_zero123,
-            "instantmesh_available": has_instantmesh,
-            "note": "Routes through ComfyUI with Zero123Plus + InstantMesh nodes",
-        })
+        has_zero123 = (
+            comfyui.has_node("[Comfy3D] Zero123Plus Diffusion Model") if available else False
+        )
+        has_instantmesh = (
+            comfyui.has_node("[Comfy3D] Load InstantMesh Reconstruction Model")
+            if available
+            else False
+        )
+        info.update(
+            {
+                "comfyui_host": comfyui._get_host(),
+                "comfyui_status": status,
+                "zero123plus_available": has_zero123,
+                "instantmesh_available": has_instantmesh,
+                "note": "Routes through ComfyUI with Zero123Plus + InstantMesh nodes",
+            }
+        )
         return info

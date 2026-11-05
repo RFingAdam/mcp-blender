@@ -123,16 +123,20 @@ def create_collision_box(
     bbox_corners = [source_obj.matrix_world @ Vector(corner) for corner in source_obj.bound_box]
 
     # Calculate dimensions
-    min_co = Vector((
-        min(c.x for c in bbox_corners),
-        min(c.y for c in bbox_corners),
-        min(c.z for c in bbox_corners),
-    ))
-    max_co = Vector((
-        max(c.x for c in bbox_corners),
-        max(c.y for c in bbox_corners),
-        max(c.z for c in bbox_corners),
-    ))
+    min_co = Vector(
+        (
+            min(c.x for c in bbox_corners),
+            min(c.y for c in bbox_corners),
+            min(c.z for c in bbox_corners),
+        )
+    )
+    max_co = Vector(
+        (
+            max(c.x for c in bbox_corners),
+            max(c.y for c in bbox_corners),
+            max(c.z for c in bbox_corners),
+        )
+    )
 
     # Add padding
     min_co -= Vector((padding, padding, padding))
@@ -315,12 +319,14 @@ def list_collision_meshes(parent_name: str | None = None) -> dict[str, Any]:
             if parent_name and obj.parent and obj.parent.name != parent_name:
                 continue
 
-            collision_meshes.append({
-                "name": obj.name,
-                "collision_type": obj.get("MSFS_collision_type", "COLLIDER"),
-                "parent": obj.parent.name if obj.parent else None,
-                "vertex_count": len(obj.data.vertices) if obj.type == "MESH" else 0,
-            })
+            collision_meshes.append(
+                {
+                    "name": obj.name,
+                    "collision_type": obj.get("MSFS_collision_type", "COLLIDER"),
+                    "parent": obj.parent.name if obj.parent else None,
+                    "vertex_count": len(obj.data.vertices) if obj.type == "MESH" else 0,
+                }
+            )
 
     return {
         "collision_meshes": collision_meshes,

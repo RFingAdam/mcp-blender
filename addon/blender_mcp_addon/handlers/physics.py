@@ -28,9 +28,7 @@ class PhysicsHandlersMixin:
         collision_shape = params.get("collision_shape", "CONVEX_HULL")
 
         # Validate enums
-        body_type = validate_enum(
-            body_type, "body_type", ["ACTIVE", "PASSIVE"]
-        )
+        body_type = validate_enum(body_type, "body_type", ["ACTIVE", "PASSIVE"])
         collision_shape = validate_enum(
             collision_shape,
             "collision_shape",
@@ -67,7 +65,6 @@ class PhysicsHandlersMixin:
             "collision_shape": collision_shape,
         }
 
-
     def _handle_physics_rigid_body_batch(self, params: dict) -> dict:
         """Add rigid bodies to multiple objects at once."""
         object_names = require_param(params, "object_names", list)
@@ -75,9 +72,7 @@ class PhysicsHandlersMixin:
         mass = float(params.get("mass", 1.0))
         ground_object = params.get("ground_object")
 
-        body_type = validate_enum(
-            body_type, "body_type", ["ACTIVE", "PASSIVE"]
-        )
+        body_type = validate_enum(body_type, "body_type", ["ACTIVE", "PASSIVE"])
 
         # Ensure rigid body world exists
         scene = bpy.context.scene
@@ -99,11 +94,13 @@ class PhysicsHandlersMixin:
             try:
                 bpy.ops.rigidbody.object_add(type=body_type)
                 obj.rigid_body.mass = mass
-                results.append({
-                    "object": obj.name,
-                    "body_type": body_type,
-                    "mass": mass,
-                })
+                results.append(
+                    {
+                        "object": obj.name,
+                        "body_type": body_type,
+                        "mass": mass,
+                    }
+                )
             except Exception as e:
                 errors.append(f"Failed to add rigid body to '{name}': {str(e)}")
 
@@ -128,9 +125,7 @@ class PhysicsHandlersMixin:
                         "collision_shape": "MESH",
                     }
                 except Exception as e:
-                    errors.append(
-                        f"Failed to set ground object '{ground_object}': {str(e)}"
-                    )
+                    errors.append(f"Failed to set ground object '{ground_object}': {str(e)}")
 
         response = {
             "success": True,
@@ -145,7 +140,6 @@ class PhysicsHandlersMixin:
             response["success"] = len(results) > 0 or ground_result is not None
 
         return response
-
 
     def _handle_physics_simulate(self, params: dict) -> dict:
         """Run physics simulation and optionally apply results."""
@@ -215,11 +209,9 @@ class PhysicsHandlersMixin:
 
         return response
 
-
     # Cloth simulation presets: {quality_steps, mass, air_damping, tension_stiffness,
     #   compression_stiffness, bending_stiffness, tension_damping, compression_damping,
     #   bending_damping}
-
 
     def _handle_physics_cloth_add(self, params: dict) -> dict:
         """Add cloth simulation to a mesh object."""
@@ -239,13 +231,15 @@ class PhysicsHandlersMixin:
         obj = get_object_or_error(object_name)
 
         if obj.type != "MESH":
-            return {"error": f"Object '{object_name}' is type {obj.type}, not MESH. Cloth requires a mesh object."}
+            return {
+                "error": f"Object '{object_name}' is type {obj.type}, not MESH. Cloth requires a mesh object."
+            }
 
         # Select and activate the object
         ensure_object_selected(obj)
 
         # Add cloth modifier
-        bpy.ops.object.modifier_add(type='CLOTH')
+        bpy.ops.object.modifier_add(type="CLOTH")
         cloth_mod = obj.modifiers.get("Cloth")
         if cloth_mod is None:
             return {"error": "Failed to add cloth modifier"}
@@ -284,16 +278,14 @@ class PhysicsHandlersMixin:
                 continue
 
             # Check if it already has a collision modifier
-            has_collision = any(m.type == 'COLLISION' for m in col_obj.modifiers)
+            has_collision = any(m.type == "COLLISION" for m in col_obj.modifiers)
             if not has_collision:
                 ensure_object_selected(col_obj)
                 try:
-                    bpy.ops.object.modifier_add(type='COLLISION')
+                    bpy.ops.object.modifier_add(type="COLLISION")
                     collision_results.append(col_name)
                 except Exception as e:
-                    collision_errors.append(
-                        f"Failed to add collision to '{col_name}': {str(e)}"
-                    )
+                    collision_errors.append(f"Failed to add collision to '{col_name}': {str(e)}")
             else:
                 collision_results.append(f"{col_name} (already had collision)")
 
@@ -311,7 +303,7 @@ class PhysicsHandlersMixin:
                 dx, dy, dz = dx / length, dy / length, dz / length
 
             # Create a wind force field
-            bpy.ops.object.effector_add(type='WIND', location=(0, 0, 0))
+            bpy.ops.object.effector_add(type="WIND", location=(0, 0, 0))
             wind_obj = bpy.context.active_object
             wind_obj.name = f"Wind_{object_name}"
             wind_obj.field.strength = wind_strength
@@ -344,7 +336,6 @@ class PhysicsHandlersMixin:
 
         return response
 
-
     def _handle_physics_soft_body_add(self, params: dict) -> dict:
         """Add soft body simulation to a mesh object."""
         object_name = require_param(params, "object_name", str)
@@ -355,18 +346,20 @@ class PhysicsHandlersMixin:
         obj = get_object_or_error(object_name)
 
         if obj.type != "MESH":
-            return {"error": f"Object '{object_name}' is type {obj.type}, not MESH. Soft body requires a mesh object."}
+            return {
+                "error": f"Object '{object_name}' is type {obj.type}, not MESH. Soft body requires a mesh object."
+            }
 
         # Select and activate the object
         ensure_object_selected(obj)
 
         # Add soft body modifier
-        bpy.ops.object.modifier_add(type='SOFT_BODY')
+        bpy.ops.object.modifier_add(type="SOFT_BODY")
         sb_mod = obj.modifiers.get("Softbody")
         if sb_mod is None:
             # Blender may name it differently
             for mod in obj.modifiers:
-                if mod.type == 'SOFT_BODY':
+                if mod.type == "SOFT_BODY":
                     sb_mod = mod
                     break
         if sb_mod is None:
@@ -397,7 +390,6 @@ class PhysicsHandlersMixin:
             "modifier": sb_mod.name,
         }
 
-
     def _handle_physics_fluid_quick(self, params: dict) -> dict:
         """Quick fluid simulation setup with domain and flow objects."""
         domain_name = require_param(params, "domain_object", str)
@@ -406,9 +398,7 @@ class PhysicsHandlersMixin:
         resolution = int(params.get("resolution", 64))
         viscosity = float(params.get("viscosity", 0.0))
 
-        fluid_type = validate_enum(
-            fluid_type, "fluid_type", ["LIQUID", "GAS"]
-        )
+        fluid_type = validate_enum(fluid_type, "fluid_type", ["LIQUID", "GAS"])
 
         domain_obj = get_object_or_error(domain_name)
         flow_obj = get_object_or_error(flow_name)
@@ -422,17 +412,17 @@ class PhysicsHandlersMixin:
         ensure_object_selected(domain_obj)
 
         # Add fluid modifier as domain
-        bpy.ops.object.modifier_add(type='FLUID')
+        bpy.ops.object.modifier_add(type="FLUID")
         fluid_mod = None
         for mod in domain_obj.modifiers:
-            if mod.type == 'FLUID':
+            if mod.type == "FLUID":
                 fluid_mod = mod
                 break
         if fluid_mod is None:
             return {"error": "Failed to add fluid modifier to domain object"}
 
         # Set as domain
-        fluid_mod.fluid_type = 'DOMAIN'
+        fluid_mod.fluid_type = "DOMAIN"
         domain_settings = fluid_mod.domain_settings
 
         # Configure domain type
@@ -447,26 +437,26 @@ class PhysicsHandlersMixin:
             domain_settings.viscosity_value = viscosity
 
         # Set cache type to modular for better control
-        domain_settings.cache_type = 'MODULAR'
+        domain_settings.cache_type = "MODULAR"
 
         # --- Set up flow object ---
         ensure_object_selected(flow_obj)
 
-        bpy.ops.object.modifier_add(type='FLUID')
+        bpy.ops.object.modifier_add(type="FLUID")
         flow_mod = None
         for mod in flow_obj.modifiers:
-            if mod.type == 'FLUID':
+            if mod.type == "FLUID":
                 flow_mod = mod
                 break
         if flow_mod is None:
             return {"error": "Failed to add fluid modifier to flow object"}
 
         # Set as flow (inflow)
-        flow_mod.fluid_type = 'FLOW'
+        flow_mod.fluid_type = "FLOW"
         flow_settings = flow_mod.flow_settings
         # The flow enum has no GAS: gas is simulated from smoke.
         flow_settings.flow_type = "SMOKE" if fluid_type == "GAS" else fluid_type
-        flow_settings.flow_behavior = 'INFLOW'
+        flow_settings.flow_behavior = "INFLOW"
 
         return {
             "success": True,
@@ -486,6 +476,4 @@ class PhysicsHandlersMixin:
             "note": "Use bpy.ops.fluid.bake_all() or the Physics tab to bake the simulation before rendering.",
         }
 
-
     # ========== Annotation & Grease Pencil Handlers ==========
-

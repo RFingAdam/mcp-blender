@@ -115,11 +115,14 @@ def test_scene_clear(runner: TestRunner):
 def test_object_create_cube(runner: TestRunner):
     """Test object_create handler with cube."""
     runner.reset_scene()
-    result = runner.handlers.handle("object_create", {
-        "type": "cube",
-        "name": "TestCube",
-        "location": [1, 2, 3],
-    })
+    result = runner.handlers.handle(
+        "object_create",
+        {
+            "type": "cube",
+            "name": "TestCube",
+            "location": [1, 2, 3],
+        },
+    )
     assert result["name"] == "TestCube", f"Name mismatch: {result['name']}"
     assert result["type"] == "MESH", f"Type mismatch: {result['type']}"
 
@@ -180,11 +183,14 @@ def test_object_transform(runner: TestRunner):
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "TestCube"})
 
-    result = runner.handlers.handle("object_transform", {
-        "name": "TestCube",
-        "location": [5, 6, 7],
-        "scale": [2, 2, 2],
-    })
+    result = runner.handlers.handle(
+        "object_transform",
+        {
+            "name": "TestCube",
+            "location": [5, 6, 7],
+            "scale": [2, 2, 2],
+        },
+    )
 
     obj = bpy.data.objects.get("TestCube")
     assert abs(obj.location.x - 5) < 0.01, "X location not updated"
@@ -207,10 +213,13 @@ def test_object_duplicate(runner: TestRunner):
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "Original"})
 
-    result = runner.handlers.handle("object_duplicate", {
-        "name": "Original",
-        "new_name": "Copy",
-    })
+    result = runner.handlers.handle(
+        "object_duplicate",
+        {
+            "name": "Original",
+            "new_name": "Copy",
+        },
+    )
 
     assert bpy.data.objects.get("Original") is not None, "Original should exist"
     assert bpy.data.objects.get("Copy") is not None, "Copy should exist"
@@ -242,10 +251,13 @@ def test_material_assign(runner: TestRunner):
     runner.handlers.handle("object_create", {"type": "cube", "name": "TestCube"})
     runner.handlers.handle("material_create", {"name": "TestMat"})
 
-    result = runner.handlers.handle("material_assign", {
-        "object_name": "TestCube",
-        "material_name": "TestMat",
-    })
+    result = runner.handlers.handle(
+        "material_assign",
+        {
+            "object_name": "TestCube",
+            "material_name": "TestMat",
+        },
+    )
 
     obj = bpy.data.objects.get("TestCube")
     assert len(obj.material_slots) > 0, "No material slots"
@@ -256,10 +268,13 @@ def test_material_set_color(runner: TestRunner):
     """Test material_set_color handler."""
     runner.handlers.handle("material_create", {"name": "ColorMat"})
 
-    result = runner.handlers.handle("material_set_color", {
-        "material_name": "ColorMat",
-        "color": [1.0, 0.0, 0.0, 1.0],  # Red
-    })
+    result = runner.handlers.handle(
+        "material_set_color",
+        {
+            "material_name": "ColorMat",
+            "color": [1.0, 0.0, 0.0, 1.0],  # Red
+        },
+    )
 
     mat = bpy.data.materials.get("ColorMat")
     # Find Principled BSDF
@@ -287,10 +302,13 @@ def test_modifier_add(runner: TestRunner):
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "ModCube"})
 
-    result = runner.handlers.handle("modifier_add", {
-        "object_name": "ModCube",
-        "modifier_type": "SUBSURF",
-    })
+    result = runner.handlers.handle(
+        "modifier_add",
+        {
+            "object_name": "ModCube",
+            "modifier_type": "SUBSURF",
+        },
+    )
 
     obj = bpy.data.objects.get("ModCube")
     assert len(obj.modifiers) > 0, "No modifiers added"
@@ -301,17 +319,23 @@ def test_modifier_configure(runner: TestRunner):
     """Test modifier_configure handler."""
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "ModCube"})
-    runner.handlers.handle("modifier_add", {
-        "object_name": "ModCube",
-        "modifier_type": "SUBSURF",
-        "modifier_name": "Subdivision",
-    })
+    runner.handlers.handle(
+        "modifier_add",
+        {
+            "object_name": "ModCube",
+            "modifier_type": "SUBSURF",
+            "modifier_name": "Subdivision",
+        },
+    )
 
-    result = runner.handlers.handle("modifier_configure", {
-        "object_name": "ModCube",
-        "modifier_name": "Subdivision",
-        "properties": {"levels": 3},
-    })
+    result = runner.handlers.handle(
+        "modifier_configure",
+        {
+            "object_name": "ModCube",
+            "modifier_name": "Subdivision",
+            "properties": {"levels": 3},
+        },
+    )
 
     obj = bpy.data.objects.get("ModCube")
     assert obj.modifiers["Subdivision"].levels == 3, "Levels not set"
@@ -321,16 +345,22 @@ def test_modifier_remove(runner: TestRunner):
     """Test modifier_remove handler."""
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "ModCube"})
-    runner.handlers.handle("modifier_add", {
-        "object_name": "ModCube",
-        "modifier_type": "SUBSURF",
-        "modifier_name": "ToRemove",
-    })
+    runner.handlers.handle(
+        "modifier_add",
+        {
+            "object_name": "ModCube",
+            "modifier_type": "SUBSURF",
+            "modifier_name": "ToRemove",
+        },
+    )
 
-    result = runner.handlers.handle("modifier_remove", {
-        "object_name": "ModCube",
-        "modifier_name": "ToRemove",
-    })
+    result = runner.handlers.handle(
+        "modifier_remove",
+        {
+            "object_name": "ModCube",
+            "modifier_name": "ToRemove",
+        },
+    )
 
     obj = bpy.data.objects.get("ModCube")
     assert "ToRemove" not in obj.modifiers, "Modifier not removed"
@@ -341,11 +371,14 @@ def test_keyframe_insert(runner: TestRunner):
     runner.reset_scene()
     runner.handlers.handle("object_create", {"type": "cube", "name": "AnimCube"})
 
-    result = runner.handlers.handle("keyframe_insert", {
-        "object_name": "AnimCube",
-        "data_path": "location",
-        "frame": 1,
-    })
+    result = runner.handlers.handle(
+        "keyframe_insert",
+        {
+            "object_name": "AnimCube",
+            "data_path": "location",
+            "frame": 1,
+        },
+    )
 
     obj = bpy.data.objects.get("AnimCube")
     assert obj.animation_data is not None, "No animation data"
@@ -371,11 +404,14 @@ def test_render_set_engine(runner: TestRunner):
 
 def test_render_set_resolution(runner: TestRunner):
     """Test render_set_resolution handler."""
-    result = runner.handlers.handle("render_set_resolution", {
-        "width": 1920,
-        "height": 1080,
-        "percentage": 50,
-    })
+    result = runner.handlers.handle(
+        "render_set_resolution",
+        {
+            "width": 1920,
+            "height": 1080,
+            "percentage": 50,
+        },
+    )
 
     scene = bpy.context.scene
     assert scene.render.resolution_x == 1920, "Width not set"
@@ -392,20 +428,26 @@ def test_render_image(runner: TestRunner):
     bpy.context.scene.camera = bpy.context.active_object
 
     # Set small resolution for fast test
-    runner.handlers.handle("render_set_resolution", {
-        "width": 64,
-        "height": 64,
-        "percentage": 100,
-    })
+    runner.handlers.handle(
+        "render_set_resolution",
+        {
+            "width": 64,
+            "height": 64,
+            "percentage": 100,
+        },
+    )
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         output_path = f.name
 
     try:
-        result = runner.handlers.handle("render_image", {
-            "output_path": output_path,
-            "file_format": "PNG",
-        })
+        result = runner.handlers.handle(
+            "render_image",
+            {
+                "output_path": output_path,
+                "file_format": "PNG",
+            },
+        )
         assert os.path.exists(output_path), "Render output not created"
     finally:
         if os.path.exists(output_path):
@@ -421,10 +463,13 @@ def test_export_gltf(runner: TestRunner):
         output_path = f.name
 
     try:
-        result = runner.handlers.handle("export_gltf", {
-            "filepath": output_path,
-            "export_format": "GLB",
-        })
+        result = runner.handlers.handle(
+            "export_gltf",
+            {
+                "filepath": output_path,
+                "export_format": "GLB",
+            },
+        )
         assert os.path.exists(output_path), "GLB file not created"
     finally:
         if os.path.exists(output_path):
@@ -440,9 +485,12 @@ def test_export_obj(runner: TestRunner):
         output_path = f.name
 
     try:
-        result = runner.handlers.handle("export_obj", {
-            "filepath": output_path,
-        })
+        result = runner.handlers.handle(
+            "export_obj",
+            {
+                "filepath": output_path,
+            },
+        )
         assert os.path.exists(output_path), "OBJ file not created"
     finally:
         if os.path.exists(output_path):
@@ -494,20 +542,26 @@ def test_mesh_fill_enum_values(runner: TestRunner):
     assert edges, "expected boundary edges after deleting a face"
 
     for fill_type in ("NGON", "TRIANGLE_FAN"):
-        result = runner.handlers.handle("mesh_fill", {
-            "object_name": "FillGrid",
-            "edge_indices": edges,
-            "fill_type": fill_type,
-        })
+        result = runner.handlers.handle(
+            "mesh_fill",
+            {
+                "object_name": "FillGrid",
+                "edge_indices": edges,
+                "fill_type": fill_type,
+            },
+        )
         assert result["success"], f"mesh_fill rejected fill_type={fill_type}"
 
     # An invalid value must still be rejected.
     try:
-        runner.handlers.handle("mesh_fill", {
-            "object_name": "FillGrid",
-            "edge_indices": edges,
-            "fill_type": "NOT_A_FILL_TYPE",
-        })
+        runner.handlers.handle(
+            "mesh_fill",
+            {
+                "object_name": "FillGrid",
+                "edge_indices": edges,
+                "fill_type": "NOT_A_FILL_TYPE",
+            },
+        )
     except ValidationError:
         pass
     else:
@@ -527,8 +581,9 @@ def test_compat_eevee_name(runner: TestRunner):
     assert name in ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"), f"Unexpected EEVEE name: {name}"
 
     # The reported name must be one this Blender build actually accepts.
-    valid = {item.identifier
-             for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items}
+    valid = {
+        item.identifier for item in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items
+    }
     assert name in valid, f"EEVEE name {name} not in this build's engines: {sorted(valid)}"
 
 
@@ -561,7 +616,9 @@ def main():
     print("\nObject Tests:")
     runner.run_test("object_create_cube", lambda: test_object_create_cube(runner))
     runner.run_test("object_create_sphere", lambda: test_object_create_sphere(runner))
-    runner.run_test("object_create_all_primitives", lambda: test_object_create_all_primitives(runner))
+    runner.run_test(
+        "object_create_all_primitives", lambda: test_object_create_all_primitives(runner)
+    )
     runner.run_test("object_list", lambda: test_object_list(runner))
     runner.run_test("object_get", lambda: test_object_get(runner))
     runner.run_test("object_transform", lambda: test_object_transform(runner))

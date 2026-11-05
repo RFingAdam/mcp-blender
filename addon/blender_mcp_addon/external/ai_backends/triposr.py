@@ -70,12 +70,8 @@ class TripoSRBackend(BaseBackend):
         self._jobs: dict[str, dict] = {}
         self._output_dir = self._get_output_dir()
         # System Python path (not Blender's bundled Python)
-        self._python_path = (
-            config.extra.get("python_path", "python3") if config else "python3"
-        )
-        self._triposr_path = (
-            config.extra.get("triposr_path") if config else None
-        )
+        self._python_path = config.extra.get("python_path", "python3") if config else "python3"
+        self._triposr_path = config.extra.get("triposr_path") if config else None
 
     def _get_output_dir(self) -> Path:
         """Get the output directory for generated models."""
@@ -310,7 +306,7 @@ class TripoSRBackend(BaseBackend):
                 model.renderer.set_chunk_size(8192)
                 model.to(device)
 
-                image = Image.open({job['image_path']!r})
+                image = Image.open({job["image_path"]!r})
                 if image.mode != "RGBA":
                     image = image.convert("RGBA")
 
@@ -320,8 +316,8 @@ class TripoSRBackend(BaseBackend):
                 meshes = model.extract_mesh(scene_codes, resolution={mc_resolution})
                 mesh = meshes[0]
 
-                output_path = {job['output_path']!r}
-                output_format = {job['output_format']!r}
+                output_path = {job["output_path"]!r}
+                output_format = {job["output_format"]!r}
 
                 if output_format == "glb":
                     mesh.export(output_path)
@@ -341,6 +337,7 @@ class TripoSRBackend(BaseBackend):
             env = None
             if self._triposr_path:
                 import os
+
                 env = os.environ.copy()
                 env["PYTHONPATH"] = self._triposr_path + ":" + env.get("PYTHONPATH", "")
 
@@ -520,15 +517,17 @@ class TripoSRBackend(BaseBackend):
         info = super().get_info()
         available, dep_status = self._check_dependencies()
 
-        info.update({
-            "dependencies_status": dep_status,
-            "device": self._get_device(),
-            "output_directory": str(self._output_dir),
-            "python_path": self._python_path,
-            "triposr_path": self._triposr_path,
-            "execution_mode": "subprocess (system Python)",
-            "note": "TripoSR requires an input image. For text-to-3D, use a different backend.",
-        })
+        info.update(
+            {
+                "dependencies_status": dep_status,
+                "device": self._get_device(),
+                "output_directory": str(self._output_dir),
+                "python_path": self._python_path,
+                "triposr_path": self._triposr_path,
+                "execution_mode": "subprocess (system Python)",
+                "note": "TripoSR requires an input image. For text-to-3D, use a different backend.",
+            }
+        )
         return info
 
     def initialize(self) -> bool:

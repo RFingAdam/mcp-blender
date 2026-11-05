@@ -23,7 +23,6 @@ class MeasurementHandlersMixin:
         """Calculate total surface area with optional per-material breakdown."""
         import bmesh
 
-
         object_name = require_param(params, "object_name", str)
         per_material = params.get("per_material", False)
         world_space = params.get("world_space", True)
@@ -65,9 +64,7 @@ class MeasurementHandlersMixin:
             }
 
             if per_material:
-                result["per_material"] = {
-                    k: round(v, 6) for k, v in sorted(material_areas.items())
-                }
+                result["per_material"] = {k: round(v, 6) for k, v in sorted(material_areas.items())}
 
             return result
         finally:
@@ -75,11 +72,9 @@ class MeasurementHandlersMixin:
 
     # ── 2. Volume ────────────────────────────────────────────────────
 
-
     def _handle_measure_volume(self, params: dict) -> dict:
         """Calculate mesh volume using the signed-tetrahedron method."""
         import bmesh
-
 
         object_name = require_param(params, "object_name", str)
 
@@ -95,9 +90,7 @@ class MeasurementHandlersMixin:
             bm.edges.ensure_lookup_table()
 
             # Check manifold-ness: every edge must have exactly 2 linked faces
-            non_manifold_edges = [
-                e.index for e in bm.edges if not e.is_manifold
-            ]
+            non_manifold_edges = [e.index for e in bm.edges if not e.is_manifold]
             is_manifold = len(non_manifold_edges) == 0
 
             # Signed tetrahedron volume method
@@ -138,12 +131,10 @@ class MeasurementHandlersMixin:
 
     # ── 3. Clearance ─────────────────────────────────────────────────
 
-
     def _handle_measure_clearance(self, params: dict) -> dict:
         """Min/avg/max distance between two mesh objects via BVHTree."""
         import bmesh
         from mathutils.bvhtree import BVHTree
-
 
         name_a = require_param(params, "object_a", str)
         name_b = require_param(params, "object_b", str)
@@ -260,11 +251,9 @@ class MeasurementHandlersMixin:
 
     # ── 4. Validate Dimensions ───────────────────────────────────────
 
-
     def _handle_validate_dimensions(self, params: dict) -> dict:
         """Check object bbox dimensions against expected with tolerance."""
         from mathutils import Vector
-
 
         object_name = require_param(params, "object_name", str)
         expected = require_param(params, "expected", dict)
@@ -301,9 +290,7 @@ class MeasurementHandlersMixin:
             expected_val = float(expected[dim_name])
             axis = axis_map[dim_name]
             if axis not in actual_dims:
-                raise ValidationError(
-                    f"Invalid axis '{axis}' in axis_mapping for '{dim_name}'"
-                )
+                raise ValidationError(f"Invalid axis '{axis}' in axis_mapping for '{dim_name}'")
             actual_val = actual_dims[axis]
             deviation = abs(actual_val - expected_val)
             within = deviation <= tolerance
@@ -333,7 +320,6 @@ class MeasurementHandlersMixin:
         }
 
     # ── 5. Calibrate from Reference ──────────────────────────────────
-
 
     def _handle_calibrate_from_reference(self, params: dict) -> dict:
         """Scale object to match a known real-world dimension on one axis."""
@@ -392,8 +378,7 @@ class MeasurementHandlersMixin:
 
         if current_dim < 1e-8:
             raise ValidationError(
-                f"Object has near-zero extent on {dimension_axis} axis; "
-                "cannot calibrate"
+                f"Object has near-zero extent on {dimension_axis} axis; cannot calibrate"
             )
 
         scale_factor = known_meters / current_dim
@@ -430,11 +415,9 @@ class MeasurementHandlersMixin:
 
     # ── 6. Edge Angle ────────────────────────────────────────────────
 
-
     def _handle_measure_edge_angle(self, params: dict) -> dict:
         """Measure dihedral angles at mesh edges."""
         import bmesh
-
 
         object_name = require_param(params, "object_name", str)
         edge_indices = params.get("edge_indices", None)
@@ -455,13 +438,10 @@ class MeasurementHandlersMixin:
             if edge_indices is not None:
                 target_indices = set(int(i) for i in edge_indices)
                 edges_to_check = [
-                    e for e in bm.edges
-                    if e.index in target_indices and len(e.link_faces) >= 2
+                    e for e in bm.edges if e.index in target_indices and len(e.link_faces) >= 2
                 ]
             else:
-                edges_to_check = [
-                    e for e in bm.edges if len(e.link_faces) >= 2
-                ]
+                edges_to_check = [e for e in bm.edges if len(e.link_faces) >= 2]
 
             angles: dict[str, float] = {}
             flagged_below: list[int] = []
@@ -504,9 +484,7 @@ class MeasurementHandlersMixin:
                 angle_vals = list(angles.values())
                 result["min_angle"] = round(min(angle_vals), 4)
                 result["max_angle"] = round(max(angle_vals), 4)
-                result["avg_angle"] = round(
-                    sum(angle_vals) / len(angle_vals), 4
-                )
+                result["avg_angle"] = round(sum(angle_vals) / len(angle_vals), 4)
 
             return result
         finally:
@@ -514,12 +492,10 @@ class MeasurementHandlersMixin:
 
     # ── 7. Validate Mesh Quality ─────────────────────────────────────
 
-
     def _handle_validate_mesh_quality(self, params: dict) -> dict:
         """Comprehensive mesh quality audit."""
         import bmesh
         from mathutils import Vector
-
 
         ALL_CHECKS = [
             "NON_MANIFOLD",
@@ -568,16 +544,12 @@ class MeasurementHandlersMixin:
             # ── NON_MANIFOLD ──
             if "NON_MANIFOLD" in checks_to_run:
                 run_count += 1
-                non_manifold = [
-                    e.index for e in bm.edges if not e.is_manifold
-                ]
+                non_manifold = [e.index for e in bm.edges if not e.is_manifold]
                 passed = len(non_manifold) == 0
                 if passed:
                     passed_count += 1
                 else:
-                    blocking_issues.append(
-                        f"{len(non_manifold)} non-manifold edge(s)"
-                    )
+                    blocking_issues.append(f"{len(non_manifold)} non-manifold edge(s)")
                 check_results["NON_MANIFOLD"] = {
                     "passed": passed,
                     "count": len(non_manifold),
@@ -595,16 +567,13 @@ class MeasurementHandlersMixin:
                 degenerate = [
                     f.index
                     for f in bm.faces
-                    if f.calc_area() < EPSILON
-                    or any(e.calc_length() < EPSILON for e in f.edges)
+                    if f.calc_area() < EPSILON or any(e.calc_length() < EPSILON for e in f.edges)
                 ]
                 passed = len(degenerate) == 0
                 if passed:
                     passed_count += 1
                 else:
-                    blocking_issues.append(
-                        f"{len(degenerate)} degenerate face(s)"
-                    )
+                    blocking_issues.append(f"{len(degenerate)} degenerate face(s)")
                 check_results["DEGENERATE"] = {
                     "passed": passed,
                     "count": len(degenerate),
@@ -636,6 +605,7 @@ class MeasurementHandlersMixin:
                         if len(shared_verts) >= 2:
                             sv = list(shared_verts)
                             v0, v1 = sv[0], sv[1]
+
                             # Find order of v0→v1 in each face
                             def edge_order(face, va, vb):
                                 verts = list(face.verts)
@@ -671,16 +641,12 @@ class MeasurementHandlersMixin:
             # ── ZERO_AREA ──
             if "ZERO_AREA" in checks_to_run:
                 run_count += 1
-                zero_area = [
-                    f.index for f in bm.faces if f.calc_area() < EPSILON
-                ]
+                zero_area = [f.index for f in bm.faces if f.calc_area() < EPSILON]
                 passed = len(zero_area) == 0
                 if passed:
                     passed_count += 1
                 else:
-                    blocking_issues.append(
-                        f"{len(zero_area)} zero-area face(s)"
-                    )
+                    blocking_issues.append(f"{len(zero_area)} zero-area face(s)")
                 check_results["ZERO_AREA"] = {
                     "passed": passed,
                     "count": len(zero_area),
@@ -695,9 +661,7 @@ class MeasurementHandlersMixin:
             # ── NGONS ──
             if "NGONS" in checks_to_run:
                 run_count += 1
-                ngons = [
-                    f.index for f in bm.faces if len(f.verts) > 4
-                ]
+                ngons = [f.index for f in bm.faces if len(f.verts) > 4]
                 # N-gons are not strictly blocking but noteworthy
                 passed = len(ngons) == 0
                 if passed:
@@ -707,9 +671,7 @@ class MeasurementHandlersMixin:
                     "count": len(ngons),
                     "indices": ngons[:50],
                     "percentage": (
-                        round(len(ngons) / total_faces * 100, 2)
-                        if total_faces > 0
-                        else 0
+                        round(len(ngons) / total_faces * 100, 2) if total_faces > 0 else 0
                     ),
                     "detail": (
                         "No n-gons (all faces are tris or quads)"
@@ -721,9 +683,7 @@ class MeasurementHandlersMixin:
             # ── TRIS ──
             if "TRIS" in checks_to_run:
                 run_count += 1
-                tris = [
-                    f.index for f in bm.faces if len(f.verts) == 3
-                ]
+                tris = [f.index for f in bm.faces if len(f.verts) == 3]
                 # Tris are fine for game engines, just informational
                 passed = True  # Tris are not a failure
                 passed_count += 1
@@ -731,9 +691,7 @@ class MeasurementHandlersMixin:
                     "passed": passed,
                     "count": len(tris),
                     "percentage": (
-                        round(len(tris) / total_faces * 100, 2)
-                        if total_faces > 0
-                        else 0
+                        round(len(tris) / total_faces * 100, 2) if total_faces > 0 else 0
                     ),
                     "detail": (
                         f"{len(tris)} triangle(s) "
@@ -761,9 +719,7 @@ class MeasurementHandlersMixin:
                             # Non-degenerate if not all UVs are identical
                             if len(set((round(uv.x, 6), round(uv.y, 6)) for uv in uvs)) > 1:
                                 faces_with_uv += 1
-                        uv_coverage_ratio = (
-                            faces_with_uv / total_faces if total_faces > 0 else 0.0
-                        )
+                        uv_coverage_ratio = faces_with_uv / total_faces if total_faces > 0 else 0.0
 
                 passed = has_uv and uv_coverage_ratio > 0.5
                 if passed:
@@ -806,12 +762,8 @@ class MeasurementHandlersMixin:
                             u_vals = [uv.x for uv in uvs]
                             v_vals = [uv.y for uv in uvs]
                             # Map UV center to grid cell
-                            cu = int(
-                                (sum(u_vals) / len(u_vals)) * grid_size
-                            ) % grid_size
-                            cv = int(
-                                (sum(v_vals) / len(v_vals)) * grid_size
-                            ) % grid_size
+                            cu = int((sum(u_vals) / len(u_vals)) * grid_size) % grid_size
+                            cv = int((sum(v_vals) / len(v_vals)) * grid_size) % grid_size
                             key = (cu, cv)
                             if key not in grid:
                                 grid[key] = []
@@ -878,9 +830,7 @@ class MeasurementHandlersMixin:
             if "SCALE_APPLIED" in checks_to_run:
                 run_count += 1
                 scale = obj.scale
-                is_unit = all(
-                    abs(s - 1.0) < 1e-4 for s in scale
-                )
+                is_unit = all(abs(s - 1.0) < 1e-4 for s in scale)
                 passed = is_unit
                 if passed:
                     passed_count += 1
@@ -908,16 +858,20 @@ class MeasurementHandlersMixin:
                     origin_local = Vector((0, 0, 0))
                     offset = (geo_center - origin_local).length
                     # Relative to bbox diagonal
-                    bbox_min = Vector((
-                        min(b.x for b in bbox),
-                        min(b.y for b in bbox),
-                        min(b.z for b in bbox),
-                    ))
-                    bbox_max = Vector((
-                        max(b.x for b in bbox),
-                        max(b.y for b in bbox),
-                        max(b.z for b in bbox),
-                    ))
+                    bbox_min = Vector(
+                        (
+                            min(b.x for b in bbox),
+                            min(b.y for b in bbox),
+                            min(b.z for b in bbox),
+                        )
+                    )
+                    bbox_max = Vector(
+                        (
+                            max(b.x for b in bbox),
+                            max(b.y for b in bbox),
+                            max(b.z for b in bbox),
+                        )
+                    )
                     diagonal = (bbox_max - bbox_min).length
                     relative_offset = offset / diagonal if diagonal > 0 else 0.0
                     passed = relative_offset < 0.1  # Within 10% of bbox diagonal
@@ -961,6 +915,4 @@ class MeasurementHandlersMixin:
         finally:
             bm.free()
 
-
     # ========== Collection & System Handlers ==========
-

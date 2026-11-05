@@ -17,14 +17,9 @@ class ExportImportHandlersMixin:
 
     def _handle_export_gltf(self, params: dict) -> dict:
         """Export to glTF/GLB."""
-        filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath"
-        )
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
         export_format = validate_enum(
-            params.get("export_format", "GLB"),
-            "export_format",
-            ["GLB", "GLTF_SEPARATE"]
+            params.get("export_format", "GLB"), "export_format", ["GLB", "GLTF_SEPARATE"]
         )
 
         bpy.ops.export_scene.gltf(
@@ -36,13 +31,9 @@ class ExportImportHandlersMixin:
         )
         return {"filepath": filepath}
 
-
     def _handle_export_fbx(self, params: dict) -> dict:
         """Export to FBX with comprehensive options."""
-        filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath"
-        )
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
 
         export_kwargs = {
             "filepath": filepath,
@@ -70,13 +61,9 @@ class ExportImportHandlersMixin:
             "selected_only": export_kwargs["use_selection"],
         }
 
-
     def _handle_export_obj(self, params: dict) -> dict:
         """Export to OBJ with options."""
-        filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath"
-        )
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
 
         export_kwargs = {
             "filepath": filepath,
@@ -102,13 +89,9 @@ class ExportImportHandlersMixin:
             "selected_only": export_kwargs["export_selected_objects"],
         }
 
-
     def _handle_export_stl(self, params: dict) -> dict:
         """Export to STL (for 3D printing)."""
-        filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath"
-        )
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
 
         export_kwargs = {
             "filepath": filepath,
@@ -139,13 +122,10 @@ class ExportImportHandlersMixin:
             "selected_only": export_kwargs["use_selection"],
         }
 
-
     def _handle_import_file(self, params: dict) -> dict:
         """Import file with auto-format detection."""
         filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath",
-            must_exist=True
+            require_param(params, "filepath", str), "filepath", must_exist=True
         )
         ext = os.path.splitext(filepath)[1].lower()
 
@@ -169,9 +149,7 @@ class ExportImportHandlersMixin:
 
         if ext not in import_ops:
             supported = ", ".join(sorted(import_ops.keys()))
-            raise ValidationError(
-                f"Unsupported file format: '{ext}'. Supported: {supported}"
-            )
+            raise ValidationError(f"Unsupported file format: '{ext}'. Supported: {supported}")
 
         import_ops[ext]()
 
@@ -186,13 +164,9 @@ class ExportImportHandlersMixin:
             "count": len(imported_objects),
         }
 
-
     def _handle_export_usd(self, params: dict) -> dict:
         """Export to Universal Scene Description (USD) format."""
-        filepath = validate_filepath(
-            require_param(params, "filepath", str),
-            "filepath"
-        )
+        filepath = validate_filepath(require_param(params, "filepath", str), "filepath")
 
         export_kwargs = {
             "filepath": filepath,
@@ -212,4 +186,3 @@ class ExportImportHandlersMixin:
         }
 
     # ========== External Integration Handlers ==========
-

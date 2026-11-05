@@ -23,12 +23,20 @@ class ObjectHandlersMixin:
         """Create a primitive object."""
         # Validate parameters
         valid_types = [
-            "cube", "sphere", "cylinder", "plane", "cone", "torus",
-            "monkey", "circle", "grid", "empty", "camera", "light"
+            "cube",
+            "sphere",
+            "cylinder",
+            "plane",
+            "cone",
+            "torus",
+            "monkey",
+            "circle",
+            "grid",
+            "empty",
+            "camera",
+            "light",
         ]
-        obj_type = validate_enum(
-            require_param(params, "type", str), "type", valid_types
-        )
+        obj_type = validate_enum(require_param(params, "type", str), "type", valid_types)
 
         location = params.get("location", [0, 0, 0])
         if location != [0, 0, 0]:
@@ -71,7 +79,6 @@ class ObjectHandlersMixin:
 
         return serialize_object(obj)
 
-
     def _handle_object_delete(self, params: dict) -> dict:
         """Delete an object by name."""
         name = require_param(params, "name", str)
@@ -79,25 +86,24 @@ class ObjectHandlersMixin:
         bpy.data.objects.remove(obj, do_unlink=True)
         return {"deleted": name}
 
-
     def _handle_object_list(self, params: dict) -> dict:
         """List all objects in the scene."""
         type_filter = params.get("type_filter")
         objects = []
         for obj in bpy.context.scene.objects:
             if type_filter is None or obj.type == type_filter.upper():
-                objects.append({
-                    "name": obj.name,
-                    "type": obj.type,
-                })
+                objects.append(
+                    {
+                        "name": obj.name,
+                        "type": obj.type,
+                    }
+                )
         return {"objects": objects}
-
 
     def _handle_object_get(self, params: dict) -> dict:
         """Get detailed properties of an object."""
         obj = get_object_or_error(require_param(params, "name", str))
         return serialize_object(obj)
-
 
     def _handle_object_transform(self, params: dict) -> dict:
         """Set object transform."""
@@ -112,7 +118,6 @@ class ObjectHandlersMixin:
             obj.scale = params["scale"]
 
         return serialize_object(obj)
-
 
     def _handle_object_duplicate(self, params: dict) -> dict:
         """Duplicate an object."""
@@ -129,7 +134,6 @@ class ObjectHandlersMixin:
 
         bpy.context.collection.objects.link(new_obj)
         return serialize_object(new_obj)
-
 
     def _handle_object_join(self, params: dict) -> dict:
         """Join multiple objects into one."""
@@ -148,7 +152,6 @@ class ObjectHandlersMixin:
         bpy.ops.object.join()
         return serialize_object(bpy.context.active_object)
 
-
     def _handle_object_separate(self, params: dict) -> dict:
         """Separate an object by loose parts."""
         obj = get_object_or_error(require_param(params, "name", str))
@@ -163,7 +166,6 @@ class ObjectHandlersMixin:
         # Return list of resulting objects
         return {"objects": [o.name for o in bpy.context.selected_objects]}
 
-
     def _handle_object_parent(self, params: dict) -> dict:
         """Set parent relationship."""
         child = get_object_or_error(require_param(params, "child", str))
@@ -176,7 +178,6 @@ class ObjectHandlersMixin:
             child.parent = None
 
         return {"child": child.name, "parent": child.parent.name if child.parent else None}
-
 
     def _handle_object_select(self, params: dict) -> dict:
         """Select objects by name or pattern."""
@@ -194,13 +195,13 @@ class ObjectHandlersMixin:
 
         if params.get("pattern"):
             import fnmatch
+
             for obj in bpy.data.objects:
                 if fnmatch.fnmatch(obj.name, params["pattern"]):
                     obj.select_set(True)
                     selected.append(obj.name)
 
         return {"selected": selected}
-
 
     def _handle_mesh_from_data(self, params: dict) -> dict:
         """Create a mesh from vertex/face arrays using from_pydata."""
@@ -230,7 +231,6 @@ class ObjectHandlersMixin:
 
         return serialize_object(obj)
 
-
     def _handle_object_set_origin(self, params: dict) -> dict:
         """Set object origin / pivot point."""
         obj = get_object_or_error(require_param(params, "object_name", str))
@@ -257,7 +257,6 @@ class ObjectHandlersMixin:
 
         return serialize_object(obj)
 
-
     def _handle_object_apply_transforms(self, params: dict) -> dict:
         """Apply object transforms to mesh data."""
         obj = get_object_or_error(require_param(params, "object_name", str))
@@ -268,11 +267,8 @@ class ObjectHandlersMixin:
         bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.transform_apply(
-            location=apply_loc, rotation=apply_rot, scale=apply_scale
-        )
+        bpy.ops.object.transform_apply(location=apply_loc, rotation=apply_rot, scale=apply_scale)
 
         return serialize_object(obj)
 
     # ========== Material Handlers ==========
-

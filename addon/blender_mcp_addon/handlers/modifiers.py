@@ -20,9 +20,7 @@ class ModifierHandlersMixin:
         obj = get_object_or_error(object_name)
 
         if obj.type != "MESH":
-            raise ValidationError(
-                f"Cannot add modifier: '{obj.name}' is a {obj.type}, not a MESH"
-            )
+            raise ValidationError(f"Cannot add modifier: '{obj.name}' is a {obj.type}, not a MESH")
 
         if modifier_type not in self.MODIFIER_TYPES:
             raise ValidationError(
@@ -58,7 +56,6 @@ class ModifierHandlersMixin:
             "preset_applied": use_preset and modifier_type in self.MODIFIER_PRESETS,
         }
 
-
     def _handle_modifier_remove(self, params: dict) -> dict:
         """Remove modifier from object."""
         object_name = require_param(params, "object_name", str)
@@ -76,7 +73,6 @@ class ModifierHandlersMixin:
 
         obj.modifiers.remove(mod)
         return {"object": obj.name, "removed": modifier_name}
-
 
     def _handle_modifier_apply(self, params: dict) -> dict:
         """Apply modifier to mesh (makes it permanent)."""
@@ -96,7 +92,6 @@ class ModifierHandlersMixin:
 
         bpy.ops.object.modifier_apply(modifier=modifier_name)
         return {"object": obj.name, "applied": modifier_name}
-
 
     def _handle_modifier_configure(self, params: dict) -> dict:
         """Configure modifier properties."""
@@ -134,7 +129,6 @@ class ModifierHandlersMixin:
 
         return result
 
-
     def _handle_modifier_list(self, params: dict) -> dict:
         """List modifiers on an object or list available modifier types."""
         object_name = params.get("object_name")
@@ -143,12 +137,14 @@ class ModifierHandlersMixin:
             obj = get_object_or_error(object_name)
             modifiers = []
             for mod in obj.modifiers:
-                modifiers.append({
-                    "name": mod.name,
-                    "type": mod.type,
-                    "show_viewport": mod.show_viewport,
-                    "show_render": mod.show_render,
-                })
+                modifiers.append(
+                    {
+                        "name": mod.name,
+                        "type": mod.type,
+                        "show_viewport": mod.show_viewport,
+                        "show_render": mod.show_render,
+                    }
+                )
             return {"object": obj.name, "modifiers": modifiers}
         else:
             return {"available_types": self.MODIFIER_TYPES}
@@ -157,7 +153,11 @@ class ModifierHandlersMixin:
 
     # Common animatable properties
     ANIMATABLE_PROPERTIES = [
-        "location", "rotation_euler", "rotation_quaternion", "scale",
-        "delta_location", "delta_rotation_euler", "delta_scale",
+        "location",
+        "rotation_euler",
+        "rotation_quaternion",
+        "scale",
+        "delta_location",
+        "delta_rotation_euler",
+        "delta_scale",
     ]
-

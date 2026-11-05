@@ -87,12 +87,14 @@ def get_action_keyframe_points(action, data_path: str, index: int = -1):
         if fc.data_path == data_path:
             if index == -1 or fc.array_index == index:
                 for kp in fc.keyframe_points:
-                    keyframes.append({
-                        "frame": kp.co[0],
-                        "value": kp.co[1],
-                        "array_index": fc.array_index,
-                        "interpolation": kp.interpolation,
-                    })
+                    keyframes.append(
+                        {
+                            "frame": kp.co[0],
+                            "value": kp.co[1],
+                            "array_index": fc.array_index,
+                            "interpolation": kp.interpolation,
+                        }
+                    )
 
     return keyframes
 
@@ -117,11 +119,13 @@ def get_object_keyframes(obj):
             keyframes[path] = []
 
         for kp in fc.keyframe_points:
-            keyframes[path].append({
-                "frame": kp.co[0],
-                "value": kp.co[1],
-                "array_index": fc.array_index,
-            })
+            keyframes[path].append(
+                {
+                    "frame": kp.co[0],
+                    "value": kp.co[1],
+                    "array_index": fc.array_index,
+                }
+            )
 
     return keyframes
 
@@ -420,7 +424,7 @@ def add_grease_pencil_strokes(gpd, strokes, color, frame_number: int, name: str 
     if hasattr(frame, "drawing"):
         drawing = frame.drawing
         drawing.add_strokes(sizes=[len(pts) for pts, _ in strokes])
-        new_strokes = list(drawing.strokes)[-len(strokes):]
+        new_strokes = list(drawing.strokes)[-len(strokes) :]
         for stroke, (pts, thickness) in zip(new_strokes, strokes):
             for point, pt in zip(stroke.points, pts):
                 point.position = (pt[0], pt[1], pt[2])
@@ -463,8 +467,7 @@ def new_compositor_output(tree):
     if not _has_compositing_group():
         return tree.nodes.new("CompositorNodeComposite")
     has_output = any(
-        item.item_type == "SOCKET" and item.in_out == "OUTPUT"
-        for item in tree.interface.items_tree
+        item.item_type == "SOCKET" and item.in_out == "OUTPUT" for item in tree.interface.items_tree
     )
     if not has_output:
         tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
