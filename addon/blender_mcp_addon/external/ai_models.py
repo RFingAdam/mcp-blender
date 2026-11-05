@@ -456,7 +456,7 @@ def _import_model_file(filepath: Path, job_id: str) -> dict[str, Any]:
         elif ext == ".fbx":
             bpy.ops.import_scene.fbx(filepath=str(filepath))
         elif ext == ".usdz":
-            if hasattr(bpy.ops.wm, "usd_import"):
+            if "usd_import" in dir(bpy.ops.wm):
                 bpy.ops.wm.usd_import(filepath=str(filepath))
             else:
                 return {
