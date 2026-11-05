@@ -47,11 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `msfs_export_model`, `msfs_batch_export_lods`, `physics_simulate`, `physics_fluid_quick`,
   `render_image` and `material_preview_render` now wait 600 seconds for Blender by default and declare
   an optional `timeout` (seconds the server waits) in their schemas. Only `ai_generate_texture_sync`,
-  whose handler reads `timeout` as its polling limit, still receives it; for other tools the server
-  keeps it to itself. This replaces the earlier rule that forwarded `timeout` to every tool declaring it.
+  whose handler reads `timeout` as its polling limit, still receives it, and the server waits 30 seconds
+  longer than that limit so the handler's own timeout reply arrives. For other tools the server keeps
+  `timeout` to itself. This replaces the earlier rule that forwarded `timeout` to every tool declaring it.
 - **`ai_redo_generation` replays the right kind of job.** Jobs now record whether they are a 3D model or
-  a texture. A texture job is redone as a texture instead of being submitted as a paid 3D model, and a
-  job kind that cannot be replayed gives a clear error. `ai_generate_variations` accepts at most 8
+  a texture. A texture job is redone as a texture instead of being submitted as a paid 3D model, with
+  the backend inputs it was first sent (an inpaint job's image and mask, size, seed), and a job kind
+  that cannot be replayed gives a clear error. `ai_generate_variations` accepts at most 8
   variations, in the schema and in the handler.
 - **`object_separate` returns to Object mode when the operator raises**, for example `MATERIAL` on a
   mesh with one material slot, instead of leaving the scene in Edit mode.
