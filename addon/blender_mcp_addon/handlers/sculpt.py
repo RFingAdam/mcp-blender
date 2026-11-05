@@ -190,7 +190,10 @@ class SculptHandlersMixin:
             try:
                 with bpy.context.temp_override(**override):
                     bpy.ops.sculpt.mesh_filter(
-                        type=_MESH_FILTER_TYPES.get(filter_type, filter_type), strength=strength
+                        type=compat.sculpt_filter_type(
+                            _MESH_FILTER_TYPES.get(filter_type, filter_type)
+                        ),
+                        strength=strength,
                     )
             except RuntimeError as e:
                 return {

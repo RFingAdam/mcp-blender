@@ -110,6 +110,33 @@ def test_boolean_solver(bpy, compat, offered, asked, expected):
     assert compat.boolean_solver(asked) == expected
 
 
+def _mesh_filter_offers(bpy, *identifiers):
+    rna = ns(properties={"type": enum_prop(*identifiers)})
+    bpy.ops.sculpt = ns(mesh_filter=ns(get_rna_type=lambda: rna))
+
+
+@pytest.mark.parametrize(
+    "offered,asked,expected",
+    [
+        # 4.2 ships the misspelling, later series fix it.
+        (("SMOOTH", "ERASE_DISCPLACEMENT"), "ERASE_DISPLACEMENT", "ERASE_DISCPLACEMENT"),
+        (("SMOOTH", "ERASE_DISPLACEMENT"), "ERASE_DISPLACEMENT", "ERASE_DISPLACEMENT"),
+        (("SMOOTH", "ERASE_DISPLACEMENT"), "ERASE_DISCPLACEMENT", "ERASE_DISPLACEMENT"),
+        (("SMOOTH", "ERASE_DISCPLACEMENT"), "SMOOTH", "SMOOTH"),
+        (("SMOOTH",), "NOT_A_FILTER", "NOT_A_FILTER"),
+    ],
+)
+def test_sculpt_filter_type_follows_the_spelling_the_operator_offers(
+    bpy, compat, offered, asked, expected
+):
+    _mesh_filter_offers(bpy, *offered)
+    assert compat.sculpt_filter_type(asked) == expected
+
+
+def test_sculpt_filter_type_with_no_operator_to_read_passes_through(bpy, compat):
+    assert compat.sculpt_filter_type("ERASE_DISPLACEMENT") == "ERASE_DISPLACEMENT"
+
+
 # ---- edge loops -------------------------------------------------------------------
 
 

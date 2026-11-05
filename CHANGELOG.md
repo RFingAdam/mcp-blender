@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`sculpt_mesh_filter` with `ERASE_DISPLACEMENT` works on Blender 4.2.** 4.2 spells that filter type
+  `ERASE_DISCPLACEMENT` in `sculpt.mesh_filter`, so the call failed with an enum error there. The add-on
+  now reads the operator's enum items and uses whichever spelling the running Blender offers.
 - **The `annotation_add` note names the right series.** The harness reason and the README table said
   Blender 4.3 to 4.5 has no Python call for annotation strokes. The baselines show 4.3, 4.4, 4.5, 5.0 and
   5.1 return that message, and only 4.2 and 5.2 draw the stroke, so the text now says 4.3 to 5.1.
