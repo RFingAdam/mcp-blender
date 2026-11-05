@@ -331,21 +331,10 @@ class AIHandlersMixin:
                 # near is light: 1 at the nearest surface, 0 at the farthest, 0 for the
                 # background (its depth is huge, so the clamp lands on 0).
                 scale = 1.0 / (far - near)
-                ramp = tree.nodes.new("ShaderNodeMath")
-                ramp.operation = "MULTIPLY_ADD"
-                ramp.use_clamp = True
-                ramp.inputs[1].default_value = -scale
-                ramp.inputs[2].default_value = far * scale
-                tree.links.new(source, ramp.inputs[0])
-                color = ramp.outputs[0]
+                color = compat.add_depth_remap(tree, source, scale, far * scale)
             else:
                 # world-space normal in -1..1 to 0..1 RGB
-                remap = tree.nodes.new("ShaderNodeVectorMath")
-                remap.operation = "MULTIPLY_ADD"
-                remap.inputs[1].default_value = (0.5, 0.5, 0.5)
-                remap.inputs[2].default_value = (0.5, 0.5, 0.5)
-                tree.links.new(source, remap.inputs[0])
-                color = remap.outputs[0]
+                color = compat.add_normal_remap(tree, source)
             alpha = tree.nodes.new("CompositorNodeSetAlpha")
             tree.links.new(color, alpha.inputs[0])
             tree.links.new(layers.outputs["Alpha"], alpha.inputs[1])

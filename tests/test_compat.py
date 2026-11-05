@@ -441,6 +441,71 @@ def test_output_node_is_the_group_output_with_a_compositing_group(bpy, compat):
     assert len(tree.interface.items_tree) == 1
 
 
+def _remap_tree(rejects_shader: bool):
+    """A tree stub that records node types and links, and can refuse shader nodes."""
+    made, links = [], []
+
+    def new(idname):
+        if rejects_shader and idname.startswith("ShaderNode"):
+            raise RuntimeError(f"Cannot add node of type {idname}")
+        node = ns(
+            bl_idname=idname,
+            inputs=[ns(default_value=None) for _ in range(3)],
+            outputs=[ns(name="out")],
+            operation=None,
+            blend_type=None,
+            use_clamp=False,
+        )
+        made.append(node)
+        return node
+
+    tree = ns(
+        nodes=ns(new=new),
+        links=ns(new=lambda a, b: links.append((a, b))),
+    )
+    return tree, made, links
+
+
+def test_depth_remap_uses_shader_math_where_the_compositor_accepts_it(bpy, compat):
+    tree, made, links = _remap_tree(rejects_shader=False)
+    out = compat.add_depth_remap(tree, "src", scale=0.5, offset=2.0)
+    assert [n.bl_idname for n in made] == ["ShaderNodeMath"]
+    assert out is made[0].outputs[0]
+    assert made[0].operation == "MULTIPLY_ADD" and made[0].use_clamp
+    assert [i.default_value for i in made[0].inputs[1:]] == [-0.5, 2.0]
+    assert links == [("src", made[0].inputs[0])]
+
+
+def test_depth_remap_uses_compositor_math_where_shader_nodes_are_rejected(bpy, compat):
+    tree, made, links = _remap_tree(rejects_shader=True)
+    out = compat.add_depth_remap(tree, "src", scale=0.5, offset=2.0)
+    assert [n.bl_idname for n in made] == ["CompositorNodeMath"]
+    assert out is made[0].outputs[0]
+    assert made[0].operation == "MULTIPLY_ADD" and made[0].use_clamp
+    assert [i.default_value for i in made[0].inputs[1:]] == [-0.5, 2.0]
+
+
+def test_normal_remap_uses_shader_vector_math_where_accepted(bpy, compat):
+    tree, made, links = _remap_tree(rejects_shader=False)
+    out = compat.add_normal_remap(tree, "src")
+    assert [n.bl_idname for n in made] == ["ShaderNodeVectorMath"]
+    assert out is made[0].outputs[0]
+    assert made[0].operation == "MULTIPLY_ADD"
+
+
+def test_normal_remap_uses_two_mix_nodes_where_shader_nodes_are_rejected(bpy, compat):
+    tree, made, links = _remap_tree(rejects_shader=True)
+    out = compat.add_normal_remap(tree, "src")
+    assert [n.bl_idname for n in made] == ["CompositorNodeMixRGB", "CompositorNodeMixRGB"]
+    assert [n.blend_type for n in made] == ["MULTIPLY", "ADD"]
+    assert not any(n.use_clamp for n in made)  # negatives must survive the first step
+    assert out is made[1].outputs[0]
+    assert ("src", made[0].inputs[1]) in links
+    assert (made[0].outputs[0], made[1].inputs[1]) in links
+    assert made[0].inputs[2].default_value == (0.5, 0.5, 0.5, 1.0)
+    assert made[1].inputs[2].default_value == (0.5, 0.5, 0.5, 1.0)
+
+
 # ---- misc -------------------------------------------------------------------------
 
 
