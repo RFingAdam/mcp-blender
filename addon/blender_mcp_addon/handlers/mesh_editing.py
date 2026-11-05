@@ -1917,7 +1917,9 @@ class MeshEditingHandlersMixin:
         from mathutils import Vector
 
         object_name = require_param(params, "object_name", str)
-        reference_image = require_param(params, "reference_image", str)
+        reference_image = validate_filepath(
+            require_param(params, "reference_image", str), "reference_image"
+        )
         camera_angle = validate_enum(
             params.get("camera_angle", "FRONT"),
             "camera_angle",

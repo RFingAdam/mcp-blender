@@ -51,7 +51,7 @@ class AIHandlersMixin:
         image_path = params.get("image_path")
         if image_path:
             return generate_model_from_image(
-                image_path=image_path,
+                image_path=validate_filepath(image_path, "image_path"),
                 prompt=params.get("prompt"),
                 style=params.get("style"),
                 quality=params.get("quality", "medium"),
@@ -86,7 +86,7 @@ class AIHandlersMixin:
         image_path = params.get("image_path")
         if image_path:
             result = generate_model_from_image(
-                image_path=image_path,
+                image_path=validate_filepath(image_path, "image_path"),
                 prompt=params.get("prompt"),
                 style=params.get("style"),
                 quality=params.get("quality", "medium"),
@@ -331,21 +331,10 @@ class AIHandlersMixin:
                 # near is light: 1 at the nearest surface, 0 at the farthest, 0 for the
                 # background (its depth is huge, so the clamp lands on 0).
                 scale = 1.0 / (far - near)
-                ramp = tree.nodes.new("ShaderNodeMath")
-                ramp.operation = "MULTIPLY_ADD"
-                ramp.use_clamp = True
-                ramp.inputs[1].default_value = -scale
-                ramp.inputs[2].default_value = far * scale
-                tree.links.new(source, ramp.inputs[0])
-                color = ramp.outputs[0]
+                color = compat.add_depth_remap(tree, source, scale, far * scale)
             else:
                 # world-space normal in -1..1 to 0..1 RGB
-                remap = tree.nodes.new("ShaderNodeVectorMath")
-                remap.operation = "MULTIPLY_ADD"
-                remap.inputs[1].default_value = (0.5, 0.5, 0.5)
-                remap.inputs[2].default_value = (0.5, 0.5, 0.5)
-                tree.links.new(source, remap.inputs[0])
-                color = remap.outputs[0]
+                color = compat.add_normal_remap(tree, source)
             alpha = tree.nodes.new("CompositorNodeSetAlpha")
             tree.links.new(color, alpha.inputs[0])
             tree.links.new(layers.outputs["Alpha"], alpha.inputs[1])
@@ -818,6 +807,8 @@ class AIHandlersMixin:
         """Render multi-angle views and analyze with Ollama vision model."""
         object_name = params.get("object_name")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "Analyze this 3D model render for quality and accuracy.")
         resolution = params.get("resolution", [512, 512])
 
@@ -876,9 +867,11 @@ class AIHandlersMixin:
         """Evaluate any render/output using Ollama vision."""
         from ..external.ai_models import evaluate_output
 
-        render_path = require_param(params, "render_path", str)
+        render_path = validate_filepath(require_param(params, "render_path", str), "render_path")
         category = params.get("category", "model")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "")
 
         if category not in ("model", "texture", "animation"):
@@ -932,6 +925,8 @@ class AIHandlersMixin:
         """Run one iteration of the refinement feedback loop."""
         object_name = params.get("object_name")
         reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         prompt = params.get("prompt", "Evaluate this 3D model for geometric accuracy and quality.")
         iteration = params.get("iteration", 0)
         previous_score = params.get("previous_score", 0.0)
@@ -984,10 +979,13 @@ class AIHandlersMixin:
         """Create a new refinement session."""
         from ..external.refinement import get_refinement_manager
 
+        reference_image = params.get("reference_image")
+        if reference_image:
+            reference_image = validate_filepath(reference_image, "reference_image")
         manager = get_refinement_manager()
         session = manager.create_session(
             object_name=require_param(params, "object_name", str),
-            reference_image=params.get("reference_image"),
+            reference_image=reference_image,
             prompt=params.get("prompt", ""),
         )
         return {
@@ -1053,6 +1051,13 @@ class AIHandlersMixin:
         """Run the full AI 3D generation pipeline."""
         from ..external.pipeline import run_pipeline
 
+        # The pipeline reads these from the dict it is given, so resolve them here.
+        image_path = params.get("image_path")
+        if image_path:
+            params = {**params, "image_path": validate_filepath(image_path, "image_path")}
+        output_dir = params.get("output_dir")
+        if output_dir:
+            params = {**params, "output_dir": validate_filepath(output_dir, "output_dir")}
         return run_pipeline(params, self)
 
     def _handle_ai_pipeline_status(self, params: dict) -> dict:

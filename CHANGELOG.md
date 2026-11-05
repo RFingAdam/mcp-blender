@@ -115,9 +115,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `render_screenshot`, `render_set_engine`, `render_set_resolution`, `polyhaven_download`,
   `ai_model_status`) and `ai_pipeline_status` raised a bare `KeyError` or accepted `{}`.
   They now report the missing parameter through `require_param`. `validate_filepath` returns
-  the absolute path with `~` expanded, checks existence after expansion and leaves Blender
-  `//` paths alone. `ai_inpaint_texture` and `reference_image_setup` called it without a
-  `name` or discarded the result; a static gate now catches an unused result.
+  the absolute path with `~` expanded and checks existence after expansion. `ai_inpaint_texture`
+  and `reference_image_setup` called it without a `name` or discarded the result; a static gate
+  now catches an unused result.
+
+- **Every path parameter resolves `~` and `//`.** `save_as`, the bake tools, `render_multi_angle`,
+  `material_preview_render`, `sculpt_to_retopo`, the MSFS export and livery tools, the AI
+  tools that take an image or output directory, and the five tools that take `reference_image`
+  passed the raw string to Python file I/O, so `~/bakes` became a folder named `~` in Blender's
+  working directory. They now resolve the path first and report the absolute path they used. A
+  `//` path resolves against the saved .blend file, and is refused with a clear error when the file
+  has never been saved. A static gate fails the build when a path parameter skips the resolver.
+
+- **`ai_texture_from_render` builds its depth and normal control images on Blender 4.2 to 4.4.**
+  Those compositors refuse shader math nodes, so the tool failed before it reached the AI backend.
+  It now uses the compositor's own nodes where the shader nodes are refused.
+
+- **`bake_curvature` frees its image and mesh data when it fails,** and saves through the same
+  checked writer as the other bake tools, so a failed write is an error, not a silent success.
 
 - **Five of the six baking tools never worked.** `bake_pbr_batch`, `bake_highpoly_to_lowpoly`,
   `bake_from_multires`, `bake_to_vertex_colors` and `bake_id_map` called eight `_bake_*`

@@ -2,6 +2,7 @@
 
 from ..validation import (
     require_param,
+    validate_filepath,
 )
 
 
@@ -178,7 +179,7 @@ class MSFSHandlersMixin:
         from ..msfs import export_msfs_model
 
         return export_msfs_model(
-            filepath=require_param(params, "filepath", str),
+            filepath=validate_filepath(require_param(params, "filepath", str), "filepath"),
             objects=params.get("objects"),
             include_lods=params.get("include_lods", True),
             include_collision=params.get("include_collision", True),
@@ -206,7 +207,7 @@ class MSFSHandlersMixin:
 
         return batch_export_lods(
             base_name=require_param(params, "base_name", str),
-            output_dir=require_param(params, "output_dir", str),
+            output_dir=validate_filepath(require_param(params, "output_dir", str), "output_dir"),
             separate_files=params.get("separate_files", False),
         )
 
@@ -239,7 +240,7 @@ class MSFSHandlersMixin:
         from ..msfs.livery import load_template_overlay
 
         return load_template_overlay(
-            image_path=require_param(params, "image_path", str),
+            image_path=validate_filepath(require_param(params, "image_path", str), "image_path"),
             object_name=params.get("object_name"),
             opacity=params.get("opacity", 0.5),
         )
@@ -251,7 +252,7 @@ class MSFSHandlersMixin:
         resolution = params.get("resolution", [4096, 4096])
         return export_uv_layout(
             object_name=require_param(params, "object_name", str),
-            output_path=require_param(params, "output_path", str),
+            output_path=validate_filepath(require_param(params, "output_path", str), "output_path"),
             resolution=tuple(resolution),
             fill_opacity=params.get("fill_opacity", 0.0),
             line_thickness=params.get("line_thickness", 1.0),
@@ -273,7 +274,7 @@ class MSFSHandlersMixin:
         from ..msfs.livery import sample_color_from_image
 
         return sample_color_from_image(
-            image_path=require_param(params, "image_path", str),
+            image_path=validate_filepath(require_param(params, "image_path", str), "image_path"),
             x=require_param(params, "x", int),
             y=require_param(params, "y", int),
         )
@@ -304,7 +305,7 @@ class MSFSHandlersMixin:
 
         return download_template(
             aircraft_id=require_param(params, "aircraft_id", str),
-            output_dir=require_param(params, "output_dir", str),
+            output_dir=validate_filepath(require_param(params, "output_dir", str), "output_dir"),
         )
 
     def _handle_msfs_livery_analyze(self, params: dict) -> dict:
@@ -312,7 +313,7 @@ class MSFSHandlersMixin:
         from ..msfs.livery import analyze_livery
 
         return analyze_livery(
-            image_path=require_param(params, "image_path", str),
+            image_path=validate_filepath(require_param(params, "image_path", str), "image_path"),
             aircraft_type=params.get("aircraft_type"),
         )
 
@@ -321,10 +322,12 @@ class MSFSHandlersMixin:
         from ..msfs.livery import transfer_livery
 
         return transfer_livery(
-            source_image=require_param(params, "source_image", str),
+            source_image=validate_filepath(
+                require_param(params, "source_image", str), "source_image"
+            ),
             source_aircraft=require_param(params, "source_aircraft", str),
             target_aircraft=require_param(params, "target_aircraft", str),
-            output_dir=require_param(params, "output_dir", str),
+            output_dir=validate_filepath(require_param(params, "output_dir", str), "output_dir"),
             preserve_colors=params.get("preserve_colors", True),
             preserve_text=params.get("preserve_text", True),
         )
@@ -334,7 +337,7 @@ class MSFSHandlersMixin:
         from ..msfs.livery import extract_color_palette
 
         return extract_color_palette(
-            image_path=require_param(params, "image_path", str),
+            image_path=validate_filepath(require_param(params, "image_path", str), "image_path"),
             num_colors=params.get("num_colors", 8),
             exclude_white=params.get("exclude_white", True),
         )
@@ -355,7 +358,7 @@ class MSFSHandlersMixin:
 
         return export_livery_textures(
             object_name=require_param(params, "object_name", str),
-            output_dir=require_param(params, "output_dir", str),
+            output_dir=validate_filepath(require_param(params, "output_dir", str), "output_dir"),
             texture_types=params.get("texture_types"),
             format=params.get("format", "PNG"),
         )
@@ -364,11 +367,14 @@ class MSFSHandlersMixin:
         """Create MSFS livery package folder structure."""
         from ..msfs.livery import create_livery_package
 
+        texture_dir = params.get("texture_dir")
+        if texture_dir is not None:
+            texture_dir = validate_filepath(texture_dir, "texture_dir")
         return create_livery_package(
             aircraft_id=require_param(params, "aircraft_id", str),
             livery_name=require_param(params, "livery_name", str),
-            output_dir=require_param(params, "output_dir", str),
-            texture_dir=params.get("texture_dir"),
+            output_dir=validate_filepath(require_param(params, "output_dir", str), "output_dir"),
+            texture_dir=texture_dir,
             airline=params.get("airline", ""),
             description=params.get("description", ""),
             author=params.get("author", ""),
@@ -378,9 +384,12 @@ class MSFSHandlersMixin:
         """Convert texture to DDS format for MSFS."""
         from ..msfs.livery import convert_to_dds
 
+        output_path = params.get("output_path")
+        if output_path is not None:
+            output_path = validate_filepath(output_path, "output_path")
         return convert_to_dds(
-            input_path=require_param(params, "input_path", str),
-            output_path=params.get("output_path"),
+            input_path=validate_filepath(require_param(params, "input_path", str), "input_path"),
+            output_path=output_path,
             texture_type=params.get("texture_type", "albedo"),
         )
 
@@ -389,7 +398,7 @@ class MSFSHandlersMixin:
         from ..msfs.livery import validate_livery_package
 
         return validate_livery_package(
-            package_dir=require_param(params, "package_dir", str),
+            package_dir=validate_filepath(require_param(params, "package_dir", str), "package_dir"),
         )
 
     # ========== Boolean Operations Handler ==========

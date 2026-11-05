@@ -472,3 +472,51 @@ def new_compositor_output(tree):
     if not has_output:
         tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
     return tree.nodes.new("NodeGroupOutput")
+
+
+def _new_math_node(tree, shader_idname: str, compositor_idname: str):
+    """Add a math node to a compositor tree, whichever kind the tree accepts.
+
+    Some builds' compositor trees refuse shader nodes ("Not a shader or geometry
+    node tree"). Ask the tree: try the shader node and fall back on the refusal.
+    """
+    try:
+        return tree.nodes.new(shader_idname)
+    except RuntimeError:
+        return tree.nodes.new(compositor_idname)
+
+
+def add_depth_remap(tree, source, scale: float, offset: float):
+    """Add ``clamp(source * -scale + offset)`` to a compositor tree and return its output."""
+    node = _new_math_node(tree, "ShaderNodeMath", "CompositorNodeMath")
+    node.operation = "MULTIPLY_ADD"
+    node.use_clamp = True
+    node.inputs[1].default_value = -scale
+    node.inputs[2].default_value = offset
+    tree.links.new(source, node.inputs[0])
+    return node.outputs[0]
+
+
+def add_normal_remap(tree, source):
+    """Add ``source * 0.5 + 0.5`` (a -1..1 vector to 0..1 RGB) and return its output."""
+    try:
+        node = tree.nodes.new("ShaderNodeVectorMath")
+    except RuntimeError:
+        # No vector math in this compositor: multiply, then add, with colour mixes.
+        half = (0.5, 0.5, 0.5, 1.0)
+        scaled = tree.nodes.new("CompositorNodeMixRGB")
+        scaled.blend_type = "MULTIPLY"
+        scaled.use_clamp = False
+        scaled.inputs[2].default_value = half
+        tree.links.new(source, scaled.inputs[1])
+        shifted = tree.nodes.new("CompositorNodeMixRGB")
+        shifted.blend_type = "ADD"
+        shifted.use_clamp = False
+        shifted.inputs[2].default_value = half
+        tree.links.new(scaled.outputs[0], shifted.inputs[1])
+        return shifted.outputs[0]
+    node.operation = "MULTIPLY_ADD"
+    node.inputs[1].default_value = (0.5, 0.5, 0.5)
+    node.inputs[2].default_value = (0.5, 0.5, 0.5)
+    tree.links.new(source, node.inputs[0])
+    return node.outputs[0]

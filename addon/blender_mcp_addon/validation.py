@@ -171,6 +171,28 @@ def validate_enum(value: Any, name: str, allowed: list[str]) -> str:
     return upper_value
 
 
+def resolve_path(path: str) -> str:
+    """Resolve a user path to the absolute path Python I/O should use.
+
+    Expands ``~``, resolves a Blender-relative ``//`` path against the .blend
+    file (which must be saved), then makes the result absolute and normalized. Handlers call this (or
+    ``validate_filepath``) before any ``os`` call, and put the result in the reply.
+    """
+    import os
+
+    path = os.path.expanduser(path)
+    if path.startswith("//"):
+        import bpy
+
+        if not bpy.data.filepath:
+            raise ValidationError(
+                "'//' paths are relative to the saved .blend file. "
+                "Save the file first, or pass an absolute path."
+            )
+        path = bpy.path.abspath(path)
+    return os.path.abspath(path)
+
+
 def validate_filepath(value: Any, name: str, must_exist: bool = False) -> str:
     """
     Validate a file path parameter.
@@ -181,9 +203,9 @@ def validate_filepath(value: Any, name: str, must_exist: bool = False) -> str:
         must_exist: Whether the file must exist
 
     Returns:
-        The absolute path with ``~`` expanded. Blender-relative paths
-        (starting ``//``) are returned unchanged. Callers must use this
-        return value, not the original string.
+        The absolute path, with ``~`` expanded and a Blender-relative ``//``
+        path resolved (see ``resolve_path``). Callers must use this return
+        value, not the original string.
 
     Raises:
         ValidationError: If not a valid path
@@ -196,20 +218,9 @@ def validate_filepath(value: Any, name: str, must_exist: bool = False) -> str:
     if not value.strip():
         raise ValidationError(f"Parameter '{name}' cannot be empty")
 
-    # Blender-relative paths resolve against the .blend file, not the cwd.
-    if value.startswith("//"):
-        path = value
-        if must_exist:
-            import bpy
+    path = resolve_path(value)
 
-            check = bpy.path.abspath(value)
-        else:
-            check = value
-    else:
-        path = os.path.abspath(os.path.expanduser(value))
-        check = path
-
-    if must_exist and not os.path.exists(check):
+    if must_exist and not os.path.exists(path):
         raise ValidationError(f"File not found: {path}")
 
     return path

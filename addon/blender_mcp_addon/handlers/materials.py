@@ -605,9 +605,11 @@ class MaterialHandlersMixin:
             return {"error": f"Invalid engine '{engine}'. Must be EEVEE or CYCLES."}
 
         safe_name = "".join(c if c.isalnum() or c in "_-" else "_" for c in material_name)
-        output_path = params.get(
-            "output_path", os.path.join(tempfile.gettempdir(), f"material_preview_{safe_name}.png")
-        )
+        output_path = params.get("output_path")
+        if output_path is None:
+            output_path = os.path.join(tempfile.gettempdir(), f"material_preview_{safe_name}.png")
+        else:
+            output_path = validate_filepath(output_path, "output_path")
 
         # Remember current state
         original_scene = bpy.context.window.scene

@@ -93,6 +93,8 @@ class RenderHandlersMixin:
 
         if output_dir is None:
             output_dir = tempfile.mkdtemp(prefix="mcp_render_")
+        else:
+            output_dir = validate_filepath(output_dir, "output_dir")
 
         os.makedirs(output_dir, exist_ok=True)
 
