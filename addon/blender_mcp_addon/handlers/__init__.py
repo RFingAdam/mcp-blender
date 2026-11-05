@@ -7,6 +7,8 @@ and wires up the handler dispatch table in ``_register_handlers()``.
 
 from typing import Any
 
+import bpy
+
 from .ai import AIHandlersMixin
 from .animation import AnimationHandlersMixin
 from .annotations import AnnotationHandlersMixin
@@ -25,6 +27,60 @@ from .physics import PhysicsHandlersMixin
 from .render import RenderHandlersMixin
 from .scene import SceneHandlersMixin
 from .sculpt import SculptHandlersMixin
+
+# Handlers that leave bpy.data unchanged. Every other handler gets one undo step
+# after a successful call. When unsure, a tool stays out of this set: an extra
+# undo step costs little, a missing one loses the user's work.
+NON_MUTATING: frozenset[str] = frozenset(
+    {
+        # Names that read: *_get, *_list, *_info, *_status, get_*, list_*
+        "action_list",
+        "ai_get_backend_info",
+        "ai_model_status",
+        "ai_pipeline_status",
+        "ai_queue_list",
+        "collection_list",
+        "get_version",
+        "keyframe_list",
+        "material_list",
+        "modifier_list",
+        "msfs_get_lod_info",
+        "msfs_livery_get_template_info",
+        "object_get",
+        "object_list",
+        "refine_list_sessions",
+        "scene_info",
+        # Other readers: they build their reply from bmesh copies or node data
+        "geonode_inspect",
+        "material_inspect_graph",
+        "measure",
+        "measure_clearance",
+        "measure_edge_angle",
+        "measure_surface_area",
+        "measure_volume",
+        "validate_dimensions",
+        "validate_mesh_quality",
+        # Queries that never touch bpy.data
+        "ai_get_history",
+        "ai_list_backends",
+        "polyhaven_search",
+        # Must never push: a push after undo would clear the redo stack
+        "undo",
+        "redo",
+        "ping",
+    }
+)
+
+# Handlers the test harness adds to the dispatch table. They reload or script the
+# scene themselves, so a push after them would record a step nobody asked for.
+HARNESS_ONLY: frozenset[str] = frozenset({"harness_reset", "harness_exec"})
+
+
+def _succeeded(result: Any) -> bool:
+    """False for a reply that reports an error, True for anything else."""
+    if isinstance(result, dict):
+        return "error" not in result and result.get("success") is not False
+    return True
 
 
 class CommandHandlers(
@@ -374,4 +430,22 @@ class CommandHandlers(
         handler = self._handlers.get(method)
         if handler is None:
             raise ValueError(f"Unknown method: {method}")
-        return handler(params)
+        result = handler(params)
+        if method not in NON_MUTATING and method not in HARNESS_ONLY and _succeeded(result):
+            self._push_undo_step(method)
+        return result
+
+    @staticmethod
+    def _push_undo_step(method: str) -> None:
+        """Record one undo step named after the tool, so one call undoes in one step.
+
+        Operators called from a socket timer push no step of their own. The push
+        runs after the handler returns, so the step captures any rename it made.
+        Background mode has undo disabled, so there is nothing to push.
+        """
+        if bpy.app.background:
+            return
+        try:
+            bpy.ops.ed.undo_push(message=method)
+        except RuntimeError:
+            pass

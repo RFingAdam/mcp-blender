@@ -8,6 +8,7 @@
     "bake_tricks_leave_material_clean": "PASS",
     "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
+    "failed_call_adds_no_undo_step": "PASS",
     "malformed_json_error_reply": "PASS",
     "mesh_knife_project_keeps_outside": "PASS",
     "mesh_loop_cut_adds_edges": "PASS",
@@ -20,7 +21,7 @@
     "reply_16mb_complete": "FAIL",
     "sculpt_mask_by_topology_masks": "PASS",
     "sculpt_mesh_filter_moves_vertices": "PASS",
-    "undo_reverts": "FAIL"
+    "undo_reverts": "PASS"
   },
   "5.2": {
     "bake_id_map_restores_slots": "PASS",
@@ -31,6 +32,7 @@
     "bake_tricks_leave_material_clean": "PASS",
     "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
+    "failed_call_adds_no_undo_step": "PASS",
     "malformed_json_error_reply": "PASS",
     "mesh_knife_project_keeps_outside": "PASS",
     "mesh_loop_cut_adds_edges": "PASS",
@@ -43,6 +45,6 @@
     "reply_16mb_complete": "FAIL",
     "sculpt_mask_by_topology_masks": "PASS",
     "sculpt_mesh_filter_moves_vertices": "PASS",
-    "undo_reverts": "FAIL"
+    "undo_reverts": "PASS"
   }
 }

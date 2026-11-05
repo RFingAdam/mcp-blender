@@ -181,7 +181,7 @@ if they drift. More detail per area is in
 | `sculpt_multires_reshape` | 4.5, 5.2 |
 | `sculpt_to_retopo` | 4.5, 5.2 |
 
-Socket checks that still fail: `reply_16mb_complete`, `undo_reverts`.
+Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
