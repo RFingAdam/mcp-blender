@@ -15,6 +15,7 @@ while providing access to the new multi-backend features.
 API Documentation: https://hyperhuman.deemos.com/docs (Rodin)
 """
 
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -620,7 +621,7 @@ def get_backend_info(backend: str) -> dict[str, Any]:
 
 # Keys a client may set. Anything that names a file, a program or a remote endpoint
 # (workflow, python_path, model_path, api_base_url) is set only in Preferences.
-CONFIGURE_KEYS = frozenset({"enabled", "api_key", "host", "timeout", "device"})
+CONFIGURE_KEYS = frozenset({"enabled", "api_key", "host", "timeout", "device", "model"})
 
 # Rejected keys that have a Preferences field, mapped to its label.
 PREFERENCE_FIELDS = {
@@ -629,6 +630,9 @@ PREFERENCE_FIELDS = {
     "triposr_path": "TripoSR folder",
     "model_path": "TripoSR model or Hunyuan3D model",
 }
+
+
+_MODEL_NAME = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
 
 
 def _rejection_message(rejected: list[str]) -> str:
@@ -682,6 +686,14 @@ def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
         return {
             "success": False,
             "error": "host must be an http or https URL with no user name or password",
+        }
+
+    if "model" in config and not (
+        isinstance(config["model"], str) and _MODEL_NAME.fullmatch(config["model"])
+    ):
+        return {
+            "success": False,
+            "error": "model must be 1 to 128 characters from letters, digits and . _ : / -",
         }
 
     manager = get_backend_manager()

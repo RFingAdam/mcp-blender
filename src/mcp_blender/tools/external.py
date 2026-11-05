@@ -178,6 +178,7 @@ def register_external_tools(server: "Server", get_client: "callable") -> None:
                 - host: http or https URL of the backend server
                 - device: Device to use (auto, cuda, cpu, mps)
                 - timeout: Request timeout in seconds
+                - model: Ollama model name
                 - enabled: Whether backend is enabled
                 Paths and local model locations are set in Blender's Preferences.
 

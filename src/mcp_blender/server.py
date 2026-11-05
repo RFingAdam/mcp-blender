@@ -912,7 +912,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_ai_configure_backend",
-        description="Configure a specific AI backend. Accepts only enabled, api_key, host (an http or https URL), timeout and device. The ComfyUI workflow, TripoSR Python and folder, and TripoSR and Hunyuan3D model are set in Blender's Preferences (Meshwire add-on), not here",
+        description="Configure a specific AI backend. Accepts only enabled, api_key, host (an http or https URL), timeout, device and model (an Ollama model name). The ComfyUI workflow, TripoSR Python and folder, and TripoSR and Hunyuan3D model are set in Blender's Preferences (Meshwire add-on), not here",
         input_schema={
             "type": "object",
             "properties": {
@@ -922,7 +922,7 @@ TOOLS: list[Tool] = [
                 },
                 "config": {
                     "type": "object",
-                    "description": "Configuration dictionary with any of: enabled, api_key, host, timeout, device (e.g., {'api_key': '...', 'timeout': 120})",
+                    "description": "Configuration dictionary with any of: enabled, api_key, host, timeout, device, model (e.g., {'api_key': '...', 'timeout': 120})",
                 },
             },
             "required": ["backend"],

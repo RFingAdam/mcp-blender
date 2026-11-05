@@ -174,6 +174,24 @@ def test_configure_backend_rejects_non_http_host(ai, host):
     assert "host" in res["error"]
 
 
+@pytest.mark.parametrize(
+    "model", ["", "x" * 129, "a b", "../../etc/passwd;", "m\n", 7, None, "llama3.2-vision:11b\x00"]
+)
+def test_configure_backend_rejects_bad_model_names(ai, model):
+    res = ai.mixin._handle_ai_configure_backend(
+        {"backend": "ollama_vision", "config": {"model": model}}
+    )
+    assert res["success"] is False
+    assert "model must be" in res["error"]
+
+
+def test_configure_backend_accepts_an_ollama_model_name(ai):
+    res = ai.mixin._handle_ai_configure_backend(
+        {"backend": "ollama_vision", "config": {"model": "llama3.2-vision:11b"}}
+    )
+    assert res.get("success") is True, res
+
+
 def test_configure_backend_accepts_safe_keys(ai):
     config = {
         "enabled": True,
