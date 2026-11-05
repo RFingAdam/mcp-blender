@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Undo and replies that fail.** A reply of `{"success": true, "error": null}`, which `execute_script`
+  returns, now pushes its undo step; only a truthy `error` or `success: false` counts as a failure.
+  `ai_model_status` pushes one undo step when it imports the finished model and none for a poll that
+  imports nothing, so undoing the import no longer takes an earlier tool call with it.
+- **`mesh_knife_project` says when it cut nothing.** It compares the vertex, edge and face counts and
+  returns `success: false` ("the cutter does not overlap the target") when they did not change, instead
+  of claiming success. A new `view_axis` parameter (`TOP` by default, or `BOTTOM`, `FRONT`, `BACK`,
+  `LEFT`, `RIGHT`) sets the direction the cutter is projected along; the 3D view is turned for the call
+  and restored afterwards, and the reply reports the axis used.
+- **Long jobs no longer time out at 30 seconds through the server.** Every `bake_*` tool,
+  `msfs_export_model`, `msfs_batch_export_lods`, `physics_simulate`, `physics_fluid_quick`,
+  `render_image` and `material_preview_render` now wait 600 seconds for Blender by default and declare
+  an optional `timeout` (seconds the server waits) in their schemas. Only `ai_generate_texture_sync`,
+  whose handler reads `timeout` as its polling limit, still receives it; for other tools the server
+  keeps it to itself. This replaces the earlier rule that forwarded `timeout` to every tool declaring it.
+- **`ai_redo_generation` replays the right kind of job.** Jobs now record whether they are a 3D model or
+  a texture. A texture job is redone as a texture instead of being submitted as a paid 3D model, and a
+  job kind that cannot be replayed gives a clear error. `ai_generate_variations` accepts at most 8
+  variations, in the schema and in the handler.
+- **`object_separate` returns to Object mode when the operator raises**, for example `MATERIAL` on a
+  mesh with one material slot, instead of leaving the scene in Edit mode.
+- **The pipeline's MSFS stage exports.** `ai_pipeline_generate` called `msfs_export_model` with
+  `output_dir`, which the handler does not take, so the export always failed unnoticed. It now passes a
+  `filepath` built from `output_dir` and the object name, and an export error fails the stage.
+
 - **`tools/list` and the addon handlers now agree.** Seven handlers had no tool and are now listed:
   `ai_get_backend_info`, `ai_generate_variations`, `ai_cancel_generation`, `ai_redo_generation`,
   `ai_queue_list`, `ai_queue_clear` and `ai_get_history`. `ping` stays a protocol call. `export_fbx`
