@@ -8,6 +8,9 @@ inspect scene state without leaning on the tools it is checking:
 
   harness_reset  reload the fixture scene
   harness_exec   run a snippet and return its ``result`` variable
+
+The add-on is imported, not enabled through addon_utils, so Blender has no
+preferences entry for it and the add-on runs on its preference defaults.
 """
 
 import argparse
@@ -59,6 +62,8 @@ def main(argv):
         # Register first, as Blender does when the addon is enabled, so a break in
         # class or property registration turns the lane red.
         blender_mcp_addon.register()
+        # The harness measures the tools, so it turns the panel switch on as a user would.
+        blender_mcp_addon.security.set_python_allowed(True)
         server = MCPSocketServer(host="127.0.0.1", port=args.port)
         _install_harness_handlers(server, args.scene)
         if not server.start():

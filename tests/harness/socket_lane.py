@@ -1314,6 +1314,33 @@ def check_execute_script_stdout(ctx: Ctx) -> str:
     return "computed text came back in stdout"
 
 
+def check_execute_script_refused_when_off(ctx: Ctx) -> str:
+    # The expected text and the switch both come from the add-on's own security module.
+    set_flag = (
+        "from blender_mcp_addon import security\n"
+        "security.set_python_allowed({on})\n"
+        "result = security.PYTHON_OFF_ERROR\n"
+    )
+    script = "import bpy\nbpy.data.objects.new('LaneRefused', None)\n"
+    try:
+        expected = ctx.conn.exec(set_flag.format(on=False))
+        before = ctx.conn.call("scene_info")["object_count"]
+        res = ctx.conn.call("execute_script", {"script": script})
+        after = ctx.conn.call("scene_info")["object_count"]
+    finally:
+        ctx.conn.exec(set_flag.format(on=True))
+    if res.get("success") is not False:
+        raise CheckFailed(f"execute_script ran with Python off: {str(res)[:120]}")
+    if res.get("error") != expected:
+        raise CheckFailed(f"error {res.get('error')!r}, expected {expected!r}")
+    if after != before or "LaneRefused" in _names(ctx.conn):
+        raise CheckFailed("the refused script still created an object")
+    ok = ctx.conn.call("execute_script", {"script": "result = 1 + 1"})
+    if not ok.get("success") or ok.get("result") != 2:
+        raise CheckFailed(f"execute_script did not run after the switch came back on: {ok}")
+    return "refused with the exact text and no object, ran again once the switch was on"
+
+
 def check_reply_16mb_complete(ctx: Ctx) -> str:
     unit = "abcdefghijklmnopqrstuvwxyz0123456789"
     expected = (unit * (BIG_REPLY_BYTES // len(unit) + 1))[:BIG_REPLY_BYTES]
@@ -1899,6 +1926,7 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("undo_reverts", check_undo_reverts, CHECK_TIMEOUT),
     ("failed_call_adds_no_undo_step", check_failed_call_adds_no_undo_step, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
+    ("execute_script_refused_when_off", check_execute_script_refused_when_off, CHECK_TIMEOUT),
     ("reply_16mb_complete", check_reply_16mb_complete, CHECK_TIMEOUT),
     ("malformed_json_error_reply", check_malformed_json_error_reply, CHECK_TIMEOUT),
     ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
