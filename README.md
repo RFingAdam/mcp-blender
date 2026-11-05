@@ -18,8 +18,8 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **186 of 218 tools work on both.**
-> 32 need what a headless test cannot provide, such as a GUI, network access, or an earlier call.
+> **190 of 225 tools work on both.**
+> 35 need what a headless test cannot provide, such as a GUI, network access, or an earlier call.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -142,9 +142,9 @@ if they drift. More detail per area is in
 | Annotations | 6 | 5 | 6 | `annotation_dimension`, `annotation_text` |
 | MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
-| AI generation and refinement | 29 | 13 | 13 | `ai_mesh_remesh`, `ai_auto_uv` |
+| AI generation and refinement | 36 | 17 | 17 | `ai_mesh_remesh`, `ai_auto_uv` |
 | Poly Haven | 2 | 0 | 0 |  |
-| **Total** | **218** | **186** | **187** |  |
+| **Total** | **225** | **190** | **191** |  |
 
 <details><summary>No tool has a known failure; some socket checks do</summary>
 
@@ -152,21 +152,24 @@ Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>32 tools that cannot be checked headless</summary>
+<details><summary>35 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
+| `ai_cancel_generation` | needs a job id that only a live AI backend can issue |
 | `ai_evaluate` | needs network access, which the harness turns off |
 | `ai_generate_model` | no AI backend is reachable offline |
 | `ai_generate_model_sync` | no AI backend is reachable offline |
 | `ai_generate_reference_image` | no AI backend is reachable offline |
 | `ai_generate_texture` | no AI backend is reachable offline |
 | `ai_generate_texture_sync` | no AI backend is reachable offline |
+| `ai_generate_variations` | no AI backend is reachable offline |
 | `ai_inpaint_texture` | no AI backend is reachable offline |
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
 | `ai_pipeline_generate` | no AI backend is reachable offline |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
 | `ai_probe_backends` | needs network access, which the harness turns off |
+| `ai_redo_generation` | needs a previous generation, which only a live AI backend can produce |
 | `ai_refine` | needs network access, which the harness turns off |
 | `ai_texture_from_render` | no AI backend is reachable offline |
 | `analyze_viewport` | needs network access, which the harness turns off |

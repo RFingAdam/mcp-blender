@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tools/list` and the addon handlers now agree.** Seven handlers had no tool and are now listed:
+  `ai_get_backend_info`, `ai_generate_variations`, `ai_cancel_generation`, `ai_redo_generation`,
+  `ai_queue_list`, `ai_queue_clear` and `ai_get_history`. `ping` stays a protocol call. `export_fbx`
+  and `export_obj` list the options they already read (`scale`, axes, `bake_anim`, `apply_unit_scale`,
+  `export_materials`) with the enum values both Blender 4.5 and 5.2 accept. `ai_generate_texture` and
+  `ai_generate_texture_sync` no longer read `texture_types`, which no workflow used.
+  `ai_pipeline_status` drops `resume`, which nothing implemented. A tool that declares `timeout`
+  now receives it: the server used to strip it before forwarding, so `ai_generate_texture_sync` always
+  polled for its default 300 seconds. `execute_script` says `timeout` is how long the server waits, not a
+  script limit. `material_set_color` requires `color` as its schema says, and `measure` documents which
+  mode needs which argument. `ai_generate_variations` reports `success: False` when no variation was
+  generated. New static gate `required_matches` compares each schema's `required` with the handler.
 - **Defects that hid behind SOFT_FAIL and PASS.** `ai_auto_uv` LIGHTMAP no longer passes the removed
   `PREF_APPLY_IMAGE` and `PREF_IMG_PX_SIZE` keywords. `ai_mesh_decimate` maps `UN_SUBDIVIDE` to
   `UNSUBDIV` and `PLANAR` to `DISSOLVE`. `constraint_add` sets `target` only on constraints that have

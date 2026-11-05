@@ -389,7 +389,8 @@ def check_tool_handler_parity(
 ) -> list[str]:
     """Registered handlers with no tool, and tools with no registered handler."""
     tools = _tools() if tools is None else tools
-    handlers = set(_registered_handlers(addon_dir))
+    # ping is answered by the transport, not offered as a tool.
+    handlers = set(_registered_handlers(addon_dir)) - {"ping"}
     out = [f"handler without tool: {name}" for name in handlers - set(tools)]
     out += [f"tool without handler: {name}" for name in set(tools) - handlers]
     return sorted(out)
@@ -449,6 +450,64 @@ def _param_reads(func: ast.FunctionDef) -> tuple[set[str], bool]:
     return keys, escapes
 
 
+def _unconditional_nodes(func: ast.FunctionDef):
+    """Walk a function body, skipping branches and loops (conditional code)."""
+    stack: list[ast.AST] = list(func.body)
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+            # Only the test or iterable always runs; a require_param in a
+            # branch is required for that branch (for example one mode).
+            first = node.test if isinstance(node, (ast.If, ast.While)) else node.iter
+            stack.append(first)
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _required_reads(func: ast.FunctionDef) -> set[str]:
+    """Keys the handler always reads with ``require_param`` on its params argument."""
+    args = func.args.args
+    if len(args) < 2:
+        return set()
+    pname = args[1].arg
+    out: set[str] = set()
+    for node in _unconditional_nodes(func):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "require_param"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == pname
+        ):
+            key = _const_str(node.args[1])
+            if key is not None:
+                out.add(key)
+    return out
+
+
+def check_required_matches(
+    addon_dir: Path = ADDON_DIR, tools: dict[str, dict] | None = None
+) -> list[str]:
+    """A schema's ``required`` must equal the keys its handler reads with ``require_param``."""
+    tools = _tools() if tools is None else tools
+    methods = _method_index(addon_dir)
+    out: set[str] = set()
+    for key, method_name in _registered_handlers(addon_dir).items():
+        if key not in tools or method_name not in methods:
+            continue
+        path, func = methods[method_name]
+        rel = _rel(path, addon_dir)
+        schema_required = set(tools[key].get("required", []))
+        handler_required = _required_reads(func)
+        for name in schema_required - handler_required:
+            out.add(f"{rel}::{method_name}: schema requires '{name}' but handler does not")
+        for name in handler_required - schema_required:
+            out.add(f"{rel}::{method_name}: handler requires '{name}' but schema does not")
+    return sorted(out)
+
+
 def check_schema_params(
     addon_dir: Path = ADDON_DIR, tools: dict[str, dict] | None = None
 ) -> list[str]:
@@ -467,6 +526,9 @@ def check_schema_params(
         rel = _rel(path, addon_dir)
         props = set(tools[key].get("properties", {}))
         reads, escapes = _param_reads(func)
+        if "timeout" in props:
+            # The server reads timeout as its wait for Blender's reply.
+            reads = reads | {"timeout"}
         for name in reads - props:
             out.add(f"{rel}::{method_name}: reads '{name}' not in schema")
         if not escapes:
@@ -486,6 +548,7 @@ CHECKS = {
     "validate_filepath_result_used": check_validate_filepath_result_used,
     "schema_params": check_schema_params,
     "tool_handler_parity": check_tool_handler_parity,
+    "required_matches": check_required_matches,
 }
 
 
@@ -794,6 +857,56 @@ def test_read_tools_are_non_mutating():
     ]
     assert reads
     assert sorted(set(reads) - non_mutating) == []
+
+
+def test_fixture_required_matches(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY,
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        require_param(params, 'size', int)\n"
+            "        require_param(params, 'name', str)\n"
+            "    def _handle_orphan(self, params):\n        pass\n",
+        },
+    )
+    tools = {"x": {"required": ["size", "extra"]}}
+    assert check_required_matches(addon, tools) == [
+        "addon/pkg/handlers/a.py::_handle_x: handler requires 'name' but schema does not",
+        "addon/pkg/handlers/a.py::_handle_x: schema requires 'extra' but handler does not",
+    ]
+
+
+def test_fixture_ping_and_timeout_exemptions(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY
+            + '        self._handlers["ping"] = self._handle_ping\n',
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        params.get('size')\n"
+            "    def _handle_orphan(self, params):\n        pass\n"
+            "    def _handle_ping(self, params):\n        pass\n",
+        },
+    )
+    tools = {"x": {"properties": {"size": {}, "timeout": {}}}, "orphan": {}}
+    assert check_tool_handler_parity(addon, tools) == []
+    assert check_schema_params(addon, tools) == []
+
+
+def test_fixture_required_matches_ignores_branch_only_requires(tmp_path):
+    addon = _make_addon(
+        tmp_path,
+        {
+            "handlers/__init__.py": _REGISTRY,
+            "handlers/a.py": "class A:\n    def _handle_x(self, params):\n"
+            "        require_param(params, 'name', str)\n"
+            "        if params.get('mode') == 'B':\n"
+            "            require_param(params, 'point', list)\n"
+            "    def _handle_orphan(self, params):\n        pass\n",
+        },
+    )
+    assert check_required_matches(addon, {"x": {"required": ["name"]}}) == []
 
 
 if __name__ == "__main__":

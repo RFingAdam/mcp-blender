@@ -125,7 +125,6 @@ class AIHandlersMixin:
             workflow_type="pbr_texture",
             object_name=params.get("object_name"),
             auto_apply=params.get("auto_apply", True),
-            texture_types=params.get("texture_types"),
             width=params.get("resolution", 1024),
             height=params.get("resolution", 1024),
             negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
@@ -142,7 +141,6 @@ class AIHandlersMixin:
             workflow_type="pbr_texture",
             object_name=params.get("object_name"),
             auto_apply=params.get("auto_apply", True),
-            texture_types=params.get("texture_types"),
             width=params.get("resolution", 1024),
             height=params.get("resolution", 1024),
             negative_prompt=params.get("negative_prompt", "blurry, low quality, watermark, text, logo"),
@@ -441,12 +439,16 @@ class AIHandlersMixin:
                 **result,
             })
 
-        return {
-            "success": True,
+        succeeded = [r for r in results if r.get("success")]
+        response = {
+            "success": bool(succeeded),
             "prompt": prompt,
             "num_variations": num_variations,
             "results": results,
         }
+        if not succeeded:
+            response["error"] = results[0].get("error", "No variation was generated")
+        return response
 
 
     def _handle_ai_cancel_generation(self, params: dict) -> dict:
