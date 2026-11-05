@@ -19,6 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import bpy
 
@@ -615,6 +616,27 @@ def get_backend_info(backend: str) -> dict[str, Any]:
     return {"success": False, "error": f"Unknown backend: {backend}"}
 
 
+# Keys a client may set. Anything that names a file, a program or a remote endpoint
+# (workflow, python_path, model_path, api_base_url) is set only in Preferences.
+CONFIGURE_KEYS = frozenset({"enabled", "api_key", "host", "timeout", "device"})
+
+
+def _is_plain_http_url(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parts = urlparse(value)
+        hostname = parts.hostname
+    except ValueError:
+        return False
+    return (
+        parts.scheme in ("http", "https")
+        and bool(hostname)
+        and parts.username is None
+        and parts.password is None
+    )
+
+
 def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
     """Configure a specific backend.
 
@@ -625,6 +647,25 @@ def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dictionary confirming the configuration.
     """
+    if not isinstance(config, dict):
+        return {"success": False, "error": "config must be an object"}
+
+    rejected = sorted(str(key) for key in config if key not in CONFIGURE_KEYS)
+    if rejected:
+        return {
+            "success": False,
+            "error": (
+                f"Cannot set {', '.join(rejected)} through ai_configure_backend. "
+                "Set it in Blender's Preferences (Meshwire add-on). "
+                f"Allowed keys: {', '.join(sorted(CONFIGURE_KEYS))}."
+            ),
+        }
+    if "host" in config and not _is_plain_http_url(config["host"]):
+        return {
+            "success": False,
+            "error": "host must be an http or https URL with no user name or password",
+        }
+
     manager = get_backend_manager()
 
     if manager.configure_backend(backend, config):

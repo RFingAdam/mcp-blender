@@ -173,11 +173,13 @@ def register_external_tools(server: "Server", get_client: "callable") -> None:
 
         Args:
             backend: Name of the backend to configure
-            config: Configuration dict with keys like:
+            config: Configuration dict. Allowed keys only:
                 - api_key: API key for cloud backends
-                - model_path: Local model path
+                - host: http or https URL of the backend server
                 - device: Device to use (auto, cuda, cpu, mps)
+                - timeout: Request timeout in seconds
                 - enabled: Whether backend is enabled
+                Paths and endpoints are set in Blender's Preferences.
 
         Returns:
             Confirmation of configuration

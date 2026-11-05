@@ -912,7 +912,7 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_ai_configure_backend",
-        description="Configure settings for a specific AI backend (API keys, URLs, model paths, device, timeout)",
+        description="Configure a specific AI backend. Accepts only enabled, api_key, host (an http or https URL), timeout and device. File paths and endpoints such as workflow, python_path, model_path and api_base_url are set in Blender's Preferences (Meshwire add-on)",
         input_schema={
             "type": "object",
             "properties": {
@@ -922,7 +922,7 @@ TOOLS: list[Tool] = [
                 },
                 "config": {
                     "type": "object",
-                    "description": "Configuration dictionary (e.g., {'api_base_url': 'http://...', 'api_key': '...', 'timeout': 120})",
+                    "description": "Configuration dictionary with any of: enabled, api_key, host, timeout, device (e.g., {'api_key': '...', 'timeout': 120})",
                 },
             },
             "required": ["backend"],
