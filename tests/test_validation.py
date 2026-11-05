@@ -49,6 +49,7 @@ def stub_bpy(monkeypatch, tmp_path):
 
     stub = types.ModuleType("bpy")
     stub.path = types.SimpleNamespace(abspath=abspath)
+    stub.data = types.SimpleNamespace(filepath=str(blend_dir / "scene.blend"))
     monkeypatch.setitem(sys.modules, "bpy", stub)
     return blend_dir
 
@@ -60,6 +61,17 @@ def test_resolve_path_expands_home(monkeypatch, tmp_path):
 
 def test_resolve_path_resolves_blender_relative_against_the_blend_file(stub_bpy):
     assert validation.resolve_path("//textures/a.png") == str(stub_bpy / "textures" / "a.png")
+
+
+def test_blender_relative_path_needs_a_saved_blend_file(stub_bpy, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys.modules["bpy"].data, "filepath", "")
+    with pytest.raises(ValidationError, match="Save the file first"):
+        validation.resolve_path("//x.png")
+    with pytest.raises(ValidationError, match="Save the file first"):
+        validate_filepath("//x.png", "p")
+    assert validation.resolve_path("/abs/x.png") == "/abs/x.png"
 
 
 def test_resolve_path_normalizes_and_makes_absolute(tmp_path, monkeypatch):

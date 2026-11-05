@@ -175,7 +175,7 @@ def resolve_path(path: str) -> str:
     """Resolve a user path to the absolute path Python I/O should use.
 
     Expands ``~``, resolves a Blender-relative ``//`` path against the .blend
-    file, then makes the result absolute and normalized. Handlers call this (or
+    file (which must be saved), then makes the result absolute and normalized. Handlers call this (or
     ``validate_filepath``) before any ``os`` call, and put the result in the reply.
     """
     import os
@@ -184,6 +184,11 @@ def resolve_path(path: str) -> str:
     if path.startswith("//"):
         import bpy
 
+        if not bpy.data.filepath:
+            raise ValidationError(
+                "'//' paths are relative to the saved .blend file. "
+                "Save the file first, or pass an absolute path."
+            )
         path = bpy.path.abspath(path)
     return os.path.abspath(path)
 
