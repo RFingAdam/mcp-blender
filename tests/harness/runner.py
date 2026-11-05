@@ -78,8 +78,11 @@ def main(argv):
     if not os.path.exists(args.scene):
         scene.build(args.scene)
 
+    from blender_mcp_addon import security
     from blender_mcp_addon.handlers import CommandHandlers
 
+    # The harness measures the tools, so it turns the panel switch on as a user would.
+    security.set_python_allowed(True)
     _block_network()
     handlers = CommandHandlers()
     with open(args.cases) as fh:

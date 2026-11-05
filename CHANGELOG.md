@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`execute_script` now needs the panel switch.** It refuses every call, before running anything, until you
+  click **Allow Python** in the Meshwire sidebar tab in Blender. The switch is off every time Blender starts
+  and stays on only until it closes. No tool, socket message or saved file can turn it on. Anything that
+  called `execute_script` must be allowed once per Blender session.
+- **Settings moved from the scene to add-on Preferences.** Host, port and the new Rodin key, Meshy key and
+  ComfyUI workflow path are stored per user in Preferences, not inside the `.blend` file, so a shared file
+  no longer carries them. Port 0, the new default, picks the first free port from 9876 to 9885. Starting the
+  server now reports an error in Blender when it cannot bind, instead of claiming it started.
+- **`ai_configure_backend` takes only safe keys.** It accepts `enabled`, `api_key`, `host`, `timeout` and
+  `device`, and `host` must be an http or https URL with no user name or password. Any other key, such as
+  `workflow`, `python_path`, `model_path` or `api_base_url`, is refused with a message that names it and
+  points to Preferences (Meshwire add-on).
 - **An MCP client can now see that a tool failed.** A reply from Blender that carries an error, or reports
   `success: false`, now comes back with `isError` set, so the client treats it as a failure. The JSON text
   is unchanged. The server's argument log also no longer holds API keys or whole scripts: values under

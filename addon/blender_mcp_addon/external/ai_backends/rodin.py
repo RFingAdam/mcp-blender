@@ -72,11 +72,11 @@ class RodinBackend(BaseBackend):
 
         # Try Blender addon preferences
         try:
-            import bpy
+            from ... import get_preferences
 
-            prefs = bpy.context.preferences.addons.get("blender_mcp_addon")
-            if prefs and hasattr(prefs, "preferences"):
-                api_key = getattr(prefs.preferences, "rodin_api_key", None)
+            prefs = get_preferences()
+            if prefs is not None:
+                api_key = getattr(prefs, "rodin_api_key", None)
                 if api_key:
                     return api_key
         except Exception:

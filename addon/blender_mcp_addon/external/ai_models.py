@@ -15,10 +15,12 @@ while providing access to the new multi-backend features.
 API Documentation: https://hyperhuman.deemos.com/docs (Rodin)
 """
 
+import re
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import bpy
 
@@ -51,9 +53,11 @@ def get_api_key() -> str | None:
         return api_key
 
     try:
-        prefs = bpy.context.preferences.addons.get("blender_mcp_addon")
-        if prefs and hasattr(prefs, "preferences"):
-            api_key = getattr(prefs.preferences, "rodin_api_key", None)
+        from .. import get_preferences
+
+        prefs = get_preferences()
+        if prefs is not None:
+            api_key = getattr(prefs, "rodin_api_key", None)
             if api_key:
                 return api_key
     except Exception:
@@ -615,6 +619,53 @@ def get_backend_info(backend: str) -> dict[str, Any]:
     return {"success": False, "error": f"Unknown backend: {backend}"}
 
 
+# Keys a client may set. Anything that names a file, a program or a remote endpoint
+# (workflow, python_path, model_path, api_base_url) is set only in Preferences.
+CONFIGURE_KEYS = frozenset({"enabled", "api_key", "host", "timeout", "device", "model"})
+
+# Rejected keys that have a Preferences field, mapped to its label.
+PREFERENCE_FIELDS = {
+    "workflow": "ComfyUI workflow",
+    "python_path": "TripoSR Python",
+    "triposr_path": "TripoSR folder",
+    "model_path": "TripoSR model or Hunyuan3D model",
+}
+
+
+_MODEL_NAME = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
+
+
+def _rejection_message(rejected: list[str]) -> str:
+    parts = []
+    for key in rejected:
+        field = PREFERENCE_FIELDS.get(key)
+        if field:
+            parts.append(
+                f"{key} cannot be set through ai_configure_backend. "
+                f"Set {field} in Blender's Preferences (Meshwire add-on)."
+            )
+        else:
+            parts.append(f"{key} is not a setting ai_configure_backend accepts.")
+    parts.append(f"Allowed keys: {', '.join(sorted(CONFIGURE_KEYS))}.")
+    return " ".join(parts)
+
+
+def _is_plain_http_url(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parts = urlparse(value)
+        hostname = parts.hostname
+    except ValueError:
+        return False
+    return (
+        parts.scheme in ("http", "https")
+        and bool(hostname)
+        and parts.username is None
+        and parts.password is None
+    )
+
+
 def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
     """Configure a specific backend.
 
@@ -625,6 +676,26 @@ def configure_backend(backend: str, config: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dictionary confirming the configuration.
     """
+    if not isinstance(config, dict):
+        return {"success": False, "error": "config must be an object"}
+
+    rejected = sorted(str(key) for key in config if key not in CONFIGURE_KEYS)
+    if rejected:
+        return {"success": False, "error": _rejection_message(rejected)}
+    if "host" in config and not _is_plain_http_url(config["host"]):
+        return {
+            "success": False,
+            "error": "host must be an http or https URL with no user name or password",
+        }
+
+    if "model" in config and not (
+        isinstance(config["model"], str) and _MODEL_NAME.fullmatch(config["model"])
+    ):
+        return {
+            "success": False,
+            "error": "model must be 1 to 128 characters from letters, digits and . _ : / -",
+        }
+
     manager = get_backend_manager()
 
     if manager.configure_backend(backend, config):

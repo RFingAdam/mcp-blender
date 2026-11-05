@@ -35,6 +35,9 @@ blender_refine_create_session(
 
 ### Step 2: Generate the initial mesh
 
+`execute_script` is off until you click **Allow Python** in the Meshwire sidebar tab in Blender.
+Until then it returns an error that says so.
+
 > *"Generate a draft mesh with `bmesh`: trunk + 3 conical layers."*
 
 ```python
