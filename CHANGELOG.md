@@ -174,6 +174,10 @@ Thanks to Muhammet Ali (`muhammetali`) for this fix.
 
 ### Added
 
+- **Every Blender series from 4.2 through 5.2 is now covered.** Blender 4.3.2, 4.4.3, 5.0.1 and 5.1.2
+  join 4.2.23 as nightly series, each with its own harness baseline. 4.5 and 5.2 stay gated on every
+  pull request. The nightly job is now a matrix over the five best-effort series. The baseline sync
+  test finds baselines by glob, so a new series needs no test edit.
 - `tests/test_handler_signatures.py`: Blender-free static checks that guard
   against `validate_enum` argument-order regressions and against calling
   Blender operators removed in 4.x.

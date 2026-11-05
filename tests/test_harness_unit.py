@@ -310,7 +310,12 @@ def test_baseline_file_is_sorted_with_trailing_newline(tmp_path):
 
 
 BASELINES = Path(__file__).parent / "harness" / "baselines"
-BASELINE_FILES = ("blender-4.2.json", "blender-4.5.json", "blender-5.2.json")
+BASELINE_FILES = tuple(sorted(f.name for f in BASELINES.glob("blender-*.json")))
+
+
+def test_every_supported_series_has_a_baseline():
+    series = ("4.2", "4.3", "4.4", "4.5", "5.0", "5.1", "5.2")
+    assert BASELINE_FILES == tuple(f"blender-{s}.json" for s in series)
 
 
 def _baseline(name):

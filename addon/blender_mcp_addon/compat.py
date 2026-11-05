@@ -265,6 +265,20 @@ def select_edge_loops(ring: bool = False) -> None:
         bpy.ops.mesh.select_edge_loop_multi()
 
 
+def paint_mask_extract(**kwargs) -> None:
+    """Extract the masked region into a new object (sculpt mode).
+
+    Newer Blender keeps the operator under ``sculpt``. Older releases offer the
+    same operator, with the same properties, under ``mesh``.
+    """
+    # dir() lists real operators. Looking one up by name always succeeds and only
+    # fails when it is called.
+    if "paint_mask_extract" in dir(bpy.ops.sculpt):
+        bpy.ops.sculpt.paint_mask_extract(**kwargs)
+    else:
+        bpy.ops.mesh.paint_mask_extract(**kwargs)
+
+
 def has_legacy_auto_smooth(mesh) -> bool:
     """True when the mesh still has the old ``use_auto_smooth`` switch."""
     return hasattr(mesh, "use_auto_smooth")

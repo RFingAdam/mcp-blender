@@ -131,6 +131,22 @@ def test_edge_loops_use_the_split_operators_otherwise(bpy, compat, ring, name):
     assert calls == [name]
 
 
+def test_mask_extract_uses_the_sculpt_operator_when_present(bpy, compat):
+    calls = []
+    bpy.ops.sculpt = ns(paint_mask_extract=lambda **kw: calls.append(("sculpt", kw)))
+    bpy.ops.mesh = ns(paint_mask_extract=lambda **kw: calls.append(("mesh", kw)))
+    compat.paint_mask_extract(smooth_iterations=2)
+    assert calls == [("sculpt", {"smooth_iterations": 2})]
+
+
+def test_mask_extract_falls_back_to_the_mesh_operator(bpy, compat):
+    calls = []
+    bpy.ops.sculpt = ns()
+    bpy.ops.mesh = ns(paint_mask_extract=lambda **kw: calls.append(("mesh", kw)))
+    compat.paint_mask_extract(smooth_iterations=2)
+    assert calls == [("mesh", {"smooth_iterations": 2})]
+
+
 # ---- action curves ----------------------------------------------------------------
 
 

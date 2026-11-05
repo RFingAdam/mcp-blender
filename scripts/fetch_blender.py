@@ -22,7 +22,11 @@ MIRRORS = (
 # sha256 of blender-<version>-linux-x64.tar.xz, identical on all four mirrors.
 SHA256 = {
     "4.2.23": "bea0eb3146be13eae6225409a117b215184f41b7f79e799f97cb3abb8f6dc404",
+    "4.3.2": "4da1c956673c0485e63054e563ee69198cc8f80d8157dd7592dffc8a6a5592e6",
+    "4.4.3": "8d3be07d2bc412b502c6bfe3cfe3e22195a4164076867da987ce148d73c27946",
     "4.5.15": "0d2b8bb2efe97e6c8eb57de6b7322f8800e1984e3125b60decca5f6771e4773e",
+    "5.0.1": "8019580ee1b7262e505f4196a00237ccf743c88d205b38d34201510676e60b09",
+    "5.1.2": "aaccb355f50183979b698bcce7467103a76261b5fa59f4972295842662a285fb",
     "5.2.3": "78486c018b4443efe5e75ab54c290ed8c15abafd249b862c2c9ce2530a918eec",
 }
 CACHE = Path.home() / ".cache" / "meshwire"

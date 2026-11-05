@@ -6,6 +6,7 @@ import tempfile
 
 import bpy
 
+from .. import compat
 from ..utils import (
     ensure_object_selected,
     get_object_or_error,
@@ -586,7 +587,7 @@ class SculptHandlersMixin:
 
         bpy.ops.object.mode_set(mode="SCULPT")
         try:
-            bpy.ops.sculpt.paint_mask_extract(
+            compat.paint_mask_extract(
                 mask_threshold=0.5,
                 add_boundary_loop=True,
                 smooth_iterations=smooth_iterations,
