@@ -52,9 +52,11 @@ def get_api_key() -> str | None:
         return api_key
 
     try:
-        prefs = bpy.context.preferences.addons.get("blender_mcp_addon")
-        if prefs and hasattr(prefs, "preferences"):
-            api_key = getattr(prefs.preferences, "rodin_api_key", None)
+        from .. import get_preferences
+
+        prefs = get_preferences()
+        if prefs is not None:
+            api_key = getattr(prefs, "rodin_api_key", None)
             if api_key:
                 return api_key
     except Exception:

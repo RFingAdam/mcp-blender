@@ -166,6 +166,16 @@ class ComfyUIBackend(BaseBackend):
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
+    def _preferred_workflow(self) -> str | None:
+        """The workflow file chosen in Preferences, or None to use the built-in one."""
+        try:
+            from ... import get_preferences
+
+            prefs = get_preferences()
+            return (getattr(prefs, "comfyui_workflow", "") or None) if prefs else None
+        except Exception:
+            return None
+
     def _get_host(self) -> str:
         return (
             self.config.extra.get("host", self.DEFAULT_HOST) if self.config else self.DEFAULT_HOST
@@ -504,7 +514,7 @@ class ComfyUIBackend(BaseBackend):
         **kwargs,
     ) -> GenerationResult:
         """Generate using a ComfyUI workflow."""
-        workflow_path = self.config.extra.get("workflow") if self.config else None
+        workflow_path = self._preferred_workflow()
 
         if workflow_path and Path(workflow_path).exists():
             with open(workflow_path, "r") as f:

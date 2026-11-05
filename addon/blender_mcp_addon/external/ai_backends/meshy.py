@@ -62,11 +62,11 @@ class MeshyBackend(BaseBackend):
             return api_key
 
         try:
-            import bpy
+            from ... import get_preferences
 
-            prefs = bpy.context.preferences.addons.get("blender_mcp_addon")
-            if prefs and hasattr(prefs, "preferences"):
-                return getattr(prefs.preferences, "meshy_api_key", None)
+            prefs = get_preferences()
+            if prefs is not None:
+                return getattr(prefs, "meshy_api_key", None) or None
         except Exception:
             pass
 
