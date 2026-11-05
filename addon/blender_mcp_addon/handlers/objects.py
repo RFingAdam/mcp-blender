@@ -14,6 +14,7 @@ from ..validation import (
     validate_enum,
     validate_vector3,
 )
+from ._helpers import restores_object_mode
 
 
 class ObjectHandlersMixin:
@@ -152,6 +153,7 @@ class ObjectHandlersMixin:
         bpy.ops.object.join()
         return serialize_object(bpy.context.active_object)
 
+    @restores_object_mode
     def _handle_object_separate(self, params: dict) -> dict:
         """Separate an object by loose parts."""
         obj = get_object_or_error(require_param(params, "name", str))
