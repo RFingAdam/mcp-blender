@@ -146,10 +146,7 @@ if they drift. More detail per area is in
 | Poly Haven | 2 | 0 | 0 |  |
 | **Total** | **218** | **186** | **187** |  |
 
-<details><summary>0 tools with a known failure</summary>
-
-| Tool | Fails on |
-| --- | --- |
+<details><summary>No tool has a known failure; some socket checks do</summary>
 
 Socket checks that still fail: `reply_16mb_complete`.
 
