@@ -271,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         if too_many:
             print(
                 f"{len(session)} session crashes, more than {MAX_SESSION_CRASHES}: "
-                "that is a crash of ours, not the known 4.2/4.3 segfault",
+                "that is a crash of ours, not the known 4.2 to 4.4 segfault",
                 file=sys.stderr,
             )
     (args.out / "results.json").write_text(json.dumps(result, indent=2, sort_keys=True))

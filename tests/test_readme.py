@@ -60,36 +60,36 @@ def test_lane_failures_list_every_series_they_were_recorded_on():
 
 def test_a_nightly_only_lane_failure_reaches_the_readme_text():
     ts = _tool_status()
-    known = ts.lane_sentence(ts.lane_failures(LANE))
-    assert "`sculpt_x`" in known and "4.2" in known
-    assert "`reply_16mb_complete`" in known and "4.5, 5.2" in known
+    known = ts.lane_sentence(ts.lane_failures(LANE), LANE)
+    assert "`sculpt_x` (on 4.2)" in known
+    assert "`reply_16mb_complete` (on 4.5, 5.2)" in known
 
 
-def test_a_row_that_leans_on_the_socket_lane_names_the_series_that_run_it():
+def test_a_check_failing_on_every_lane_series_says_so():
     ts = _tool_status()
-    lane = {s: {} for s in ("4.2", "4.3", "4.4", "4.5", "5.0", "5.1", "5.2")}
-    text = ts.qualify("needs a 3D viewport; socket lane covers it", lane)
-    assert "4.5 and 5.2 on every pull request" in text
-    assert "4.2, 4.3, 4.4, 5.0 and 5.1 nightly" in text
-    assert "best effort" in text
-
-
-def test_the_qualifier_follows_the_series_the_lane_really_ran_on():
-    ts = _tool_status()
-    text = ts.qualify("needs a 3D viewport; socket lane covers it", {"4.5": {}, "5.2": {}})
-    assert "nightly" not in text
-    assert "4.5 and 5.2 on every pull request" in text
-
-
-def test_a_row_that_does_not_mention_the_lane_is_left_alone():
-    ts = _tool_status()
-    assert ts.qualify("no AI backend is reachable offline", {"4.5": {}}) == (
-        "no AI backend is reachable offline"
+    lane = {"4.5": {"x": "FAIL"}, "5.2": {"x": "FAIL"}}
+    assert ts.lane_sentence(ts.lane_failures(lane), lane) == (
+        "Socket checks that still fail: `x` (on every series)."
     )
 
 
-def test_the_readme_never_says_the_lane_covers_a_tool_without_naming_series():
+def test_the_lane_note_names_the_gated_and_the_nightly_series():
+    ts = _tool_status()
+    lane = {s: {} for s in ("4.2", "4.3", "4.4", "4.5", "5.0", "5.1", "5.2")}
+    assert ts.lane_note(lane) == (
+        "Where a reason names the socket lane, it runs on Blender 4.5 and 5.2 on every pull"
+        " request, and on 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort."
+    )
+
+
+def test_the_lane_note_follows_the_series_the_lane_really_ran_on():
+    ts = _tool_status()
+    note = ts.lane_note({"4.5": {}, "5.2": {}})
+    assert "nightly" not in note
+    assert "4.5 and 5.2 on every pull request" in note
+
+
+def test_the_readme_names_the_lane_series_wherever_a_row_leans_on_the_lane():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
-    for line in text.splitlines():
-        if "socket lane" in line.lower() and line.startswith("| `"):
-            assert "every pull request" in line, line
+    if any("socket" in line.lower() and line.startswith("| `") for line in text.splitlines()):
+        assert "Where a reason names the socket lane, it runs on Blender" in text

@@ -133,29 +133,27 @@ def lane_failures(lane: dict[str, dict[str, str]]) -> dict[str, list[str]]:
     return dict(sorted(out.items()))
 
 
-def lane_sentence(fails: dict[str, list[str]]) -> str:
-    named = ", ".join(f"`{c}` (on {', '.join(s)})" for c, s in fails.items())
+def lane_sentence(fails: dict[str, list[str]], lane: dict[str, dict[str, str]]) -> str:
+    def where(series: list[str]) -> str:
+        return "every series" if set(series) == set(lane) else ", ".join(series)
+
+    named = ", ".join(f"`{c}` (on {where(s)})" for c, s in fails.items())
     return f"Socket checks that still fail: {named}."
 
 
-def qualify(reason: str, lane: dict[str, dict[str, str]]) -> str:
-    """Say which series run the socket lane wherever a reason leans on it.
+def lane_note(lane: dict[str, dict[str, str]]) -> str:
+    """One line saying which series run the socket lane, for rows that lean on it.
 
     The pull request jobs run it on SERIES. Any other series in the lane baseline
     runs it nightly, where a failure does not block a merge.
     """
-    if "socket" not in reason.lower():
-        return reason
     ran = sorted(lane, key=_version)
     gated = [s for s in ran if s in SERIES]
     nightly = [s for s in ran if s not in SERIES]
     where = f"{_names(gated)} on every pull request"
     if nightly:
-        where += f" and {_names(nightly)} nightly, best effort"
-    covers = "socket lane covers it"
-    if covers in reason:
-        return reason.replace(covers, f"{covers} on {where}")
-    return f"{reason} (the socket lane runs on {where})"
+        where += f", and on {_names(nightly)} nightly, best effort"
+    return f"Where a reason names the socket lane, it runs on Blender {where}."
 
 
 def load() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
@@ -228,7 +226,7 @@ def tools_section(states: dict[str, dict[str, str]], lane: dict[str, dict[str, s
     totals = [str(sum(map(works, states[s].values()))) for s in SERIES]
     rows.append(["**Total**", f"**{len(tools)}**", *(f"**{t}**" for t in totals), ""])
 
-    why = {t: qualify(k.reason, lane) for t, k in {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}.items()}
+    why = {t: k.reason for t, k in {**SOFT_FAIL_ALLOWED, **KNOWN_UNREACHED}.items()}
     for t in g["unchecked"]:
         if t not in why and any(states[s][t] == "offline" for s in SERIES):
             why[t] = "needs network access, which the harness turns off"
@@ -238,7 +236,7 @@ def tools_section(states: dict[str, dict[str, str]], lane: dict[str, dict[str, s
     lines = [_table(head, rows, numeric=range(1, 2 + len(SERIES))), ""]
     known = [_table(["Tool", "Fails on"], fail_rows)] if fail_rows else []
     if lane_fails:
-        known.append(lane_sentence(lane_fails))
+        known.append(lane_sentence(lane_fails, lane))
     if known:
         summary = (
             f"{len(g['fail'])} tools with a known failure"
@@ -254,7 +252,14 @@ def tools_section(states: dict[str, dict[str, str]], lane: dict[str, dict[str, s
     if g["unchecked"]:
         lines += _details(
             f"{len(g['unchecked'])} tools that cannot be checked headless",
-            _table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]]),
+            "\n\n".join(
+                (
+                    [lane_note(lane)]
+                    if any("socket" in why.get(t, "") for t in g["unchecked"])
+                    else []
+                )
+                + [_table(["Tool", "Why"], [[f"`{t}`", why.get(t, "")] for t in g["unchecked"]])]
+            ),
         )
     return "\n".join(lines[:-1])
 
