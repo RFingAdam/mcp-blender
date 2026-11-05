@@ -44,6 +44,8 @@ STARTUP_TIMEOUT = 120.0
 KILL_GRACE = 3.0
 POLL = 0.05
 RUNNER = Path(__file__).with_name("runner.py")
+# A run with more session crashes than this fails, whatever the baseline says.
+MAX_SESSION_CRASHES = 3
 DIFF_HINT = "see CONTRIBUTING.md, section 'Truth harness', for how to read and record these lines"
 
 
@@ -259,11 +261,19 @@ def main(argv: list[str] | None = None) -> int:
 
     cases = select(build_cases(load_tools()), args.only)
     result = run(args.blender, cases, args.out)
+    too_many = False
     if args.retry_crashes:
         session = retry_crashes(args.blender, cases, result, args.out / "retry")
         (args.out / "session_crashes.json").write_text(json.dumps(session, indent=2))
         for case_id, alone in sorted(session.items()):
             print(f"session crash: {case_id} CRASH in the full run, {alone} alone", file=sys.stderr)
+        too_many = len(session) > MAX_SESSION_CRASHES
+        if too_many:
+            print(
+                f"{len(session)} session crashes, more than {MAX_SESSION_CRASHES}: "
+                "that is a crash of ours, not the known 4.2/4.3 segfault",
+                file=sys.stderr,
+            )
     (args.out / "results.json").write_text(json.dumps(result, indent=2, sort_keys=True))
     for case_id in sorted(result):
         print(f"{case_id} {result[case_id]}")
@@ -275,8 +285,8 @@ def main(argv: list[str] | None = None) -> int:
             print(line, file=sys.stderr)
         if diff:
             print(DIFF_HINT, file=sys.stderr)
-        return 1 if diff else 0
-    return 0
+        return 1 if diff or too_many else 0
+    return 1 if too_many else 0
 
 
 if __name__ == "__main__":

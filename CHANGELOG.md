@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The nightly harness fails on too many session crashes.** `--retry-crashes` still forgives the known
+  Blender 4.2 and 4.3 segfault, which lands on a different case each run and passes alone. A run with
+  more than 3 such crashes now exits non-zero, so a crash of ours that happens to pass alone cannot hide
+  behind it.
 - **The truth harness no longer touches your Blender user files.** The driver and the socket lane set
   `BLENDER_USER_RESOURCES` to a directory under the run's temp dir, and drop `BLENDER_USER_CONFIG`,
   `BLENDER_USER_SCRIPTS` and the other user path variables. Before, a local run of `ai_queue_clear` or

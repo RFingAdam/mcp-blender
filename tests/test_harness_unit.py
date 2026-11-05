@@ -423,3 +423,53 @@ def test_enum_overrides_reach_the_generated_case():
         case = cases[f"{tool}#enum:{param}={value}"]
         assert {k: case.params[k] for k in extra} == extra
         assert case.params[param] == value
+
+
+def _crashing_run(monkeypatch, crashed):
+    from tests.harness import driver
+    from tests.harness.cases import build_cases
+    from tests.harness.catalog import load_tools
+
+    ids = [c.id for c in build_cases(load_tools())]
+    marked = set(ids[:crashed])
+
+    def fake_run(blender, cases, out_dir):
+        if len(cases) == 1:
+            return {cases[0].id: "PASS"}
+        return {c.id: "CRASH" if c.id in marked else "PASS" for c in cases}
+
+    monkeypatch.setattr(driver, "run", fake_run)
+    return ids
+
+
+def test_retry_crashes_passes_at_the_cap(monkeypatch, tmp_path, capsys):
+    import json
+
+    from tests.harness import driver
+
+    ids = _crashing_run(monkeypatch, driver.MAX_SESSION_CRASHES)
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps(dict.fromkeys(ids, "PASS")))
+    out = tmp_path / "out"
+    out.mkdir()
+    argv = ["--blender", "x", "--out", str(out), "--check-baseline", str(base), "--retry-crashes"]
+    assert driver.main(argv) == 0
+
+
+def test_retry_crashes_fails_past_the_cap(monkeypatch, tmp_path, capsys):
+    import json
+
+    from tests.harness import driver
+
+    assert driver.MAX_SESSION_CRASHES == 3
+
+    ids = _crashing_run(monkeypatch, driver.MAX_SESSION_CRASHES + 1)
+    base = tmp_path / "base.json"
+    base.write_text(json.dumps(dict.fromkeys(ids, "PASS")))
+    out = tmp_path / "out"
+    out.mkdir()
+    argv = ["--blender", "x", "--out", str(out), "--check-baseline", str(base), "--retry-crashes"]
+    assert driver.main(argv) == 1
+    assert "more than 3: " in capsys.readouterr().err
+    # the results are still written, so the run can be inspected
+    assert (out / "results.json").exists()

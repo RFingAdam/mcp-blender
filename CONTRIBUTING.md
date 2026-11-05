@@ -141,7 +141,8 @@ passes when it runs alone. The nightly job passes `--retry-crashes`, which rerun
 case alone in a fresh Blender. A case that passes alone takes its solo class and is printed as
 `session crash: id CRASH in the full run, CLASS alone`. The list is also saved to
 `session_crashes.json`. A case that crashes alone too stays `CRASH`. The 4.5 and 5.2 jobs never
-retry, so any crash there fails the check.
+retry, so any crash there fails the check. A run with `--retry-crashes` that finds more than 3
+session crashes exits 1 even when the baseline matches, because that many is not the known segfault.
 
 ### Reproduce locally
 
