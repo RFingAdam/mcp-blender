@@ -31,6 +31,16 @@ _VIEW_AXIS_ROTATIONS = {
 }
 
 
+def _world_bounds(*objects):
+    """Center and largest side of the world-space box around ``objects``."""
+    from mathutils import Vector
+
+    corners = [ob.matrix_world @ Vector(c) for ob in objects for c in ob.bound_box]
+    low = Vector(min(c[i] for c in corners) for i in range(3))
+    high = Vector(max(c[i] for c in corners) for i in range(3))
+    return (low + high) / 2.0, max(high - low)
+
+
 class MeshEditingHandlersMixin:
     """Mixin for mesh editing handlers."""
 
@@ -1757,19 +1767,35 @@ class MeshEditingHandlersMixin:
         # The cutter is selected only now: selected before entering Edit mode it would enter
         # Edit mode too, and the operator ignores selected objects that are being edited.
         cutter.select_set(True)
-        # The operator projects along the view of the area it is given, which is the first
-        # 3D view found, so that view is turned to the requested axis for the call only.
+        # The operator cuts in screen space along the view of the area it is given, which
+        # is the first 3D view found. For the call only, that view is turned to the
+        # requested axis and framed on both objects, so the result does not depend on
+        # where the user's viewport happens to look.
         rv3d = override["area"].spaces.active.region_3d
-        saved_rotation = rv3d.view_rotation.copy()
-        saved_perspective = rv3d.view_perspective
+        saved = (
+            rv3d.view_rotation.copy(),
+            rv3d.view_location.copy(),
+            rv3d.view_distance,
+            rv3d.view_perspective,
+        )
+        center, extent = _world_bounds(target, cutter)
         try:
             rv3d.view_perspective = "ORTHO"
             rv3d.view_rotation = _VIEW_AXIS_ROTATIONS[view_axis]
+            rv3d.view_location = center
+            rv3d.view_distance = max(extent, 0.01) * 2.0
+            # The operator reads the view matrices, which are only rebuilt on redraw.
+            rv3d.update()
             with bpy.context.temp_override(**override):
                 bpy.ops.mesh.knife_project(cut_through=cut_through)
         finally:
-            rv3d.view_rotation = saved_rotation
-            rv3d.view_perspective = saved_perspective
+            (
+                rv3d.view_rotation,
+                rv3d.view_location,
+                rv3d.view_distance,
+                rv3d.view_perspective,
+            ) = saved
+            rv3d.update()
             bpy.ops.object.mode_set(mode="OBJECT")
         if counts() == before:
             return {

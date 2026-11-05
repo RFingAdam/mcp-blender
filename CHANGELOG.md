@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`mesh_knife_project` says when it cut nothing.** It compares the vertex, edge and face counts and
   returns `success: false` ("the cutter does not overlap the target") when they did not change, instead
   of claiming success. A new `view_axis` parameter (`TOP` by default, or `BOTTOM`, `FRONT`, `BACK`,
-  `LEFT`, `RIGHT`) sets the direction the cutter is projected along; the 3D view is turned for the call
-  and restored afterwards, and the reply reports the axis used.
+  `LEFT`, `RIGHT`) sets the direction the cutter is projected along. For the call only, the first 3D view is turned
+  to that axis and framed on the target and cutter, then restored, so the cut no longer depends on
+  where the viewport happens to look. The reply reports the axis used.
 - **Long jobs no longer time out at 30 seconds through the server.** Every `bake_*` tool,
   `msfs_export_model`, `msfs_batch_export_lods`, `physics_simulate`, `physics_fluid_quick`,
   `render_image` and `material_preview_render` now wait 600 seconds for Blender by default and declare
