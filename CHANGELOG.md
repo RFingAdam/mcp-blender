@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Sculpt tools use Blender's real identifiers.** `sculpt_face_set_create` calls
+  `sculpt.face_sets_init`, whose modes the criteria map to (`LINKED` is `LOOSE_PARTS`);
+  `face_sets_create` never took them. `sculpt_mask_by_topology` uses `sculpt.mask_from_cavity` and
+  `sculpt.mask_init` in place of the removed `dirty_mask` and `vertex_paint_masks`, and blurs with
+  one `mask_filter` call. `sculpt_extract_mask` runs `sculpt.paint_mask_extract` and reads the
+  `.sculpt_mask` attribute, so a mesh with no mask gets a clear error. `sculpt_multires_reshape`
+  no longer lists `DELETE_LOWER`, which Blender never had. `sculpt_to_retopo` bakes a tangent-space
+  normal map, since `bake` has no `DISPLACEMENT` type. The face set, mask and blur operators crash
+  Blender in background mode, so those tools answer "needs an open 3D viewport" there.
+- **A failing sculpt tool leaves Object mode.** The sculpt tools used to return an error after
+  entering Sculpt mode and stay there. `restores_object_mode(error_replies=True)` now also covers
+  error replies, and a successful call still keeps Sculpt mode.
 - **`mesh_select` combines criteria with AND** (#38). Several criteria used to be unioned, so a
   second criterion could only add elements. An element now has to match every criterion given; a
   criterion that does not apply to the mode is ignored. The tool description says so.

@@ -156,6 +156,7 @@ OVERRIDES.update(
         "bake_to_vertex_colors": _over(object_name="Cube", samples=1),
         "bake_curvature": _over(object_name="Cube", output_path="{TMP}/out.png", resolution=32),
         "bake_id_map": _over(object_name="Cube", output_path="{TMP}/out.png", resolution=32),
+        "sculpt_extract_mask": _over(object_name="MaskedSphere"),
         "sculpt_multires_reshape": _over(object_name="Sphere", action="SUBDIVIDE"),
         "modifier_apply": _over(object_name="Sphere", modifier_name="Bevel"),
         "modifier_remove": _over(object_name="Sphere", modifier_name="Bevel"),
@@ -217,7 +218,8 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "mesh_knife_project": "needs a 3D viewport; socket lane covers it",
     "mesh_loop_cut": "needs a 3D viewport; socket lane covers it",
     "render_screenshot": "needs a 3D viewport; socket lane covers it",
-    "sculpt_mask_by_topology": "needs a 3D viewport; socket lane covers it",
+    "sculpt_face_set_create": "face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it",
+    "sculpt_mask_by_topology": "the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it",
     "sculpt_mesh_filter": "needs a 3D viewport; socket lane covers it",
     "sculpt_multires_reshape": "the fixture mesh has no subdivision levels to rebuild or unsubdivide",
 }
@@ -233,5 +235,4 @@ SOFT_FAIL_DEFECTS: dict[str, str] = {
 # Tools that report success shape but hide a failure in the payload.
 FALSE_PASS_DEFECTS: dict[str, str] = {
     "ai_pipeline_generate": "stages.import.status is failed and mesh_path is null, with no top-level success",
-    "sculpt_to_retopo": "displacement_error reports the enum DISPLACEMENT is not found",
 }

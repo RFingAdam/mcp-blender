@@ -603,8 +603,23 @@ def check_sculpt_mesh_filter_moves_vertices(ctx: Ctx) -> str:
     return "vertices moved for " + ", ".join(done)
 
 
-def check_sculpt_mask_by_topology_masks(ctx: Ctx) -> str:
-    ctx.conn.exec(MAKE_CUBE + "make('LaneMaskCube', 2.0, (80, 0, 0))\n")
+def check_sculpt_mask_by_topology_sets_mask(ctx: Ctx) -> str:
+    # A smooth sphere with a dent: CAVITY finds the dent, and RANDOM gives distinct values.
+    # CAVITY reads a constant on a noisy mesh, so the dent is deliberately smooth.
+    ctx.conn.exec(
+        "import bmesh\n"
+        "me = bpy.data.meshes.new('LaneMaskMesh')\n"
+        "bm = bmesh.new()\n"
+        "bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=24, radius=1.0)\n"
+        "for v in bm.verts:\n"
+        "    n = v.co.normalized()\n"
+        "    v.co = n * (1.0 - 0.9 * max(0.0, n.z - 0.7))\n"
+        "bm.to_mesh(me)\n"
+        "bm.free()\n"
+        "ob = bpy.data.objects.new('LaneMaskCube', me)\n"
+        "ob.location = (80, 0, 0)\n"
+        "bpy.context.scene.collection.objects.link(ob)\n"
+    )
     probe = (
         "ob = bpy.data.objects['LaneMaskCube']\n"
         "bpy.ops.object.mode_set(mode='OBJECT')\n"
@@ -612,18 +627,154 @@ def check_sculpt_mask_by_topology_masks(ctx: Ctx) -> str:
         "result = sorted({round(d.value, 3) for d in attr.data}) if attr else []\n"
     )
     got = {}
-    for mask_type, expect in (("ALL", [1.0]), ("NONE", [0.0])):
+    for mask_type in ("ALL", "NONE", "CAVITY", "RANDOM"):
+        # NONE after ALL has a mask to clear; CAVITY and RANDOM start from a clean one
         reply = ctx.conn.call("sculpt_mask_by_topology", {"object_name": "LaneMaskCube", "mask_type": mask_type})
         if not (isinstance(reply, dict) and reply.get("success") is True):
             raise CheckFailed(f"{mask_type}: {str(reply)[:160]}")
         values = ctx.conn.exec(probe)
+        if mask_type == "ALL" and values != [1.0]:
+            raise CheckFailed(f"ALL: mask values {values}, expected [1.0]")
         # NONE may drop the mask layer altogether
-        if values and values != expect:
-            raise CheckFailed(f"{mask_type}: mask values {values}, expected {expect}")
-        if mask_type == "ALL" and not values:
-            raise CheckFailed("ALL: no mask was written")
-        got[mask_type] = values
-    return f"mask values {got}"
+        if mask_type == "NONE" and values and values != [0.0]:
+            raise CheckFailed(f"NONE: mask values {values}, expected [0.0]")
+        if mask_type == "CAVITY" and len(values) < 2:
+            raise CheckFailed(f"CAVITY: mask values {values}, expected a gradient")
+        if mask_type == "RANDOM" and len(values) < 8:
+            raise CheckFailed(f"RANDOM: mask values {values}, expected many distinct values")
+        got[mask_type] = len(values)
+    # Blur and invert go through the same operators
+    reply = ctx.conn.call(
+        "sculpt_mask_by_topology",
+        {"object_name": "LaneMaskCube", "mask_type": "RANDOM", "invert": True, "blur_iterations": 2},
+    )
+    if not (isinstance(reply, dict) and reply.get("success") is True):
+        raise CheckFailed(f"RANDOM with invert and blur: {str(reply)[:160]}")
+    return f"distinct mask values per type {got}; invert and blur succeed"
+
+
+def check_sculpt_face_set_create_makes_sets(ctx: Ctx) -> str:
+    # Two loose cubes with a material each: LINKED and MATERIAL both find two sets.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "ob = make('LaneFaceSets', 2.0, (85, 0, 0))\n"
+        "other = make('LaneFaceSetsB', 2.0, (85, 0, 0))\n"
+        "bpy.ops.object.select_all(action='DESELECT')\n"
+        "bpy.context.view_layer.objects.active = ob\n"
+        "for o in (ob, other):\n"
+        "    o.select_set(True)\n"
+        "bpy.ops.object.join()\n"
+        "ob = bpy.context.view_layer.objects.active\n"
+        "ob.name = 'LaneFaceSets'\n"
+        "for i in range(2):\n"
+        "    ob.data.materials.append(bpy.data.materials.new(f'LaneFaceSetMat{i}'))\n"
+        "for p in ob.data.polygons:\n"
+        "    p.material_index = 1 if p.index >= 6 else 0\n"
+    )
+    probe = (
+        "ob = bpy.data.objects['LaneFaceSets']\n"
+        "bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "attr = ob.data.attributes.get('.sculpt_face_set')\n"
+        "result = len({d.value for d in attr.data}) if attr else 0\n"
+    )
+    counts = {}
+    for criteria in ("LINKED", "MATERIAL", "NORMAL", "SHARP_EDGES", "UV_ISLAND"):
+        reply = ctx.conn.call("sculpt_face_set_create", {"object_name": "LaneFaceSets", "criteria": criteria})
+        if not (isinstance(reply, dict) and reply.get("success") is True):
+            raise CheckFailed(f"{criteria}: {str(reply)[:160]}")
+        counts[criteria] = ctx.conn.exec(probe)
+        if counts[criteria] < 1:
+            raise CheckFailed(f"{criteria}: replied success but wrote no face sets")
+    for criteria in ("LINKED", "MATERIAL"):
+        if counts[criteria] != 2:
+            raise CheckFailed(f"{criteria}: expected 2 face sets, got {counts[criteria]}")
+    return f"face sets per criteria {counts}"
+
+
+def check_sculpt_extract_mask_needs_a_mask(ctx: Ctx) -> str:
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneNoMask', 2.0, (87, 0, 0))\n"
+        + "if bpy.context.mode != 'OBJECT':\n    bpy.ops.object.mode_set(mode='OBJECT')\n"
+    )
+    try:
+        reply = ctx.conn.call("sculpt_extract_mask", {"object_name": "LaneNoMask"})
+    except RpcError as e:
+        raise CheckFailed(f"raised instead of replying with an error: {str(e)[:160]}") from None
+    if not (isinstance(reply, dict) and "error" in reply):
+        raise CheckFailed(f"expected an error, got {str(reply)[:160]}")
+    if "mask" not in str(reply["error"]).lower() or "attribute" in str(reply["error"]).lower():
+        raise CheckFailed(f"error does not explain the missing mask: {reply['error']}")
+    # With a masked half, the same tool extracts it
+    ctx.conn.exec(
+        "bpy.ops.mesh.primitive_uv_sphere_add(location=(87, 4, 0))\n"
+        "ob = bpy.context.active_object\n"
+        "ob.name = 'LaneMasked'\n"
+        "mask = ob.data.attributes.new('.sculpt_mask', 'FLOAT', 'POINT')\n"
+        "for v in ob.data.vertices:\n"
+        "    mask.data[v.index].value = 1.0 if v.co.z > 0 else 0.0\n"
+    )
+    reply = ctx.conn.call("sculpt_extract_mask", {"object_name": "LaneMasked"})
+    if not (isinstance(reply, dict) and reply.get("success") is True) or not reply.get("polygon_count"):
+        raise CheckFailed(f"extracting a masked half: {str(reply)[:160]}")
+    return f"an unmasked mesh gives a clear error; a masked half extracts {reply['polygon_count']} faces"
+
+
+def check_sculpt_failure_leaves_object_mode(ctx: Ctx) -> str:
+    # The decorator the sculpt tools use: an error reply after entering Sculpt mode must
+    # leave Object mode, and a successful reply keeps the mode it ended in.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneSculptMode', 2.0, (88, 0, 0))\n"
+        + "if bpy.context.mode != 'OBJECT':\n    bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "bpy.ops.object.select_all(action='DESELECT')\n"
+        "bpy.context.view_layer.objects.active = bpy.data.objects['LaneSculptMode']\n"
+    )
+    probe = (
+        "from blender_mcp_addon.handlers._helpers import restores_object_mode\n"
+        "def enter_sculpt(reply):\n"
+        "    @restores_object_mode(error_replies=True)\n"
+        "    def handler(self, params):\n"
+        "        bpy.ops.object.mode_set(mode='SCULPT')\n"
+        "        return reply\n"
+        "    handler(None, {})\n"
+        "    mode = bpy.context.mode\n"
+        "    bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "    return mode\n"
+        "result = {\n"
+        "    'error': enter_sculpt({'error': 'boom'}),\n"
+        "    'false': enter_sculpt({'success': False}),\n"
+        "    'ok': enter_sculpt({'success': True}),\n"
+        "}\n"
+    )
+    modes = ctx.conn.exec(probe)
+    if modes["error"] != "OBJECT" or modes["false"] != "OBJECT":
+        raise CheckFailed(f"an error reply left the mode at {modes}")
+    if modes["ok"] != "SCULPT":
+        raise CheckFailed(f"a successful reply should keep Sculpt mode, got {modes}")
+    # A real tool: a mesh with masked vertices and no faces cannot be extracted
+    ctx.conn.exec(
+        "me = bpy.data.meshes.new('LaneSculptNoFaces')\n"
+        "me.vertices.add(3)\n"
+        "me.vertices.foreach_set('co', [0, 0, 0, 1, 0, 0, 0, 1, 0])\n"
+        "me.update()\n"
+        "mask = me.attributes.new('.sculpt_mask', 'FLOAT', 'POINT')\n"
+        "for d in mask.data:\n"
+        "    d.value = 1.0\n"
+        "ob = bpy.data.objects.new('LaneSculptNoFaces', me)\n"
+        "bpy.context.scene.collection.objects.link(ob)\n"
+    )
+    try:
+        reply = ctx.conn.call("sculpt_extract_mask", {"object_name": "LaneSculptNoFaces"})
+    except RpcError:
+        reply = None
+    mode = ctx.conn.exec("result = bpy.context.mode\n")
+    failed = reply is None or (isinstance(reply, dict) and (reply.get("success") is False or "error" in reply))
+    if failed and mode != "OBJECT":
+        raise CheckFailed(f"sculpt_extract_mask failed ({str(reply)[:100]}) and left {mode} mode")
+    return "error replies leave Object mode, a successful reply keeps Sculpt mode" + (
+        "; sculpt_extract_mask failed cleanly" if failed else ""
+    )
 
 
 def check_render_screenshot_writes_file(ctx: Ctx) -> str:
@@ -1307,7 +1458,10 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("mesh_select_criteria_intersect", check_mesh_select_criteria_intersect, CHECK_TIMEOUT),
     ("mesh_edge_slide_moves_edge", check_mesh_edge_slide_moves_edge, CHECK_TIMEOUT),
     ("sculpt_mesh_filter_moves_vertices", check_sculpt_mesh_filter_moves_vertices, 90.0),
-    ("sculpt_mask_by_topology_masks", check_sculpt_mask_by_topology_masks, CHECK_TIMEOUT),
+    ("sculpt_mask_by_topology_sets_mask", check_sculpt_mask_by_topology_sets_mask, 90.0),
+    ("sculpt_face_set_create_makes_sets", check_sculpt_face_set_create_makes_sets, 90.0),
+    ("sculpt_extract_mask_needs_a_mask", check_sculpt_extract_mask_needs_a_mask, CHECK_TIMEOUT),
+    ("sculpt_failure_leaves_object_mode", check_sculpt_failure_leaves_object_mode, CHECK_TIMEOUT),
     ("render_screenshot_writes_file", check_render_screenshot_writes_file, 60.0),
     ("mode_restored_after_failure", check_mode_restored_after_failure, CHECK_TIMEOUT),
     ("render_image_writes_file", check_render_image_writes_file, 120.0),
