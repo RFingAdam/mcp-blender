@@ -21,7 +21,9 @@ MAX_WBUF = 256 * 1024 * 1024  # most unsent reply bytes held for one client
 MAX_CLIENTS = 8
 READ_PER_TICK = 4 * 1024 * 1024  # most bytes read from one client per tick
 SEND_CHUNK = 1024 * 1024
-CLOSE_GRACE = 1.0  # seconds a closing client may take to read its last reply
+MAX_CLOSING = 16  # clients already told to go; past this a refusal closes with no reply
+CLOSE_GRACE = 2.0  # seconds a closing client has to read its last reply, drained or not
+WRITE_STALL = 30.0  # seconds a client may leave unsent reply bytes without taking any
 
 
 class _Client:
@@ -34,7 +36,9 @@ class _Client:
         self.authed = False  # token auth sets this (nothing checks it yet)
         self.deadline = 0.0  # monotonic time by which auth must finish; 0 means none
         self.closing = False  # close once wbuf drains; read nothing more
-        self.close_at = 0.0  # set once wbuf drained while closing
+        self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
+        self.half_closed = False  # SHUT_WR sent after the last reply byte left
+        self.last_progress = 0.0  # when wbuf last became non-empty or last moved bytes
         self.dead = False  # drop on this tick's cleanup pass
 
 
@@ -58,6 +62,7 @@ class MCPSocketServer:
         self.is_running = False
         self.handlers = CommandHandlers()
         self._timer_registered = False
+        self._now = time.monotonic  # one clock for every timer; tests replace it
 
     @property
     def client_count(self) -> int:
@@ -153,8 +158,11 @@ class MCPSocketServer:
                 return
             sock.setblocking(False)
             client = _Client(sock)
-            live = sum(1 for c in self.clients.values() if not c.closing)
-            if live >= MAX_CLIENTS:
+            if len(self.clients) >= MAX_CLIENTS:
+                closing = sum(1 for c in self.clients.values() if c.closing)
+                if closing >= MAX_CLOSING:
+                    sock.close()  # refusals are capped too: no reply, no slot
+                    continue
                 self._fail(
                     client,
                     wire.E_TOO_MANY,
@@ -167,14 +175,14 @@ class MCPSocketServer:
 
     def _process_clients(self):
         """Read, run and answer every client, then drop the ones that are finished."""
-        now = time.monotonic()
+        now = self._now()
         for client in list(self.clients.values()):
             try:
                 self._read(client)
                 if not client.closing:
                     self._run_lines(client)
                 self._flush(client)
-                self._finish_closing(client, now)
+                self._expire(client, now)
             except Exception as e:
                 print(f"Error processing client: {e}")
                 traceback.print_exc()
@@ -245,6 +253,7 @@ class MCPSocketServer:
         client.rbuf.clear()
         self._queue(client, _error(code, text), None)
         client.closing = True
+        client.close_at = self._now() + CLOSE_GRACE
 
     def _queue(self, client: _Client, response: dict, msg_id):
         """Encode a reply into wbuf. One that would overflow MAX_WBUF becomes an error reply."""
@@ -261,6 +270,8 @@ class MCPSocketServer:
             code = wire.E_REPLY_TOO_LARGE
         if data is None or len(client.wbuf) + len(data) > MAX_WBUF:
             data = (json.dumps(_error(code, problem, msg_id)) + "\n").encode("utf-8")
+        if not client.wbuf:
+            client.last_progress = self._now()
         client.wbuf += data
 
     def _flush(self, client: _Client):
@@ -276,19 +287,26 @@ class MCPSocketServer:
                 client.wbuf.clear()
                 return
             del client.wbuf[:sent]
+            if sent:
+                client.last_progress = self._now()
 
-    def _finish_closing(self, client: _Client, now: float):
-        """Once a closing client's reply is out, half-close and give the peer a moment to read."""
-        if not client.closing or client.dead or client.wbuf:
+    def _expire(self, client: _Client, now: float):
+        """Apply the clocks: a closing client leaves at close_at, a stalled writer at WRITE_STALL.
+
+        Once a closing client's reply is out it is half-closed so the peer sees EOF.
+        """
+        if client.dead:
             return
-        if client.close_at == 0.0:
-            try:
-                client.sock.shutdown(socket.SHUT_WR)
-            except OSError:
+        if client.closing:
+            if now >= client.close_at:
                 client.dead = True
-                return
-            client.close_at = now + CLOSE_GRACE
-        elif now >= client.close_at:
+            elif not client.wbuf and not client.half_closed:
+                client.half_closed = True
+                try:
+                    client.sock.shutdown(socket.SHUT_WR)
+                except OSError:
+                    client.dead = True
+        if client.wbuf and now - client.last_progress >= WRITE_STALL:
             client.dead = True
 
     def _drop(self, sock: socket.socket, client: _Client):

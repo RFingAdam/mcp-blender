@@ -317,9 +317,89 @@ def test_start_returns_false_when_port_is_taken(mod, server):
     assert other.start() is False
 
 
-def test_closing_client_that_never_reads_is_dropped_after_the_grace(server, mod, monkeypatch):
-    monkeypatch.setattr(mod, "CLOSE_GRACE", 0.05)
+class Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def with_clock(srv):
+    clock = Clock()
+    srv._now = clock
+    return clock
+
+
+def test_closing_client_that_never_reads_is_dropped_after_grace(server, mod):
+    clock = with_clock(server)
+    server.handlers.size = 8 * MIB
     sock = connect(server)
-    sock.sendall(b"{nope\n")
-    pump(server, until=lambda: server.client_count == 0)
+    tick(server)
+    (client,) = server.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    sock.sendall(b"{nope\n")  # error reply queued, then closing; the peer never reads
+    tick(server, 3)
+    assert client.closing
+    clock.t += mod.CLOSE_GRACE - 0.1
+    tick(server)
+    assert server.client_count == 1
+    clock.t += 0.2
+    tick(server)
+    assert server.client_count == 0
     sock.close()
+
+
+def test_stalled_write_buffer_is_dropped(server, mod):
+    clock = with_clock(server)
+    server.handlers.size = 8 * MIB
+    sock = connect(server)
+    tick(server)
+    (client,) = server.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    request(sock, "big")
+    tick(server, 3)
+    assert client.wbuf and not client.closing
+    clock.t += mod.WRITE_STALL - 1
+    tick(server)
+    assert server.client_count == 1
+    clock.t += 2
+    tick(server)
+    assert server.client_count == 0
+    sock.close()
+
+
+def test_closing_clients_count_toward_the_cap(server, mod):
+    with_clock(server)
+    socks = []
+    for _ in range(mod.MAX_CLIENTS - 1):
+        socks.append(connect(server))
+        tick(server)
+    bad = connect(server)
+    tick(server)
+    bad.sendall(b"{nope\n")
+    tick(server, 3)  # it is closing now, and still holds a slot
+    assert server.client_count == mod.MAX_CLIENTS
+    late = connect(server)
+    reply = json.loads(read_all(server, late).split(b"\n", 1)[0])
+    assert reply["error"]["code"] == mod.wire.E_TOO_MANY
+
+
+def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatch):
+    with_clock(server)
+    monkeypatch.setattr(mod, "MAX_CLIENTS", 1)
+    monkeypatch.setattr(mod, "MAX_CLOSING", 2)
+    keeper = connect(server)
+    tick(server)
+    refused = []
+    for _ in range(2):  # these two get a reply and fill the closing allowance
+        refused.append(connect(server))
+        tick(server)
+    assert sum(c.closing for c in server.clients.values()) == 2
+    extra = connect(server)
+    tick(server)
+    extra.setblocking(True)
+    extra.settimeout(5)
+    assert extra.recv(100) == b""  # closed with no reply
+    assert server.client_count == 3
+    keeper.close()
