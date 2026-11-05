@@ -457,6 +457,71 @@ def check_mesh_loop_cut_adds_edges(ctx: Ctx) -> str:
     return f"edges {before} -> {after}"
 
 
+def check_mesh_select_criteria_intersect(ctx: Ctx) -> str:
+    # Two criteria must both hold (#38). On a cube, normal +Z matches only the
+    # top face and "x within 0.5 of the centre" matches every face but +X, so a union would give
+    # five faces and an intersection gives the top face alone.
+    ctx.conn.exec(MAKE_CUBE + "make('LaneSelectCube', 2.0, (80, 0, 0))\n")
+    reply = ctx.conn.call(
+        "mesh_select",
+        {
+            "object_name": "LaneSelectCube",
+            "mode": "FACE",
+            "normal_direction": [0, 0, 1],
+            "normal_threshold": 0.9,
+            "position_max": [80.5, 5, 5],
+        },
+    )
+    if not (isinstance(reply, dict) and reply.get("success") is True):
+        raise CheckFailed(f"mesh_select did not report success: {str(reply)[:160]}")
+    picked = reply.get("selected_indices")
+    if not isinstance(picked, list) or len(picked) != 1:
+        raise CheckFailed(f"expected only the top face, got {picked}")
+    probe = f"result = bpy.data.objects['LaneSelectCube'].data.polygons[{picked[0]}].normal.z\n"
+    if ctx.conn.exec(probe) < 0.9:
+        raise CheckFailed(f"face {picked[0]} is not the +Z face")
+    return "two criteria selected only the face matching both"
+
+
+def check_mesh_edge_slide_moves_edge(ctx: Ctx) -> str:
+    # An interior edge of a flat grid slides along the faces next to it.
+    ctx.conn.exec(
+        "import bmesh\n"
+        "me = bpy.data.meshes.new('LaneSlideMesh')\n"
+        "bm = bmesh.new()\n"
+        "bmesh.ops.create_grid(bm, x_segments=4, y_segments=4, size=1.0)\n"
+        "bm.to_mesh(me)\n"
+        "bm.free()\n"
+        "ob = bpy.data.objects.new('LaneSlide', me)\n"
+        "ob.location = (90, 0, 0)\n"
+        "bpy.context.scene.collection.objects.link(ob)\n"
+    )
+    pick = (
+        "me = bpy.data.objects['LaneSlide'].data\n"
+        "xs = sorted({round(v.co.x, 4) for v in me.vertices})\n"
+        "ys = sorted({round(v.co.y, 4) for v in me.vertices})\n"
+        "ids = [e.index for e in me.edges if all(abs(me.vertices[v].co.x - xs[1]) < 1e-4 and ys[0] < me.vertices[v].co.y < ys[-1] + 1e-4 for v in e.vertices)]\n"
+        "result = ids\n"
+    )
+    edges = ctx.conn.exec(pick)
+    if not edges:
+        raise CheckFailed("setup: no interior edge found")
+    probe = (
+        "me = bpy.data.objects['LaneSlide'].data\n"
+        f"result = sorted(round(me.vertices[v].co.x, 4) for v in me.edges[{edges[0]}].vertices)\n"
+    )
+    before = ctx.conn.exec(probe)
+    reply = ctx.conn.call(
+        "mesh_edge_slide", {"object_name": "LaneSlide", "edge_indices": [edges[0]], "factor": 0.5}
+    )
+    after = ctx.conn.exec(probe)
+    if not (isinstance(reply, dict) and reply.get("success") is True):
+        raise CheckFailed(f"edge slide did not report success: {str(reply)[:160]}")
+    if before == after:
+        raise CheckFailed(f"edge did not move: x stayed {before}")
+    return f"edge x {before} -> {after}"
+
+
 SCULPT_FILTER_TYPES = [
     "SMOOTH", "SHARPEN", "ENHANCE_DETAIL", "SURFACE_NOISE", "INFLATE",
     "SPHERE", "RELAX", "RELAX_FACE_SETS", "ERASE_DISPLACEMENT",
@@ -1239,6 +1304,8 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
     ("mesh_knife_project_keeps_outside", check_mesh_knife_project_keeps_outside, CHECK_TIMEOUT),
     ("mesh_loop_cut_adds_edges", check_mesh_loop_cut_adds_edges, CHECK_TIMEOUT),
+    ("mesh_select_criteria_intersect", check_mesh_select_criteria_intersect, CHECK_TIMEOUT),
+    ("mesh_edge_slide_moves_edge", check_mesh_edge_slide_moves_edge, CHECK_TIMEOUT),
     ("sculpt_mesh_filter_moves_vertices", check_sculpt_mesh_filter_moves_vertices, 90.0),
     ("sculpt_mask_by_topology_masks", check_sculpt_mask_by_topology_masks, CHECK_TIMEOUT),
     ("render_screenshot_writes_file", check_render_screenshot_writes_file, 60.0),

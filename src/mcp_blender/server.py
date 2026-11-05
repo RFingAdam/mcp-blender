@@ -1718,9 +1718,9 @@ TOOLS: list[Tool] = [
                 "extrude": {"type": "number", "default": 0, "description": "Flat extrusion depth"},
                 "fill_type": {
                     "type": "string",
-                    "enum": ["FULL", "BACK", "FRONT", "HALF", "NONE"],
+                    "enum": ["FULL", "BACK", "FRONT", "HALF"],
                     "default": "FULL",
-                    "description": "Cap fill type",
+                    "description": "Cap fill type. A 2D curve also accepts NONE",
                 },
                 "twist_method": {"type": "string", "default": "MINIMUM", "description": "Twist computation method"},
                 "apply_as_mesh": {
@@ -2481,7 +2481,7 @@ TOOLS: list[Tool] = [
     # ==================== Selection & Query Tools ====================
     Tool(
         name="blender_mesh_select",
-        description="Multi-criteria mesh selection engine. Select vertices, edges, or faces by index, position range, normal direction, material, edge angle, or face area. Supports grow/shrink and linked selection. Returns selected indices for piping to subsequent edit operations.",
+        description="Multi-criteria mesh selection engine. Select vertices, edges, or faces by index, position range, normal direction, material, edge angle, or face area. When several criteria are given, an element must match all of them (AND). A criterion that does not apply to the chosen mode is ignored. Supports grow/shrink and linked selection. Returns selected indices for piping to subsequent edit operations.",
         input_schema={
             "type": "object",
             "properties": {

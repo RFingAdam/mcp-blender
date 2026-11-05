@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .fixtures import FIXTURES, OVERRIDES
+from .fixtures import ENUM_OVERRIDES, FIXTURES, OVERRIDES
 
 _TYPE_DEFAULTS = {
     "string": "x",
@@ -58,7 +58,7 @@ def build_cases(tools: dict[str, dict]) -> list[Case]:
                         f"{tool}#enum:{param}={value}",
                         tool,
                         "enum",
-                        {**base, param: value},
+                        {**base, **ENUM_OVERRIDES.get((tool, param, value), {}), param: value},
                     )
                 )
     return cases

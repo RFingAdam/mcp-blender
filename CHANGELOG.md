@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`mesh_select` combines criteria with AND** (#38). Several criteria used to be unioned, so a
+  second criterion could only add elements. An element now has to match every criterion given; a
+  criterion that does not apply to the mode is ignored. The tool description says so.
+- **Mesh tools use Blender's real identifiers.** `mesh_subdivide` maps `INNERVERT` to the
+  `INNER_VERT` that `bmesh.ops.subdivide_edges` takes. `mesh_edge_slide` passes `use_even`, not
+  `even`, and returns "needs an open 3D viewport" in background mode, where the slide operator
+  crashes Blender 4.5. `mesh_crease` writes the `crease_edge` attribute, since
+  `BMLayerAccessEdge.crease` is gone. `curve_to_mesh` no longer lists `fill_type` `NONE`, which
+  Blender rejects for 3D curves; a 2D curve still accepts it.
 - **Each successful tool call is one undo step in the GUI.** Operators called from the socket
   timer push no undo step, so `undo` reverted nothing or too much. `CommandHandlers.handle` now
   calls `bpy.ops.ed.undo_push(message=<tool>)` after a tool that does not report an error or
