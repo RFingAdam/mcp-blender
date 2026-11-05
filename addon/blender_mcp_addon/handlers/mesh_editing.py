@@ -177,6 +177,10 @@ class MeshEditingHandlersMixin:
             raise ValidationError(f"Object '{curve_name}' is not a curve (type: {curve_obj.type})")
 
         curve_data = curve_obj.data
+        if fill_type == "NONE" and curve_data.dimensions != "2D":
+            # Blender only offers the NONE fill mode on 2D curves, so the schema omits it.
+            # The handler still takes it for a 2D curve, for callers that already pass it.
+            raise ValidationError("fill_type NONE needs a 2D curve; this curve is " + curve_data.dimensions)
         curve_data.bevel_depth = bevel_depth
         curve_data.bevel_resolution = bevel_resolution
         curve_data.extrude = extrude
@@ -636,19 +640,20 @@ class MeshEditingHandlersMixin:
         grow = int(params.get("grow", 0))
         shrink = int(params.get("shrink", 0))
 
-        candidates = set()
+        # Each criterion yields a set of element indices; the result is their
+        # intersection (AND). A criterion that does not apply in this mode is
+        # ignored. With no applicable criterion nothing is selected.
+        matched: list[set] = []
 
         if indices is not None:
-            for i in indices:
-                i = int(i)
-                if 0 <= i < len(elements):
-                    candidates.add(i)
+            matched.append({int(i) for i in indices if 0 <= int(i) < len(elements)})
 
         # Position filter
         if position_min is not None or position_max is not None:
             p_min = Vector(position_min) if position_min else Vector((-1e10, -1e10, -1e10))
             p_max = Vector(position_max) if position_max else Vector((1e10, 1e10, 1e10))
             world_matrix = obj.matrix_world
+            hits = set()
             for i, elem in enumerate(elements):
                 if mode == "VERT":
                     co = world_matrix @ elem.co
@@ -657,47 +662,38 @@ class MeshEditingHandlersMixin:
                 else:
                     co = world_matrix @ elem.calc_center_median()
                 if p_min.x <= co.x <= p_max.x and p_min.y <= co.y <= p_max.y and p_min.z <= co.z <= p_max.z:
-                    candidates.add(i)
+                    hits.add(i)
+            matched.append(hits)
 
         # Normal direction filter (FACE mode)
         if normal_direction is not None and mode == "FACE":
             nd = Vector(normal_direction).normalized()
-            for i, face in enumerate(bm.faces):
-                if face.normal.dot(nd) >= normal_threshold:
-                    candidates.add(i)
+            matched.append({i for i, face in enumerate(bm.faces) if face.normal.dot(nd) >= normal_threshold})
 
         # Material index filter (FACE mode)
         if material_index is not None and mode == "FACE":
             mat_idx = int(material_index)
-            for i, face in enumerate(bm.faces):
-                if face.material_index == mat_idx:
-                    candidates.add(i)
+            matched.append({i for i, face in enumerate(bm.faces) if face.material_index == mat_idx})
 
         # Edge angle filter (EDGE mode)
         if (edge_angle_min is not None or edge_angle_max is not None) and mode == "EDGE":
             a_min = math.radians(edge_angle_min) if edge_angle_min is not None else 0
             a_max = math.radians(edge_angle_max) if edge_angle_max is not None else math.pi
-            for i, edge in enumerate(bm.edges):
-                if len(edge.link_faces) == 2:
-                    angle = edge.calc_face_angle()
-                    if a_min <= angle <= a_max:
-                        candidates.add(i)
+            matched.append(
+                {
+                    i
+                    for i, edge in enumerate(bm.edges)
+                    if len(edge.link_faces) == 2 and a_min <= edge.calc_face_angle() <= a_max
+                }
+            )
 
         # Face area filter (FACE mode)
         if (face_area_min is not None or face_area_max is not None) and mode == "FACE":
             fa_min = face_area_min if face_area_min is not None else 0
             fa_max = face_area_max if face_area_max is not None else 1e10
-            for i, face in enumerate(bm.faces):
-                area = face.calc_area()
-                if fa_min <= area <= fa_max:
-                    candidates.add(i)
+            matched.append({i for i, face in enumerate(bm.faces) if fa_min <= face.calc_area() <= fa_max})
 
-        # If no criteria specified at all, select nothing
-        if (indices is None and position_min is None and position_max is None
-                and normal_direction is None and material_index is None
-                and edge_angle_min is None and edge_angle_max is None
-                and face_area_min is None and face_area_max is None):
-            candidates = set()
+        candidates = set.intersection(*matched) if matched else set()
 
         # Apply action
         if action == "SET":
@@ -1150,8 +1146,6 @@ class MeshEditingHandlersMixin:
 
     def _handle_mesh_crease(self, params: dict) -> dict:
         """Set edge crease values for subdivision surface control."""
-        import bmesh
-
         object_name = require_param(params, "object_name", str)
         edge_indices = params.get("edge_indices")
         crease_value = params.get("crease_value", 1.0)
@@ -1161,32 +1155,23 @@ class MeshEditingHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-        bm.edges.ensure_lookup_table()
+        mesh = obj.data
+        # Edge creases are the float edge attribute "crease_edge" since Blender 4.0.
+        mesh.edge_creases_ensure()
+        creases = mesh.attributes["crease_edge"].data
 
-        crease_layer = bm.edges.layers.crease.verify()
+        if edge_indices is not None:
+            targets = [int(i) for i in edge_indices if 0 <= int(i) < len(mesh.edges)]
+        elif selected_only:
+            targets = [e.index for e in mesh.edges if e.select]
+        else:
+            targets = range(len(mesh.edges))
 
         affected = 0
-        if edge_indices is not None:
-            for i in edge_indices:
-                i = int(i)
-                if 0 <= i < len(bm.edges):
-                    bm.edges[i][crease_layer] = crease_value
-                    affected += 1
-        elif selected_only:
-            for e in bm.edges:
-                if e.select:
-                    e[crease_layer] = crease_value
-                    affected += 1
-        else:
-            for e in bm.edges:
-                e[crease_layer] = crease_value
-                affected += 1
-
-        bm.to_mesh(obj.data)
-        bm.free()
-        obj.data.update()
+        for i in targets:
+            creases[i].value = crease_value
+            affected += 1
+        mesh.update()
 
         return {
             "success": True,
@@ -1527,8 +1512,11 @@ class MeshEditingHandlersMixin:
         quad_corner_type = validate_enum(
             params.get("quad_corner_type", "STRAIGHT_CUT"),
             "quad_corner_type",
-            ["STRAIGHT_CUT", "INNERVERT", "PATH", "FAN"],
+            ["STRAIGHT_CUT", "INNERVERT", "INNER_VERT", "PATH", "FAN"],
         )
+        # bpy.ops.mesh.subdivide spells it INNERVERT, bmesh.ops spells it INNER_VERT.
+        if quad_corner_type == "INNERVERT":
+            quad_corner_type = "INNER_VERT"
 
         obj = get_object_or_error(object_name)
         if obj.type != "MESH":
@@ -1587,6 +1575,12 @@ class MeshEditingHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
+        # The slide operator reads the 3D view region; in background mode it crashes
+        # Blender 4.5, so it needs a viewport.
+        override = view3d_override()
+        if override is None:
+            return needs_view3d("mesh_edge_slide")
+
         ensure_object_selected(obj)
         bpy.context.view_layer.objects.active = obj
 
@@ -1602,7 +1596,8 @@ class MeshEditingHandlersMixin:
                 mesh.edges[i].select = True
 
         bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.transform.edge_slide(value=factor, single_side=False, even=even)
+        with bpy.context.temp_override(**override):
+            bpy.ops.transform.edge_slide(value=factor, single_side=False, use_even=even)
         bpy.ops.object.mode_set(mode="OBJECT")
 
         return {

@@ -176,8 +176,18 @@ OVERRIDES.update(
         "msfs_get_lod_info": _over(base_name="Hull"),
         "msfs_setup_lod_distances": _over(base_name="Hull"),
         "boolean_op": _over(target="Cube", tool="Sphere", operation="UNION"),
+        "mesh_merge": _over(object_name="Cube", vertex_indices=[0, 1]),
     }
 )
+
+# Extra params for one enum case, keyed by (tool, param, value). For a param
+# whose requirements depend on another param's value, which the JSON Schema
+# here does not express.
+ENUM_OVERRIDES: dict[tuple[str, str, str], dict] = {
+    ("measure", "mode", "DISTANCE"): _over(point_a=[0.0, 0.0, 0.0], point_b=[1.0, 0.0, 0.0]),
+    ("measure", "mode", "EDGE_LENGTH"): _over(edge_indices=[0, 1]),
+    ("measure", "mode", "VERTEX_DISTANCE"): _over(vertex_indices=[0, 1]),
+}
 
 # Cases the harness cannot reach, keyed by tool name, with the reason.
 # Informational only: baselines record each case's true class regardless.
@@ -203,6 +213,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
     "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
     "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
+    "mesh_edge_slide": "needs a 3D viewport; socket lane covers it",
     "mesh_knife_project": "needs a 3D viewport; socket lane covers it",
     "mesh_loop_cut": "needs a 3D viewport; socket lane covers it",
     "render_screenshot": "needs a 3D viewport; socket lane covers it",

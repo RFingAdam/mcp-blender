@@ -255,7 +255,6 @@
   "curve_to_mesh#enum:fill_type=FRONT": "PASS",
   "curve_to_mesh#enum:fill_type=FULL": "PASS",
   "curve_to_mesh#enum:fill_type=HALF": "PASS",
-  "curve_to_mesh#enum:fill_type=NONE": "BUG",
   "curve_to_mesh#invalid": "EXPECTED",
   "curve_to_mesh#minimal": "PASS",
   "execute_script#invalid": "EXPECTED",

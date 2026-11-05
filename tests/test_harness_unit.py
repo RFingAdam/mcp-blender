@@ -355,3 +355,14 @@ def test_baseline_ids_match_generated_cases(name):
         f"{name}: cases missing from the baseline {missing[:10]}, "
         f"cases in the baseline that no longer exist {extra[:10]}"
     )
+
+
+def test_enum_overrides_reach_the_generated_case():
+    from tests.harness.fixtures import ENUM_OVERRIDES
+
+    assert ENUM_OVERRIDES
+    cases = {c.id: c for c in build_cases(load_tools())}
+    for (tool, param, value), extra in ENUM_OVERRIDES.items():
+        case = cases[f"{tool}#enum:{param}={value}"]
+        assert {k: case.params[k] for k in extra} == extra
+        assert case.params[param] == value
