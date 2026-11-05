@@ -7,7 +7,7 @@ import tempfile
 
 import bpy
 
-from .. import compat
+from .. import compat, security
 from ..validation import (
     ValidationError,
     require_param,
@@ -786,6 +786,15 @@ class AIHandlersMixin:
         Enables real mesh modeling via bmesh, mathutils, and full Blender API access.
         """
         script = require_param(params, "script", str)
+
+        if not security.python_allowed():
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "",
+                "error": security.PYTHON_OFF_ERROR,
+                "result": None,
+            }
 
         # Capture stdout/stderr
         stdout_capture = io.StringIO()
