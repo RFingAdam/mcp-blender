@@ -27,7 +27,6 @@ def _package(name: str, path: Path) -> types.ModuleType:
 @pytest.fixture
 def baking(monkeypatch):
     bpy = MagicMock()
-    bpy.app.version = (4, 5, 0)
     monkeypatch.setitem(sys.modules, "bpy", bpy)
     for name in [m for m in sys.modules if m == ROOT or m.startswith(ROOT + ".")]:
         monkeypatch.delitem(sys.modules, name)

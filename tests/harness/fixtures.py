@@ -211,6 +211,7 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
     "ai_generate_texture": "no AI backend is reachable offline",
     "ai_generate_texture_sync": "no AI backend is reachable offline",
     "ai_inpaint_texture": "no AI backend is reachable offline",
+    "annotation_add": "Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes",
     "msfs_livery_convert_to_dds": "needs texconv from DirectXTex, which is not installed here",
     "msfs_livery_export_uv_layout": "the UV exporter draws on the GPU, which background mode lacks; the socket test checks it in a GUI",
     "msfs_livery_set_paint_brush": "needs texture paint mode from a prior msfs_livery_setup_paint_mode call, which a fresh-scene case cannot make; the socket test msfs_paint_brush_after_setup runs both",
@@ -229,10 +230,11 @@ SOFT_FAIL_ALLOWED: dict[str, str] = {
 SOFT_FAIL_DEFECTS: dict[str, str] = {
     "ai_auto_uv": "LIGHTMAP passes a keyword the operator rejects",
     "ai_mesh_decimate": "the schema offers UN_SUBDIVIDE and PLANAR, which the handler rejects",
-    "ai_texture_from_render": "5.2 fails to render the depth and normal passes",
+    "ai_texture_from_render": "depth and normal control types send a beauty render, not a depth or normal pass",
 }
 
 # Tools that report success shape but hide a failure in the payload.
 FALSE_PASS_DEFECTS: dict[str, str] = {
+    "grease_pencil_markup": "the compositor fallback draws nothing (annotations_drawn: 0) yet reports success",
     "ai_pipeline_generate": "stages.import.status is failed and mesh_path is null, with no top-level success",
 }

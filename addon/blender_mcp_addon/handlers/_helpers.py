@@ -6,6 +6,8 @@ import os
 
 import bpy
 
+from .. import compat
+
 _SOCKET_TYPE_MAP = {
     "FLOAT": "NodeSocketFloat",
     "VALUE": "NodeSocketFloat",
@@ -211,9 +213,8 @@ def _socket_type_label(socket):
 
 def _read_modifier_input(modifier, identifier):
     """Read a modifier input value, converting Blender types to plain Python."""
-    try:
-        val = modifier[identifier]
-    except KeyError:
+    val = compat.get_modifier_input(modifier, identifier)
+    if val is None:
         return None
     if hasattr(val, "__iter__") and not isinstance(val, (str, bytes)):
         return [float(v) for v in val]
@@ -236,9 +237,9 @@ def _set_modifier_input(modifier, identifier, value, socket_type):
         }
         data_coll = coll_map.get(socket_type)
         if data_coll and isinstance(value, str):
-            modifier[identifier] = data_coll.get(value)
+            compat.set_modifier_input(modifier, identifier, data_coll.get(value))
             return
-    modifier[identifier] = value
+    compat.set_modifier_input(modifier, identifier, value)
 
 
 _CLOTH_PRESETS = {
@@ -438,8 +439,7 @@ def _markup_with_compositor(render_path, annotations, output_path):
 
     # Set up compositor
     scene = bpy.context.scene
-    scene.use_nodes = True
-    tree = scene.node_tree
+    tree = compat.get_compositor_tree(scene)
     tree.nodes.clear()
 
     # Create nodes
@@ -447,7 +447,7 @@ def _markup_with_compositor(render_path, annotations, output_path):
     image_node.image = img
     image_node.location = (0, 0)
 
-    composite_node = tree.nodes.new('CompositorNodeComposite')
+    composite_node = compat.new_compositor_output(tree)
     composite_node.location = (400, 0)
 
     # Connect image to composite output

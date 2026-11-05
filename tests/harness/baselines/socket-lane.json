@@ -1,5 +1,6 @@
 {
   "4.5": {
+    "annotation_add_draws_or_says_why": "PASS",
     "bake_id_map_restores_slots": "PASS",
     "bake_leaves_material_clean": "PASS",
     "bake_multires_writes_image": "PASS",
@@ -29,6 +30,7 @@
     "undo_reverts": "PASS"
   },
   "5.2": {
+    "annotation_add_draws_or_says_why": "PASS",
     "bake_id_map_restores_slots": "PASS",
     "bake_leaves_material_clean": "PASS",
     "bake_multires_writes_image": "PASS",

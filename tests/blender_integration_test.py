@@ -517,9 +517,8 @@ def test_mesh_fill_enum_values(runner: TestRunner):
 def test_compat_version_detection(runner: TestRunner):
     """Test version compatibility detection."""
     info = compat.get_version_info()
-    assert "is_5_0" in info, "Missing is_5_0"
-    assert "is_4_2" in info, "Missing is_4_2"
-    assert isinstance(info["is_5_0"], bool), "is_5_0 should be bool"
+    assert "version" in info, "Missing version"
+    assert isinstance(info["features"]["layered_actions"], bool), "features should be bool"
 
 
 def test_compat_eevee_name(runner: TestRunner):

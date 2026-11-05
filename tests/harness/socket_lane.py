@@ -903,6 +903,35 @@ def check_msfs_paint_brush_after_setup(ctx: Ctx) -> str:
     return "brush size, strength and colour read back as set"
 
 
+def check_annotation_add_draws_or_says_why(ctx: Ctx) -> str:
+    # Some series offer no Python call that creates an annotation stroke. There the tool must
+    # say so and leave no empty layer behind; elsewhere the stroke must really exist, and
+    # annotation_clear must remove it.
+    count_code = (
+        "sc = bpy.context.scene\n"
+        "d = sc.annotation if hasattr(sc, 'annotation') else sc.grease_pencil\n"
+        "layers = list(d.layers) if d else []\n"
+        "result = [len(layers), sum(len(f.strokes) for l in layers for f in l.frames)]\n"
+    )
+    reply = ctx.conn.call(
+        "annotation_add", {"points": [[0, 0, 0], [1, 1, 1], [2, 0, 1]], "layer_name": "LaneNote"}
+    )
+    layers, strokes = ctx.conn.exec(count_code)
+    if reply.get("success") is True:
+        if strokes != 1:
+            raise CheckFailed(f"annotation_add reported success but {strokes} strokes exist")
+        ctx.conn.call("annotation_clear", {})
+        layers, strokes = ctx.conn.exec(count_code)
+        if layers != 0:
+            raise CheckFailed(f"annotation_clear left {layers} layers")
+        return "annotation stroke was drawn and cleared"
+    if not reply.get("error"):
+        raise CheckFailed(f"annotation_add failed without an error: {str(reply)[:160]}")
+    if layers != 0:
+        raise CheckFailed(f"annotation_add failed but left {layers} layers behind")
+    return "annotation_add explained why it cannot draw and left no layer"
+
+
 def check_undo_reverts(ctx: Ctx) -> str:
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoA"})
     ctx.conn.call("object_create", {"type": "cube", "name": "LaneUndoB"})
@@ -1467,6 +1496,7 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("render_image_writes_file", check_render_image_writes_file, 120.0),
     ("msfs_uv_layout_writes_file", check_msfs_uv_layout_writes_file, 60.0),
     ("msfs_paint_brush_after_setup", check_msfs_paint_brush_after_setup, 60.0),
+    ("annotation_add_draws_or_says_why", check_annotation_add_draws_or_says_why, CHECK_TIMEOUT),
     ("undo_reverts", check_undo_reverts, CHECK_TIMEOUT),
     ("failed_call_adds_no_undo_step", check_failed_call_adds_no_undo_step, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
