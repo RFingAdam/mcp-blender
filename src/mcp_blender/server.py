@@ -6350,10 +6350,12 @@ LONG_RUNNING: frozenset[str] = frozenset(
 LONG_WAIT = 600.0
 DEFAULT_WAIT = 30.0
 
-# Tools whose handler reads `timeout` itself (a polling limit). They receive it as well
-# as using it for the server's wait. For every other tool `timeout` is a transport
-# option: the server pops it and does not forward it.
+# Tools whose handler reads `timeout` itself (a polling limit). They receive it, and the
+# server waits REPLY_MARGIN seconds longer so the handler's own timeout reply arrives.
+# For every other tool `timeout` is a transport option: the server pops it and does not
+# forward it.
 HANDLER_READS_TIMEOUT: frozenset[str] = frozenset({"ai_generate_texture_sync"})
+REPLY_MARGIN = 30.0
 
 
 def create_server(host: str, port: int) -> Server:
@@ -6386,6 +6388,8 @@ def create_server(host: str, port: int) -> Server:
             if isinstance(arguments, dict):
                 if command in HANDLER_READS_TIMEOUT:
                     timeout = arguments.get("timeout")
+                    if timeout is not None:
+                        timeout = float(timeout) + REPLY_MARGIN
                 else:
                     timeout = arguments.pop("timeout", None)
             if timeout is None:

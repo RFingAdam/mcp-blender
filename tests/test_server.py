@@ -343,7 +343,8 @@ class TestTimeoutReachesHandler:
             assert "timeout" in _props("blender_" + short), short
             command, args, timeout = _call(monkeypatch, "blender_" + short, {"timeout": 7})
             assert args.get("timeout") == 7, short
-            assert timeout == 7, short
+            # The server outwaits the handler's own limit, so the handler's reply arrives.
+            assert timeout == 7 + server_module.REPLY_MARGIN, short
             assert command == short
 
     def test_server_wait_timeout_is_not_forwarded(self, monkeypatch):
