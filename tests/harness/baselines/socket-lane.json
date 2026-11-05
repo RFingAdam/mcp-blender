@@ -9,12 +9,17 @@
     "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
     "malformed_json_error_reply": "PASS",
-    "mesh_knife_project_keeps_outside": "FAIL",
+    "mesh_knife_project_keeps_outside": "PASS",
+    "mesh_loop_cut_adds_edges": "PASS",
+    "mode_restored_after_failure": "PASS",
     "msfs_paint_brush_after_setup": "PASS",
     "msfs_uv_layout_writes_file": "PASS",
     "object_create_listed": "PASS",
     "render_image_writes_file": "PASS",
+    "render_screenshot_writes_file": "PASS",
     "reply_16mb_complete": "FAIL",
+    "sculpt_mask_by_topology_masks": "PASS",
+    "sculpt_mesh_filter_moves_vertices": "PASS",
     "undo_reverts": "FAIL"
   },
   "5.2": {
@@ -27,12 +32,17 @@
     "bake_without_uvs_errors": "PASS",
     "execute_script_stdout": "PASS",
     "malformed_json_error_reply": "PASS",
-    "mesh_knife_project_keeps_outside": "FAIL",
+    "mesh_knife_project_keeps_outside": "PASS",
+    "mesh_loop_cut_adds_edges": "PASS",
+    "mode_restored_after_failure": "PASS",
     "msfs_paint_brush_after_setup": "PASS",
     "msfs_uv_layout_writes_file": "PASS",
     "object_create_listed": "PASS",
     "render_image_writes_file": "PASS",
+    "render_screenshot_writes_file": "PASS",
     "reply_16mb_complete": "FAIL",
+    "sculpt_mask_by_topology_masks": "PASS",
+    "sculpt_mesh_filter_moves_vertices": "PASS",
     "undo_reverts": "FAIL"
   }
 }

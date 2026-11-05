@@ -18,6 +18,7 @@ from ..validation import (
     validate_filepath,
     validate_vector3,
 )
+from ._helpers import needs_view3d, restores_object_mode, view3d_override
 
 
 class MeshEditingHandlersMixin:
@@ -503,6 +504,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_loop_cut(self, params: dict) -> dict:
         """Add edge loops to a mesh via loop cut."""
         object_name = require_param(params, "object_name", str)
@@ -518,7 +520,11 @@ class MeshEditingHandlersMixin:
         if edge_index >= len(mesh.edges):
             raise ValidationError(f"Edge index {edge_index} out of range (mesh has {len(mesh.edges)} edges)")
 
-        # Use operator for loop cut - requires specific context
+        # The loop cut operator reads the 3D view region, so it needs a viewport
+        override = view3d_override()
+        if override is None:
+            return needs_view3d("mesh_loop_cut")
+
         ensure_object_selected(obj)
         bpy.context.view_layer.objects.active = obj
 
@@ -526,21 +532,21 @@ class MeshEditingHandlersMixin:
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="DESELECT")
 
-        # Use loopcut operator
-        bpy.ops.mesh.loopcut_slide(
-            MESH_OT_loopcut={
-                "number_cuts": cuts,
-                "smoothness": smoothness,
-                "falloff": "INVERSE_SQUARE",
-                "object_index": 0,
-                "edge_index": edge_index,
-            },
-            TRANSFORM_OT_edge_slide={
-                "value": 0.0,  # centered
-                "single_side": False,
-                "correct_uv": True,
-            },
-        )
+        with bpy.context.temp_override(**override):
+            bpy.ops.mesh.loopcut_slide(
+                MESH_OT_loopcut={
+                    "number_cuts": cuts,
+                    "smoothness": smoothness,
+                    "falloff": "INVERSE_SQUARE",
+                    "object_index": 0,
+                    "edge_index": edge_index,
+                },
+                TRANSFORM_OT_edge_slide={
+                    "value": 0.0,  # centered
+                    "single_side": False,
+                    "correct_uv": True,
+                },
+            )
 
         bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -936,6 +942,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_select_shortest_path(self, params: dict) -> dict:
         """Select shortest path between two mesh elements."""
         object_name = require_param(params, "object_name", str)
@@ -1034,6 +1041,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_select_edge_loops(self, params: dict) -> dict:
         """Select complete edge loops or rings through a given edge."""
         object_name = require_param(params, "object_name", str)
@@ -1396,6 +1404,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_bridge(self, params: dict) -> dict:
         """Bridge two edge loops to create connecting faces."""
         object_name = require_param(params, "object_name", str)
@@ -1441,6 +1450,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_fill(self, params: dict) -> dict:
         """Fill boundary edges with faces."""
         import bmesh
@@ -1565,6 +1575,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_edge_slide(self, params: dict) -> dict:
         """Slide edges along their connected faces."""
         object_name = require_param(params, "object_name", str)
@@ -1655,6 +1666,7 @@ class MeshEditingHandlersMixin:
     # ========== Cutting & Separation Tools ==========
 
 
+    @restores_object_mode
     def _handle_mesh_knife_project(self, params: dict) -> dict:
         """Project a curve/mesh onto a target surface to cut panel lines."""
         target_name = require_param(params, "target_object", str)
@@ -1667,53 +1679,32 @@ class MeshEditingHandlersMixin:
         if target.type != "MESH":
             raise ValidationError(f"Target '{target_name}' is not a mesh")
 
+        # The operator projects along the viewport's view direction, so it needs a 3D view.
+        # The old boolean INTERSECT fallback kept only the overlap and deleted the rest of
+        # the target, so it is gone: no viewport is reported instead.
+        override = view3d_override()
+        if override is None:
+            return needs_view3d("mesh_knife_project")
+
         ensure_object_selected(target)
         bpy.context.view_layer.objects.active = target
-        cutter.select_set(True)
 
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="DESELECT")
-
+        # The cutter is selected only now: selected before entering Edit mode it would enter
+        # Edit mode too, and the operator ignores selected objects that are being edited.
+        cutter.select_set(True)
         try:
-            bpy.ops.mesh.knife_project(cut_through=cut_through)
+            with bpy.context.temp_override(**override):
+                bpy.ops.mesh.knife_project(cut_through=cut_through)
+        finally:
             bpy.ops.object.mode_set(mode="OBJECT")
-            return {
-                "success": True,
-                "target": target_name,
-                "cutter": cutter_name,
-                "method": "knife_project",
-            }
-        except RuntimeError:
-            bpy.ops.object.mode_set(mode="OBJECT")
-
-        # Fallback: use boolean INTERSECT to cut geometry
-        try:
-            mod = target.modifiers.new(name="KnifeFallback", type="BOOLEAN")
-            mod.operation = "INTERSECT"
-            mod.object = cutter
-            mod.solver = "EXACT"
-
-            ensure_object_selected(target)
-            bpy.context.view_layer.objects.active = target
-            bpy.ops.object.modifier_apply(modifier=mod.name)
-            cutter.hide_set(True)
-
-            return {
-                "success": True,
-                "target": target_name,
-                "cutter": cutter_name,
-                "method": "boolean_intersect_fallback",
-                "note": "Knife project requires 3D viewport. Used boolean INTERSECT as fallback.",
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "target": target_name,
-                "cutter": cutter_name,
-                "method": "failed",
-                "error": str(e),
-                "note": "Both knife_project and boolean fallback failed. Use blender_boolean_op manually.",
-            }
+        return {
+            "success": True,
+            "target": target_name,
+            "cutter": cutter_name,
+            "method": "knife_project",
+        }
 
 
     def _handle_mesh_bisect(self, params: dict) -> dict:
@@ -1778,6 +1769,7 @@ class MeshEditingHandlersMixin:
         }
 
 
+    @restores_object_mode
     def _handle_mesh_separate_selected(self, params: dict) -> dict:
         """Separate selected faces into a new object."""
         object_name = require_param(params, "object_name", str)

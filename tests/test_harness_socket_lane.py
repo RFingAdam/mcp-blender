@@ -331,3 +331,11 @@ def test_check_baseline_diff_points_at_contributing(tmp_path, monkeypatch, capsy
     assert code == 1
     assert err[0] == "improved: a FAIL -> PASS"
     assert "CONTRIBUTING.md" in err[-1] and "Truth harness" in err[-1]
+
+
+def test_sculpt_filter_check_covers_every_schema_value():
+    # The lane check is the only proof each filter_type works, so it must track the schema.
+    from mcp_blender.server import TOOLS
+
+    tool = next(t for t in TOOLS if t.name == "blender_sculpt_mesh_filter")
+    assert lane.SCULPT_FILTER_TYPES == tool.input_schema["properties"]["filter_type"]["enum"]

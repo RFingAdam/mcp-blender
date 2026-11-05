@@ -1,5 +1,6 @@
 """Module-level helper functions and constants for handler modules."""
 
+import functools
 import math
 import os
 
@@ -19,6 +20,57 @@ _SOCKET_TYPE_MAP = {
     "IMAGE": "NodeSocketImage",
     "STRING": "NodeSocketString",
 }
+
+def view3d_override():
+    """Context override for an operator that needs a 3D viewport, or None when there is none.
+
+    Walks the window manager rather than reading ``bpy.context.area``: the socket server
+    runs handlers from a ``bpy.app.timers`` callback, where the context has no area or
+    window even in the GUI. Background mode returns None.
+    """
+    # A .blend loaded in background mode still carries its saved windows and areas, but
+    # they have no GPU context behind them and operators that use them crash.
+    if bpy.app.background:
+        return None
+    wm = bpy.context.window_manager
+    for window in wm.windows if wm else ():
+        screen = window.screen
+        for area in screen.areas if screen else ():
+            if area.type != "VIEW_3D":
+                continue
+            for region in area.regions:
+                if region.type == "WINDOW":
+                    return {"window": window, "screen": screen, "area": area, "region": region}
+    return None
+
+
+def needs_view3d(tool: str) -> dict:
+    """The honest reply for a tool whose operator needs a 3D viewport and has none."""
+    return {"success": False, "error": f"{tool} needs an open 3D viewport"}
+
+
+def restores_object_mode(handler):
+    """Leave Object mode as it was found when a mesh handler fails after entering Edit mode.
+
+    Many mesh handlers switch to Edit mode, run an operator and switch back. When the
+    operator raises, the switch back never runs and the scene stays in Edit mode.
+    """
+
+    @functools.wraps(handler)
+    def wrapper(self, params):
+        was_object = bpy.context.mode == "OBJECT"
+        try:
+            return handler(self, params)
+        except BaseException:
+            if was_object and bpy.context.mode != "OBJECT":
+                try:
+                    bpy.ops.object.mode_set(mode="OBJECT")
+                except RuntimeError:
+                    pass
+            raise
+
+    return wrapper
+
 
 # Bake channel configuration
 _CHANNEL_BAKE_CONFIG = {

@@ -396,8 +396,28 @@ def check_object_create_listed(ctx: Ctx) -> str:
 
 
 def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
+    # knife_project needs a cutter with wire or boundary edges, which a closed cube lacks,
+    # so the cutter is a single quad. It projects along the view, so the view is set to a
+    # top-down orthographic one over the target instead of whatever the GUI opened with.
     ctx.conn.exec(
-        MAKE_CUBE + "make('LaneTarget', 2.0, (20, 0, 0))\nmake('LaneCutter', 0.5, (20, 0, 0))\n"
+        MAKE_CUBE
+        + "make('LaneTarget', 2.0, (20, 0, 0))\n"
+        + "me = bpy.data.meshes.new('LaneCutter')\n"
+        + "bm = bmesh.new()\n"
+        + "bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.25)\n"
+        + "bm.to_mesh(me)\n"
+        + "bm.free()\n"
+        + "cutter = bpy.data.objects.new('LaneCutter', me)\n"
+        + "cutter.location = (20, 0, 2)\n"
+        + "bpy.context.scene.collection.objects.link(cutter)\n"
+        + "from mathutils import Euler\n"
+        + "for area in bpy.context.window_manager.windows[0].screen.areas:\n"
+        + "    if area.type == 'VIEW_3D':\n"
+        + "        r3d = area.spaces[0].region_3d\n"
+        + "        r3d.view_perspective = 'ORTHO'\n"
+        + "        r3d.view_rotation = Euler((0.0, 0.0, 0.0)).to_quaternion()\n"
+        + "        r3d.view_location = (20.0, 0.0, 0.0)\n"
+        + "        r3d.view_distance = 10.0\n"
     )
     probe = (
         "ob = bpy.data.objects['LaneTarget']\n"
@@ -422,6 +442,163 @@ def check_mesh_knife_project_keeps_outside(ctx: Ctx) -> str:
             f"no cut was made: verts {before['verts']} -> {after['verts']} (reported method {method})"
         )
     return f"outer geometry kept and cut added ({before['verts']} -> {after['verts']} verts)"
+
+
+def check_mesh_loop_cut_adds_edges(ctx: Ctx) -> str:
+    ctx.conn.exec(MAKE_CUBE + "make('LaneLoopCube', 2.0, (60, 0, 0))\n")
+    probe = "result = len(bpy.data.objects['LaneLoopCube'].data.edges)\n"
+    before = ctx.conn.exec(probe)
+    reply = ctx.conn.call("mesh_loop_cut", {"object_name": "LaneLoopCube", "edge_index": 0, "cuts": 1})
+    after = ctx.conn.exec(probe)
+    if not (isinstance(reply, dict) and reply.get("success") is True):
+        raise CheckFailed(f"loop cut did not report success: {str(reply)[:160]}")
+    if after <= before:
+        raise CheckFailed(f"edge count did not grow: {before} -> {after}")
+    return f"edges {before} -> {after}"
+
+
+SCULPT_FILTER_TYPES = [
+    "SMOOTH", "SHARPEN", "ENHANCE_DETAIL", "SURFACE_NOISE", "INFLATE",
+    "SPHERE", "RELAX", "RELAX_FACE_SETS", "ERASE_DISPLACEMENT",
+]
+
+
+def check_sculpt_mesh_filter_moves_vertices(ctx: Ctx) -> str:
+    # A subdivided, bumpy sphere: every filter has something to change, including
+    # ERASE_DISPLACEMENT, which needs a displacement to erase.
+    ctx.conn.exec(
+        "import bmesh, random\n"
+        "me = bpy.data.meshes.new('LaneSculptMesh')\n"
+        "bm = bmesh.new()\n"
+        "bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=1.0)\n"
+        "bm.to_mesh(me)\n"
+        "bm.free()\n"
+        "ob = bpy.data.objects.new('LaneSculpt', me)\n"
+        "ob.location = (70, 0, 0)\n"
+        "bpy.context.scene.collection.objects.link(ob)\n"
+    )
+    reset = (
+        "import random\n"
+        "random.seed(3)\n"
+        "me = bpy.data.objects['LaneSculpt'].data\n"
+        "for v in me.vertices:\n"
+        "    v.co = v.co.normalized() * (1.0 + random.uniform(-0.2, 0.2))\n"
+        "me.update()\n"
+    )
+    # ERASE_DISPLACEMENT only acts on a Multires displacement, so it gets a Multires
+    # object that a RANDOM filter has displaced first; positions come from the evaluated mesh.
+    ctx.conn.exec(
+        "ob2 = bpy.data.objects.new('LaneSculptMulti', bpy.data.meshes.new_from_object(bpy.data.objects['LaneSculpt']))\n"
+        "ob2.location = (75, 0, 0)\n"
+        "bpy.context.scene.collection.objects.link(ob2)\n"
+        "ob2.modifiers.new('Multires', 'MULTIRES')\n"
+        "bpy.context.view_layer.objects.active = ob2\n"
+        "bpy.ops.object.multires_subdivide(modifier='Multires', mode='CATMULL_CLARK')\n"
+    )
+    probe = (
+        "bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "result = [tuple(v.co) for v in bpy.data.objects['LaneSculpt'].data.vertices]\n"
+    )
+    probe_multi = (
+        "ob = bpy.data.objects['LaneSculptMulti']\n"
+        "bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "ob.data.update()\n"
+        "bpy.context.view_layer.update()\n"
+        "result = [tuple(v.co) for v in ob.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.vertices]\n"
+    )
+
+    def moved_count(before, after):
+        return sum(1 for a, b in zip(before, after) if max(abs(x - y) for x, y in zip(a, b)) > 1e-6)
+
+    done = []
+    for filter_type in SCULPT_FILTER_TYPES:
+        name, read = "LaneSculpt", probe
+        if filter_type == "ERASE_DISPLACEMENT":
+            name, read = "LaneSculptMulti", probe_multi
+            reply = ctx.conn.call(
+                "sculpt_mesh_filter", {"object_name": name, "filter_type": "SURFACE_NOISE", "strength": 1.0}
+            )
+            if not (isinstance(reply, dict) and reply.get("success") is True):
+                raise CheckFailed(f"displacing the Multires object: {str(reply)[:160]}")
+        else:
+            ctx.conn.exec("if bpy.context.mode != 'OBJECT':\n    bpy.ops.object.mode_set(mode='OBJECT')\n" + reset)
+        before = ctx.conn.exec(read)
+        reply = ctx.conn.call(
+            "sculpt_mesh_filter",
+            {"object_name": name, "filter_type": filter_type, "strength": 1.0},
+        )
+        if not (isinstance(reply, dict) and reply.get("success") is True):
+            raise CheckFailed(f"{filter_type}: {str(reply)[:160]}")
+        # Sculpt-mode edits reach the mesh data once the mode is left
+        after = ctx.conn.exec(read)
+        moved = moved_count(before, after)
+        if not moved:
+            raise CheckFailed(f"{filter_type}: replied success but no vertex moved")
+        done.append(f"{filter_type}={moved}")
+    return "vertices moved for " + ", ".join(done)
+
+
+def check_sculpt_mask_by_topology_masks(ctx: Ctx) -> str:
+    ctx.conn.exec(MAKE_CUBE + "make('LaneMaskCube', 2.0, (80, 0, 0))\n")
+    probe = (
+        "ob = bpy.data.objects['LaneMaskCube']\n"
+        "bpy.ops.object.mode_set(mode='OBJECT')\n"
+        "attr = ob.data.attributes.get('.sculpt_mask')\n"
+        "result = sorted({round(d.value, 3) for d in attr.data}) if attr else []\n"
+    )
+    got = {}
+    for mask_type, expect in (("ALL", [1.0]), ("NONE", [0.0])):
+        reply = ctx.conn.call("sculpt_mask_by_topology", {"object_name": "LaneMaskCube", "mask_type": mask_type})
+        if not (isinstance(reply, dict) and reply.get("success") is True):
+            raise CheckFailed(f"{mask_type}: {str(reply)[:160]}")
+        values = ctx.conn.exec(probe)
+        # NONE may drop the mask layer altogether
+        if values and values != expect:
+            raise CheckFailed(f"{mask_type}: mask values {values}, expected {expect}")
+        if mask_type == "ALL" and not values:
+            raise CheckFailed("ALL: no mask was written")
+        got[mask_type] = values
+    return f"mask values {got}"
+
+
+def check_render_screenshot_writes_file(ctx: Ctx) -> str:
+    out = ctx.out_dir / "screenshot" / "lane_screenshot.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.unlink(missing_ok=True)
+    reply = ctx.conn.call("render_screenshot", {"output_path": str(out)})
+    if isinstance(reply, dict) and "error" in reply:
+        raise CheckFailed(f"render_screenshot failed: {str(reply['error'])[:160]}")
+    if not out.exists():
+        raise CheckFailed("render_screenshot replied but wrote no file")
+    try:
+        width, height = png_size(out.read_bytes())
+    except ValueError:
+        raise CheckFailed("render_screenshot output is not a PNG") from None
+    return f"wrote a {width}x{height} PNG"
+
+
+def check_mode_restored_after_failure(ctx: Ctx) -> str:
+    # mesh_separate_selected enters Edit mode and then mesh.separate raises, because an
+    # empty face list leaves nothing selected.
+    ctx.conn.exec(
+        MAKE_CUBE
+        + "make('LaneModeCube', 2.0, (90, 0, 0))\n"
+        + "if bpy.context.mode != 'OBJECT':\n    bpy.ops.object.mode_set(mode='OBJECT')\n"
+    )
+    try:
+        reply = ctx.conn.call(
+            "mesh_separate_selected",
+            {"object_name": "LaneModeCube", "face_indices": []},
+        )
+    except RpcError:
+        reply = None
+    failed = reply is None or (isinstance(reply, dict) and (reply.get("success") is False or "error" in reply))
+    if not failed:
+        raise CheckFailed(f"mesh_separate_selected was expected to fail, got {str(reply)[:160]}")
+    mode = ctx.conn.exec("result = bpy.context.mode\n")
+    if mode != "OBJECT":
+        raise CheckFailed(f"mode is {mode} after the failed tool, expected OBJECT")
+    return "failed tool left the scene in Object mode"
 
 
 def check_render_image_writes_file(ctx: Ctx) -> str:
@@ -1039,6 +1216,11 @@ def check_bake_without_uvs_errors(ctx: Ctx) -> str:
 CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("object_create_listed", check_object_create_listed, CHECK_TIMEOUT),
     ("mesh_knife_project_keeps_outside", check_mesh_knife_project_keeps_outside, CHECK_TIMEOUT),
+    ("mesh_loop_cut_adds_edges", check_mesh_loop_cut_adds_edges, CHECK_TIMEOUT),
+    ("sculpt_mesh_filter_moves_vertices", check_sculpt_mesh_filter_moves_vertices, 90.0),
+    ("sculpt_mask_by_topology_masks", check_sculpt_mask_by_topology_masks, CHECK_TIMEOUT),
+    ("render_screenshot_writes_file", check_render_screenshot_writes_file, 60.0),
+    ("mode_restored_after_failure", check_mode_restored_after_failure, CHECK_TIMEOUT),
     ("render_image_writes_file", check_render_image_writes_file, 120.0),
     ("msfs_uv_layout_writes_file", check_msfs_uv_layout_writes_file, 60.0),
     ("msfs_paint_brush_after_setup", check_msfs_paint_brush_after_setup, 60.0),

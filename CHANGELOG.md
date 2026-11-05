@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Viewport-only tools no longer crash Blender, and work in a GUI session (closes #37).**
+  `mesh_loop_cut`, `mesh_knife_project`, `sculpt_mesh_filter`, `sculpt_mask_by_topology`
+  (`ALL`, `NONE` and `invert`) and `render_screenshot` call operators that need a 3D viewport.
+  In background mode they segfaulted or raised. They now find a viewport by walking the window
+  manager, because the socket server runs handlers from a timer where `bpy.context.area` is
+  None, and run the operator under `temp_override`. With no viewport they return
+  `{"success": false, "error": "<tool> needs an open 3D viewport"}`. `sculpt_mesh_filter` maps
+  `ENHANCE_DETAIL` to Blender's `ENHANCE_DETAILS` and `SURFACE_NOISE` to `RANDOM`.
+  `mesh_knife_project` lost its boolean INTERSECT fallback, which deleted everything outside
+  the cutter, and now selects the cutter after entering Edit mode so the operator sees it.
+  Mesh tools that enter Edit mode (`mesh_loop_cut`, `mesh_bridge`, `mesh_fill`,
+  `mesh_edge_slide`, `mesh_knife_project`, `mesh_separate_selected`,
+  `mesh_select_shortest_path`, `mesh_select_edge_loops`) return to Object mode when they fail.
+
 - **Missing arguments are rejected with a validation error, and `~` paths work.** Sixteen
   tools (`object_create`, `object_delete`, `object_get`, `object_transform`,
   `object_duplicate`, `object_join`, `object_separate`, `object_parent`,
