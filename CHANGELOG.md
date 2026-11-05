@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The truth harness no longer touches your Blender user files.** The driver and the socket lane set
+  `BLENDER_USER_RESOURCES` to a directory under the run's temp dir, and drop `BLENDER_USER_CONFIG`,
+  `BLENDER_USER_SCRIPTS` and the other user path variables. Before, a local run of `ai_queue_clear` or
+  `ai_clear_history` could delete your real AI job history, and `ai_get_history` could return it.
 - **Undo and replies that fail.** A reply of `{"success": true, "error": null}`, which `execute_script`
   returns, now pushes its undo step; only a truthy `error` or `success: false` counts as a failure.
   `ai_model_status` pushes one undo step when it imports the finished model and none for a poll that

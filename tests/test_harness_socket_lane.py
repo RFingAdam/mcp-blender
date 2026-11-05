@@ -10,6 +10,7 @@ import sys
 import textwrap
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -339,3 +340,11 @@ def test_sculpt_filter_check_covers_every_schema_value():
 
     tool = next(t for t in TOOLS if t.name == "blender_sculpt_mesh_filter")
     assert lane.SCULPT_FILTER_TYPES == tool.input_schema["properties"]["filter_type"]["enum"]
+
+
+def test_lane_blender_keeps_user_files_under_the_run_dir(tmp_path):
+    session = lane.BlenderSession("blender", tmp_path, tmp_path / "scene.blend")
+    user = Path(session.env["BLENDER_USER_RESOURCES"])
+    assert user.is_dir()
+    assert tmp_path in user.parents
+    assert session.env["PYTHONDONTWRITEBYTECODE"] == "1"

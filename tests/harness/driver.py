@@ -17,6 +17,7 @@ from pathlib import Path
 from . import assets
 from .cases import Case
 from .classify import classify
+from .env import blender_env
 
 SLOW_TOOLS = frozenset(
     {
@@ -115,7 +116,7 @@ def _run(
     events_file.write_bytes(b"")
     log_file.write_bytes(b"")
 
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp_dir))
+    env = blender_env(tmp_dir)
     outcomes: dict[int, dict | None] = {}
     offset = 0
     nxt = 0

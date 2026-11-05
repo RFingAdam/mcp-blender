@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Callable
 
 from .driver import DIFF_HINT, compare
+from .env import blender_env
 
 HERE = Path(__file__).resolve().parent
 BOOT = HERE / "socket_boot.py"
@@ -250,6 +251,10 @@ class BlenderSession:
         self.port = 0
         self.starts = 0
 
+    @property
+    def env(self) -> dict[str, str]:
+        return blender_env(self.out_dir / "tmp")
+
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
@@ -259,7 +264,7 @@ class BlenderSession:
             self.blender, "--factory-startup", "--python", str(BOOT), "--",
             "--port", str(self.port), "--scene", str(self.scene),
         ]  # fmt: skip
-        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+        env = self.env
         with self.log_path.open("ab") as log:
             log.write(f"\n=== start {self.starts} port {self.port} ===\n".encode())
             log.flush()
@@ -1962,6 +1967,7 @@ def run_lane(blender: str, out_dir: Path, checks=CHECKS) -> tuple[str, dict[str,
             [blender, "-b", "--factory-startup", "--python", str(BOOT), "--",
              "--build-scene", "--scene", str(scene)],
             stdout=build_log, stderr=subprocess.STDOUT, start_new_session=True,
+            env=blender_env(out_dir / "tmp"),
         )  # fmt: skip
         try:
             build.wait(timeout=STARTUP_TIMEOUT)
