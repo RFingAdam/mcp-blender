@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Large replies arrive whole, and bad requests get an answer.** The add-on used to cut off any reply
+  bigger than the socket buffer; a 32 MiB reply now arrives complete. A malformed, non-object, non-UTF-8 or
+  oversized request, and a client past the connection limit, now get an error reply that says what was wrong,
+  and the add-on then closes that connection. The server reports that reason instead of "Disconnected".
 - **`execute_script` now needs the panel switch.** It refuses every call, before running anything, until you
   click **Allow Python** in the Meshwire sidebar tab in Blender. The switch is off every time Blender starts
   and stays on only until it closes. No tool, socket message or saved file can turn it on. Anything that

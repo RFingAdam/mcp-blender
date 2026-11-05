@@ -150,12 +150,6 @@ if they drift. More detail per area is in
 | Poly Haven | 2 | 0 | 0 |  |
 | **Total** | **225** | **190** | **191** |  |
 
-<details><summary>No tool has a known failure; some socket checks do</summary>
-
-Socket checks that still fail: `reply_16mb_complete` (on every series).
-
-</details>
-
 <details><summary>35 tools that cannot be checked headless</summary>
 
 Where a reason names the socket lane, it runs on Blender 4.5 and 5.2 on every pull request, and on 4.2, 4.3, 4.4, 5.0 and 5.1 nightly, best effort.
