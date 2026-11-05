@@ -49,27 +49,41 @@ def needs_view3d(tool: str) -> dict:
     return {"success": False, "error": f"{tool} needs an open 3D viewport"}
 
 
-def restores_object_mode(handler):
-    """Leave Object mode as it was found when a mesh handler fails after entering Edit mode.
+def restores_object_mode(handler=None, *, error_replies=False):
+    """Leave Object mode as it was found when a handler fails after entering Edit or Sculpt mode.
 
     Many mesh handlers switch to Edit mode, run an operator and switch back. When the
     operator raises, the switch back never runs and the scene stays in Edit mode.
+
+    Sculpt handlers usually report a failure as an error dict instead of raising, so
+    with ``error_replies=True`` a reply with an ``error`` or ``success: False`` is a
+    failure too. A reply that succeeds keeps whatever mode the handler left.
     """
 
-    @functools.wraps(handler)
-    def wrapper(self, params):
-        was_object = bpy.context.mode == "OBJECT"
-        try:
-            return handler(self, params)
-        except BaseException:
-            if was_object and bpy.context.mode != "OBJECT":
-                try:
-                    bpy.ops.object.mode_set(mode="OBJECT")
-                except RuntimeError:
-                    pass
-            raise
+    def decorate(handler):
+        @functools.wraps(handler)
+        def wrapper(self, params):
+            was_object = bpy.context.mode == "OBJECT"
 
-    return wrapper
+            def leave_to_object():
+                if was_object and bpy.context.mode != "OBJECT":
+                    try:
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                    except RuntimeError:
+                        pass
+
+            try:
+                reply = handler(self, params)
+            except BaseException:
+                leave_to_object()
+                raise
+            if error_replies and isinstance(reply, dict) and (reply.get("error") or reply.get("success") is False):
+                leave_to_object()
+            return reply
+
+        return wrapper
+
+    return decorate if handler is None else decorate(handler)
 
 
 # Bake channel configuration

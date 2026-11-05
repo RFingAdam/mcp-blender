@@ -792,7 +792,6 @@
   "sculpt_mesh_filter#minimal": "CRASH",
   "sculpt_multires_reshape#enum:action=APPLY_BASE": "PASS",
   "sculpt_multires_reshape#enum:action=DELETE_HIGHER": "PASS",
-  "sculpt_multires_reshape#enum:action=DELETE_LOWER": "BUG",
   "sculpt_multires_reshape#enum:action=REBUILD": "SOFT_FAIL",
   "sculpt_multires_reshape#enum:action=SUBDIVIDE": "PASS",
   "sculpt_multires_reshape#enum:action=UNSUBDIVIDE": "SOFT_FAIL",

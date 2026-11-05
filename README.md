@@ -18,9 +18,9 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **176 of 218 tools work on both.**
-> 19 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
-> 23 have a known failure.
+> **178 of 218 tools work on both.**
+> 22 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 18 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -136,7 +136,7 @@ if they drift. More detail per area is in
 | Measurement and validation | 7 | 7 | 7 | `measure_volume`, `measure_clearance` |
 | Baking | 6 | 6 | 6 | `bake_pbr_batch`, `bake_from_multires` |
 | Geometry nodes | 7 | 7 | 5 | `geonode_array_grid`, `geonode_extrude_profile` |
-| Sculpting | 8 | 2 | 2 | `sculpt_setup`, `sculpt_remesh_voxel` |
+| Sculpting | 8 | 4 | 4 | `sculpt_setup`, `sculpt_remesh_voxel` |
 | Rigging | 8 | 7 | 7 | `armature_create`, `autorig_preset` |
 | Physics | 6 | 4 | 4 | `physics_rigid_body_add`, `physics_cloth_add` |
 | Collections and session | 8 | 6 | 6 | `collection_create`, `save_as` |
@@ -145,9 +145,9 @@ if they drift. More detail per area is in
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
 | AI generation and refinement | 29 | 16 | 16 | `ai_evaluate`, `refine_iteration` |
 | Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
-| **Total** | **218** | **184** | **176** |  |
+| **Total** | **218** | **186** | **178** |  |
 
-<details><summary>23 tools with a known failure</summary>
+<details><summary>18 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
@@ -169,17 +169,12 @@ if they drift. More detail per area is in
 | `physics_fluid_quick` | 4.5, 5.2 |
 | `physics_simulate` | 4.5, 5.2 |
 | `render_set_engine` | 5.2 |
-| `sculpt_extract_mask` | 4.5, 5.2 |
-| `sculpt_face_set_create` | 4.5, 5.2 |
-| `sculpt_mask_by_topology` | 4.5, 5.2 |
-| `sculpt_multires_reshape` | 4.5, 5.2 |
-| `sculpt_to_retopo` | 4.5, 5.2 |
 
 Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>19 tools that cannot be checked headless</summary>
+<details><summary>22 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -200,7 +195,10 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `redo` | Blender disables undo in background mode |
 | `refine_get_session` | needs a session id from a prior refine_create_session call |
 | `render_screenshot` | needs a 3D viewport; socket lane covers it |
+| `sculpt_face_set_create` | face_sets_init crashes Blender in background mode, so it needs a 3D viewport; socket lane covers it |
+| `sculpt_mask_by_topology` | the mask operators need a 3D viewport and crash Blender in background mode; socket lane covers it |
 | `sculpt_mesh_filter` | needs a 3D viewport; socket lane covers it |
+| `sculpt_multires_reshape` | the fixture mesh has no subdivision levels to rebuild or unsubdivide |
 | `undo` | Blender disables undo in background mode |
 
 </details>

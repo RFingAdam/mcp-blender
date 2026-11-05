@@ -15,7 +15,7 @@ from ..validation import (
     require_param,
     validate_enum,
 )
-from ._helpers import needs_view3d, view3d_override
+from ._helpers import needs_view3d, restores_object_mode, view3d_override
 
 # Schema names for mesh filters whose operator identifier differs. SURFACE_NOISE is the
 # random-noise filter, which Blender calls RANDOM.
@@ -23,6 +23,33 @@ _MESH_FILTER_TYPES = {
     "ENHANCE_DETAIL": "ENHANCE_DETAILS",
     "SURFACE_NOISE": "RANDOM",
 }
+
+
+# Schema criteria for face sets mapped to sculpt.face_sets_init modes. The modes belong
+# to face_sets_init: face_sets_create only knows MASKED, VISIBLE, ALL and SELECTION.
+_FACE_SET_MODES = {
+    "LINKED": "LOOSE_PARTS",
+    "MATERIAL": "MATERIALS",
+    "NORMAL": "NORMALS",
+    "SHARP_EDGES": "SHARP_EDGES",
+    "UV_ISLAND": "UV_SEAMS",
+}
+
+# Blender stores the sculpt mask as a hidden float point attribute
+_SCULPT_MASK = ".sculpt_mask"
+
+
+def _mask_values(mesh):
+    """Mask values per vertex, or None when the mesh has no mask attribute.
+
+    Sculpt-mode edits reach the mesh data once the object leaves Sculpt mode.
+    """
+    attr = mesh.attributes.get(_SCULPT_MASK)
+    if attr is None:
+        return None
+    values = [0.0] * len(attr.data)
+    attr.data.foreach_get("value", values)
+    return values
 
 
 class SculptHandlersMixin:
@@ -121,6 +148,7 @@ class SculptHandlersMixin:
         return result_info
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_mesh_filter(self, params: dict) -> dict:
         """Apply global mesh filter to entire sculpted mesh."""
         object_name = require_param(params, "object_name", str)
@@ -180,6 +208,7 @@ class SculptHandlersMixin:
         }
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_mask_by_topology(self, params: dict) -> dict:
         """Create sculpt masks based on topology features."""
         object_name = require_param(params, "object_name", str)
@@ -192,9 +221,10 @@ class SculptHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
-        # The flood fill reads the 3D view region; the other mask types do not
+        # The flood fill reads the 3D view region, and the cavity, random and blur
+        # operators crash Blender outright in background mode, so all of them need a viewport
         override = view3d_override()
-        if (mask_type in ("ALL", "NONE") or invert) and override is None:
+        if override is None:
             return needs_view3d("sculpt_mask_by_topology")
 
         # Ensure sculpt mode
@@ -209,27 +239,9 @@ class SculptHandlersMixin:
             with bpy.context.temp_override(**override):
                 bpy.ops.paint.mask_flood_fill(mode="VALUE", value=1.0 if mask_type == "ALL" else 0.0)
         elif mask_type == "CAVITY":
-            # dirty_mask creates a mask based on cavity/concavity
-            bpy.ops.sculpt.dirty_mask(dirty_only=False)
+            bpy.ops.sculpt.mask_from_cavity()
         elif mask_type == "RANDOM":
-            # Create a random mask using bmesh vertex paint_mask
-            import random
-
-            # Exit sculpt mode temporarily to edit mask data
-            bpy.ops.object.mode_set(mode="OBJECT")
-
-            # Access paint mask layer
-            mesh = obj.data
-            if not mesh.vertex_paint_masks:
-                # Blender 4.x may use different API, try the sculpt approach
-                bpy.ops.object.mode_set(mode="SCULPT")
-                # Fill with value then we'll randomize via sculpt ops
-                bpy.ops.paint.mask_flood_fill(mode="VALUE", value=0.5)
-            else:
-                mask_layer = mesh.vertex_paint_masks[0]
-                for i in range(len(mask_layer.data)):
-                    mask_layer.data[i].value = random.random()
-                bpy.ops.object.mode_set(mode="SCULPT")
+            bpy.ops.sculpt.mask_init(mode="RANDOM_PER_VERTEX")
 
         # Invert mask if requested
         if invert:
@@ -237,12 +249,12 @@ class SculptHandlersMixin:
                 bpy.ops.paint.mask_flood_fill(mode="INVERT")
 
         # Blur/smooth the mask
-        for _ in range(blur_iterations):
+        if blur_iterations > 0:
             try:
-                bpy.ops.sculpt.mask_filter(filter_type="SMOOTH")
-            except RuntimeError:
-                # Some Blender versions use different API
-                break
+                with bpy.context.temp_override(**override):
+                    bpy.ops.sculpt.mask_filter(filter_type="SMOOTH", iterations=blur_iterations)
+            except RuntimeError as e:
+                return {"error": f"Mask blur failed: {e}"}
 
         return {
             "success": True,
@@ -253,6 +265,7 @@ class SculptHandlersMixin:
         }
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_face_set_create(self, params: dict) -> dict:
         """Create face sets by grouping faces based on criteria."""
         object_name = require_param(params, "object_name", str)
@@ -266,6 +279,10 @@ class SculptHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
+        # face_sets_init crashes Blender outright in background mode
+        if view3d_override() is None:
+            return needs_view3d("sculpt_face_set_create")
+
         # Ensure sculpt mode
         ensure_object_selected(obj)
         if bpy.context.mode != "SCULPT":
@@ -273,19 +290,10 @@ class SculptHandlersMixin:
                 bpy.ops.object.mode_set(mode="OBJECT")
             bpy.ops.object.mode_set(mode="SCULPT")
 
-        # Map criteria to Blender's face_sets_create mode values
-        criteria_map = {
-            "LINKED": "LOOSE",
-            "MATERIAL": "MATERIALS",
-            "NORMAL": "NORMALS",
-            "SHARP_EDGES": "SHARP_EDGES",
-            "UV_ISLAND": "UV_SEAMS",
-        }
-
-        blender_mode = criteria_map[criteria]
+        blender_mode = _FACE_SET_MODES[criteria]
 
         try:
-            bpy.ops.sculpt.face_sets_create(mode=blender_mode)
+            bpy.ops.sculpt.face_sets_init(mode=blender_mode)
         except RuntimeError as e:
             return {"error": f"Face set creation failed: {str(e)}"}
 
@@ -307,13 +315,14 @@ class SculptHandlersMixin:
         }
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_multires_reshape(self, params: dict) -> dict:
         """Manage multiresolution modifier levels."""
         object_name = require_param(params, "object_name", str)
         action = require_param(params, "action", str)
         action = validate_enum(
             action, "action",
-            ["SUBDIVIDE", "UNSUBDIVIDE", "REBUILD", "APPLY_BASE", "DELETE_HIGHER", "DELETE_LOWER"],
+            ["SUBDIVIDE", "UNSUBDIVIDE", "REBUILD", "APPLY_BASE", "DELETE_HIGHER"],
         )
 
         obj = get_object_or_error(object_name)
@@ -354,8 +363,6 @@ class SculptHandlersMixin:
                 bpy.ops.object.multires_base_apply(modifier=mod_name)
             elif action == "DELETE_HIGHER":
                 bpy.ops.object.multires_higher_levels_delete(modifier=mod_name)
-            elif action == "DELETE_LOWER":
-                bpy.ops.object.multires_lower_levels_delete(modifier=mod_name)
         except RuntimeError as e:
             return {"error": f"Multires {action} failed: {str(e)}"}
 
@@ -373,6 +380,7 @@ class SculptHandlersMixin:
         }
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_to_retopo(self, params: dict) -> dict:
         """Pipeline: sculpt to retopologized mesh with optional displacement bake."""
         object_name = require_param(params, "object_name", str)
@@ -528,7 +536,7 @@ class SculptHandlersMixin:
                 scene.render.bake.use_cage = False
 
                 # Bake displacement
-                bpy.ops.object.bake(type="DISPLACEMENT")
+                bpy.ops.object.bake(type="NORMAL")
 
                 # Save the image
                 disp_image.filepath_raw = output_path
@@ -543,6 +551,7 @@ class SculptHandlersMixin:
                 bpy.data.materials.remove(bake_mat)
 
                 result["displacement_baked"] = True
+                result["bake_type"] = "NORMAL"
                 result["displacement_path"] = output_path
                 result["displacement_resolution"] = displacement_resolution
 
@@ -553,10 +562,9 @@ class SculptHandlersMixin:
         return result
 
 
+    @restores_object_mode(error_replies=True)
     def _handle_sculpt_extract_mask(self, params: dict) -> dict:
         """Extract masked region as a separate mesh object."""
-        import bmesh
-
         object_name = require_param(params, "object_name", str)
         thickness = float(params.get("thickness", 0.05))
         smooth_iterations = int(params.get("smooth_iterations", 2))
@@ -565,23 +573,26 @@ class SculptHandlersMixin:
         if obj.type != "MESH":
             raise ValidationError(f"Object '{object_name}' is not a mesh")
 
-        # Ensure we're in sculpt mode to access mask data
         ensure_object_selected(obj)
-        if bpy.context.mode != "SCULPT":
-            if bpy.context.mode != "OBJECT":
-                bpy.ops.object.mode_set(mode="OBJECT")
-            bpy.ops.object.mode_set(mode="SCULPT")
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
 
-        # Try using the built-in mask extract if available (Blender 2.83+)
+        values = _mask_values(obj.data)
+        if values is None or max(values) <= 0.5:
+            return {
+                "error": f"Object '{object_name}' has no masked vertices (mask above 0.5). "
+                "Paint or create a mask first, for example with sculpt_mask_by_topology."
+            }
+
+        bpy.ops.object.mode_set(mode="SCULPT")
         try:
-            bpy.ops.mesh.paint_mask_extract(
+            bpy.ops.sculpt.paint_mask_extract(
                 mask_threshold=0.5,
                 add_boundary_loop=True,
                 smooth_iterations=smooth_iterations,
                 apply_shrinkwrap=True,
                 add_solidify=(thickness > 0),
             )
-
             # The extracted object becomes the active object
             extracted_obj = bpy.context.active_object
 
@@ -602,72 +613,8 @@ class SculptHandlersMixin:
                 "polygon_count": len(extracted_obj.data.polygons),
             }
 
-        except (RuntimeError, AttributeError):
-            # Fallback: manual bmesh extraction
-            pass
-
-        # Manual extraction fallback
-        bpy.ops.object.mode_set(mode="OBJECT")
-
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
-
-        # Get mask values from paint_mask layer
-        mask_layer = bm.verts.layers.paint_mask.verify()
-
-        # Find faces where average mask > 0.5
-        masked_faces = []
-        for face in bm.faces:
-            avg_mask = sum(v[mask_layer] for v in face.verts) / len(face.verts)
-            if avg_mask > 0.5:
-                masked_faces.append(face)
-
-        if not masked_faces:
-            bm.free()
-            return {"error": "No masked faces found (mask threshold 0.5). Apply a mask first."}
-
-        # Delete unmasked faces
-        unmasked_faces = [f for f in bm.faces if f not in masked_faces]
-        bmesh.ops.delete(bm, geom=unmasked_faces, context="FACES")
-
-        # Create new mesh and object
-        new_mesh = bpy.data.meshes.new(f"{object_name}_extract")
-        bm.to_mesh(new_mesh)
-        bm.free()
-
-        new_obj = bpy.data.objects.new(f"{object_name}_extract", new_mesh)
-        bpy.context.collection.objects.link(new_obj)
-
-        # Copy transforms from original
-        new_obj.matrix_world = obj.matrix_world.copy()
-
-        # Smooth boundary
-        if smooth_iterations > 0:
-            ensure_object_selected(new_obj)
-            bpy.ops.object.mode_set(mode="EDIT")
-            bpy.ops.mesh.select_all(action="DESELECT")
-            bpy.ops.mesh.select_non_manifold()
-            for _ in range(smooth_iterations):
-                bpy.ops.mesh.vertices_smooth(factor=0.5)
-            bpy.ops.object.mode_set(mode="OBJECT")
-
-        # Add solidify for thickness
-        if thickness > 0:
-            solidify = new_obj.modifiers.new(name="Solidify", type="SOLIDIFY")
-            solidify.thickness = thickness
-            solidify.offset = -1.0  # Grow outward
-
-        return {
-            "success": True,
-            "source_object": object_name,
-            "extracted_object": new_obj.name,
-            "thickness": thickness,
-            "smooth_iterations": smooth_iterations,
-            "vertex_count": len(new_obj.data.vertices),
-            "polygon_count": len(new_obj.data.polygons),
-        }
+        except RuntimeError as e:
+            return {"error": f"Mask extract failed: {e}"}
 
 
     def _handle_sculpt_remesh_voxel(self, params: dict) -> dict:

@@ -54,6 +54,7 @@ def build(path):
 
     _add_lods()
     _add_multires_sphere()
+    _add_masked_sphere()
     _add_state(scene, cube, sphere, arm)
 
     scene.collection.children.link(bpy.data.collections.new("Collection"))
@@ -92,6 +93,16 @@ def _add_multires_sphere():
     mod = ob.modifiers.new("Multires", "MULTIRES")
     bpy.ops.object.multires_subdivide(modifier=mod.name, mode="CATMULL_CLARK")
     bpy.ops.object.multires_subdivide(modifier=mod.name, mode="CATMULL_CLARK")
+
+
+def _add_masked_sphere():
+    """A sphere with its upper half masked, for sculpt_extract_mask."""
+    bpy.ops.mesh.primitive_uv_sphere_add(location=(8, 8, 0))
+    ob = bpy.context.active_object
+    ob.name = "MaskedSphere"
+    mask = ob.data.attributes.new(".sculpt_mask", "FLOAT", "POINT")
+    for v in ob.data.vertices:
+        mask.data[v.index].value = 1.0 if v.co.z > 0 else 0.0
 
 
 def _add_state(scene, cube, sphere, arm):

@@ -3499,7 +3499,7 @@ TOOLS: list[Tool] = [
             "Manage multiresolution modifier levels for sculpting. SUBDIVIDE adds a level, "
             "UNSUBDIVIDE removes the highest level, REBUILD reconstructs subdivisions, "
             "APPLY_BASE applies sculpted changes to the base mesh, DELETE_HIGHER removes "
-            "levels above current, DELETE_LOWER removes levels below current."
+            "levels above current."
         ),
         input_schema={
             "type": "object",
@@ -3516,7 +3516,6 @@ TOOLS: list[Tool] = [
                         "REBUILD",
                         "APPLY_BASE",
                         "DELETE_HIGHER",
-                        "DELETE_LOWER",
                     ],
                     "description": "Action to perform on the multires modifier",
                 },
@@ -3530,7 +3529,8 @@ TOOLS: list[Tool] = [
             "Pipeline tool: convert a high-poly sculpt to a retopologized low-poly mesh "
             "with optional displacement map baking. Creates a duplicate, applies remesh "
             "(voxel or quadriflow), auto-UV unwraps, and optionally bakes displacement "
-            "from the original. Essential for game-ready asset production."
+            "from the original (Blender has no displacement bake, so a tangent-space normal "
+            "map is baked). Essential for game-ready asset production."
         ),
         input_schema={
             "type": "object",
@@ -3550,7 +3550,7 @@ TOOLS: list[Tool] = [
                 },
                 "bake_displacement": {
                     "type": "boolean",
-                    "description": "Bake displacement map from original to retopo mesh (default: true)",
+                    "description": "Bake a detail map (tangent-space normal map) from original to retopo mesh (default: true)",
                 },
                 "displacement_resolution": {
                     "type": "number",

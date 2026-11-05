@@ -21,7 +21,10 @@
     "render_image_writes_file": "PASS",
     "render_screenshot_writes_file": "PASS",
     "reply_16mb_complete": "FAIL",
-    "sculpt_mask_by_topology_masks": "PASS",
+    "sculpt_extract_mask_needs_a_mask": "PASS",
+    "sculpt_face_set_create_makes_sets": "PASS",
+    "sculpt_failure_leaves_object_mode": "PASS",
+    "sculpt_mask_by_topology_sets_mask": "PASS",
     "sculpt_mesh_filter_moves_vertices": "PASS",
     "undo_reverts": "PASS"
   },
@@ -47,7 +50,10 @@
     "render_image_writes_file": "PASS",
     "render_screenshot_writes_file": "PASS",
     "reply_16mb_complete": "FAIL",
-    "sculpt_mask_by_topology_masks": "PASS",
+    "sculpt_extract_mask_needs_a_mask": "PASS",
+    "sculpt_face_set_create_makes_sets": "PASS",
+    "sculpt_failure_leaves_object_mode": "PASS",
+    "sculpt_mask_by_topology_sets_mask": "PASS",
     "sculpt_mesh_filter_moves_vertices": "PASS",
     "undo_reverts": "PASS"
   }
