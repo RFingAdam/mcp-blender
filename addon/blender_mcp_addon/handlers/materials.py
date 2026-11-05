@@ -65,7 +65,7 @@ class MaterialHandlersMixin:
         """Set material base color."""
         material_name = require_param(params, "material_name", str)
         mat = get_material_or_error(material_name)
-        color = validate_color(params.get("color"), "color")
+        color = validate_color(require_param(params, "color", list), "color")
 
         if not mat.use_nodes:
             mat.use_nodes = True

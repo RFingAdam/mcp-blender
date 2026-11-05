@@ -3,29 +3,7 @@
   "self_attributes": [],
   "validator_calls": [],
   "validate_filepath_result_used": [],
-  "schema_params": [
-    "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_generate_texture: reads 'texture_types' not in schema",
-    "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_generate_texture_sync: reads 'texture_types' not in schema",
-    "addon/blender_mcp_addon/handlers/ai.py::_handle_ai_pipeline_status: schema 'resume' never read",
-    "addon/blender_mcp_addon/handlers/ai.py::_handle_execute_script: schema 'timeout' never read",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'apply_unit_scale' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'axis_forward' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'axis_up' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'bake_anim' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_fbx: reads 'scale' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_obj: reads 'export_materials' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_obj: reads 'forward_axis' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_obj: reads 'scale' not in schema",
-    "addon/blender_mcp_addon/handlers/export_import.py::_handle_export_obj: reads 'up_axis' not in schema"
-  ],
-  "tool_handler_parity": [
-    "handler without tool: ai_cancel_generation",
-    "handler without tool: ai_generate_variations",
-    "handler without tool: ai_get_backend_info",
-    "handler without tool: ai_get_history",
-    "handler without tool: ai_queue_clear",
-    "handler without tool: ai_queue_list",
-    "handler without tool: ai_redo_generation",
-    "handler without tool: ping"
-  ]
+  "schema_params": [],
+  "tool_handler_parity": [],
+  "required_matches": []
 }

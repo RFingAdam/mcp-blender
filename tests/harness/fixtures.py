@@ -197,6 +197,8 @@ KNOWN_UNREACHED: dict[str, str] = {
     "redo": "Blender disables undo in background mode",
     "ai_model_status": "needs a job id that only a live AI backend can issue",
     "ai_pipeline_status": "needs a pipeline id that only a live AI backend can issue",
+    "ai_cancel_generation": "needs a job id that only a live AI backend can issue",
+    "ai_redo_generation": "needs a previous generation, which only a live AI backend can produce",
     "refine_get_session": "needs a session id from a prior refine_create_session call",
 }
 
@@ -207,6 +209,7 @@ KNOWN_UNREACHED: dict[str, str] = {
 SOFT_FAIL_ALLOWED: dict[str, str] = {
     "ai_generate_model": "no AI backend is reachable offline",
     "ai_generate_model_sync": "no AI backend is reachable offline",
+    "ai_generate_variations": "no AI backend is reachable offline",
     "ai_generate_reference_image": "no AI backend is reachable offline",
     "ai_generate_texture": "no AI backend is reachable offline",
     "ai_generate_texture_sync": "no AI backend is reachable offline",

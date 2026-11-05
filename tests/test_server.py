@@ -1,6 +1,11 @@
 """Tests for MCP server."""
 
 
+import asyncio
+
+from mcp_types import CallToolRequestParams
+
+from mcp_blender import server as server_module
 from mcp_blender.server import TOOLS, create_server
 
 
@@ -46,7 +51,7 @@ class TestToolDefinitions:
         # 155 base + 63 new tools:
         # 7 materials + 7 measurement + 8 collections/system + 6 baking
         # + 7 geonode + 8 sculpting + 8 rigging + 6 physics + 6 annotation
-        assert len(TOOLS) == 218, f"Expected 218 tools, got {len(TOOLS)}"
+        assert len(TOOLS) == 225, f"Expected 225 tools, got {len(TOOLS)}"
 
 
 class TestServerCreation:
@@ -207,3 +212,46 @@ class TestToolCategories:
             "blender_mesh_flatten",
         )]
         assert len(transform_tools) == 3, f"Expected 3 transform tools, got {len(transform_tools)}"
+
+
+class _RecordingClient:
+    def __init__(self):
+        self.calls = []
+
+    async def send_command(self, command, arguments, timeout=None):
+        self.calls.append((command, dict(arguments), timeout))
+        return {"success": True}
+
+
+def _call(monkeypatch, name, arguments):
+    client = _RecordingClient()
+
+    async def fake_get_client(host="127.0.0.1", port=9876):
+        return client
+
+    monkeypatch.setattr(server_module, "get_client", fake_get_client)
+    entry = create_server("127.0.0.1", 9876)._request_handlers["tools/call"]
+    asyncio.run(entry.handler(None, CallToolRequestParams(name=name, arguments=arguments)))
+    return client.calls[0]
+
+
+class TestTimeoutReachesHandler:
+    def test_timeout_reaches_handler(self, monkeypatch):
+        """A tool that declares timeout in its schema still receives it."""
+        declared = [t.name for t in TOOLS if "timeout" in t.input_schema["properties"]]
+        assert declared, "expected at least one tool that declares timeout"
+        for name in declared:
+            command, args, timeout = _call(monkeypatch, name, {"timeout": 7})
+            assert args.get("timeout") == 7, name
+            assert timeout == 7, name
+            assert command == name.removeprefix("blender_")
+
+    def test_timeout_without_declaration_still_sets_wait(self, monkeypatch):
+        _, args, timeout = _call(monkeypatch, "blender_scene_info", {})
+        assert timeout == 30.0
+        assert "timeout" not in args
+
+    def test_timeout_is_not_forwarded_when_undeclared(self, monkeypatch):
+        _, args, timeout = _call(monkeypatch, "blender_scene_info", {"timeout": 5})
+        assert timeout == 5
+        assert "timeout" not in args

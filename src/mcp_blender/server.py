@@ -594,6 +594,11 @@ TOOLS: list[Tool] = [
                 "filepath": {"type": "string", "description": "Output file path"},
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "apply_modifiers": {"type": "boolean", "description": "Apply modifiers"},
+                "scale": {"type": "number", "minimum": 0.001, "maximum": 1000, "description": "Global scale factor (0.001 to 1000)"},
+                "apply_unit_scale": {"type": "boolean", "description": "Apply the scene unit scale to the exported size"},
+                "bake_anim": {"type": "boolean", "description": "Export animation"},
+                "axis_forward": {"type": "string", "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"], "description": "Forward axis (Blender default -Z)"},
+                "axis_up": {"type": "string", "enum": ["X", "Y", "Z", "-X", "-Y", "-Z"], "description": "Up axis (Blender default Y)"},
             },
             "required": ["filepath"],
         },
@@ -607,6 +612,10 @@ TOOLS: list[Tool] = [
                 "filepath": {"type": "string", "description": "Output file path"},
                 "selected_only": {"type": "boolean", "description": "Export selected objects only"},
                 "apply_modifiers": {"type": "boolean", "description": "Apply modifiers"},
+                "scale": {"type": "number", "minimum": 0.0001, "maximum": 10000, "description": "Global scale factor (0.0001 to 10000)"},
+                "forward_axis": {"type": "string", "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"], "description": "Forward axis (Blender default NEGATIVE_Z)"},
+                "up_axis": {"type": "string", "enum": ["X", "Y", "Z", "NEGATIVE_X", "NEGATIVE_Y", "NEGATIVE_Z"], "description": "Up axis (Blender default Y)"},
+                "export_materials": {"type": "boolean", "description": "Write the material library (.mtl)"},
             },
             "required": ["filepath"],
         },
@@ -782,6 +791,173 @@ TOOLS: list[Tool] = [
                 },
             },
             "required": ["backend"],
+        },
+    ),
+    Tool(
+        name="blender_ai_get_backend_info",
+        description="Get details about one AI backend: its capabilities, availability and current configuration. Returns an error for an unknown backend name.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string",
+                    "description": "Backend name, for example rodin, triposg or comfyui",
+                },
+            },
+            "required": ["backend"],
+        },
+    ),
+    Tool(
+        name="blender_ai_generate_variations",
+        description="Submit several generation jobs for the same prompt and return one result per variation. Each variation is an ordinary blender_ai_generate_model job; poll them with blender_ai_model_status. Needs a reachable AI backend.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Text description of the model to generate",
+                },
+                "num_variations": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 3,
+                    "description": "How many jobs to submit (default: 3)",
+                },
+                "style": {
+                    "type": "string",
+                    "enum": ["realistic", "cartoon", "low_poly", "sculpture", "anime"],
+                    "description": "Generation style",
+                },
+                "quality": {
+                    "type": "string",
+                    "enum": ["draft", "medium", "high"],
+                    "default": "medium",
+                    "description": "Generation quality level",
+                },
+                "output_format": {
+                    "type": "string",
+                    "enum": ["glb", "gltf", "fbx", "obj", "usdz"],
+                    "default": "glb",
+                    "description": "Output file format",
+                },
+                "backend": {
+                    "type": "string",
+                    "description": "Backend name; omit to let the server choose",
+                },
+            },
+            "required": ["prompt"],
+        },
+    ),
+    Tool(
+        name="blender_ai_cancel_generation",
+        description="Cancel an in-progress AI generation job by its job id and mark it cancelled in the queue.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "Job ID returned from blender_ai_generate_model",
+                },
+                "backend": {
+                    "type": "string",
+                    "description": "Backend that owns the job (optional hint)",
+                },
+            },
+            "required": ["job_id"],
+        },
+    ),
+    Tool(
+        name="blender_ai_redo_generation",
+        description="Run the most recent generation job again, optionally changing its prompt, style, quality, output format or backend. Returns an error when there is no previous generation. Needs a reachable AI backend.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Replacement prompt (default: the previous prompt)",
+                },
+                "style": {
+                    "type": "string",
+                    "description": "Replacement style (default: the previous style)",
+                },
+                "quality": {
+                    "type": "string",
+                    "description": "Replacement quality (default: the previous quality)",
+                },
+                "output_format": {
+                    "type": "string",
+                    "description": "Replacement output format (default: the previous format)",
+                },
+                "backend": {
+                    "type": "string",
+                    "description": "Backend to redo on, also used to pick the previous job; 'auto' lets the server choose",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_ai_queue_list",
+        description="List AI generation jobs in the queue, newest first.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "Only jobs with this status, for example pending, queued, processing, downloading, completed, failed or cancelled",
+                },
+                "backend": {
+                    "type": "string",
+                    "description": "Only jobs from this backend",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum number of jobs to return",
+                },
+                "include_completed": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include finished jobs (default: true)",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_ai_queue_clear",
+        description="Remove finished jobs from the AI generation queue. Clears completed jobs by default, or failed jobs when clear_failed is true.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "clear_failed": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Clear failed jobs instead of completed ones (default: false)",
+                },
+                "older_than_hours": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "When clearing completed jobs, only those older than this many hours",
+                },
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="blender_ai_get_history",
+        description="Get the history of AI generation jobs, with a summary of each.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 50,
+                    "description": "Maximum number of entries (default: 50)",
+                },
+            },
+            "required": [],
         },
     ),
     Tool(
@@ -1869,7 +2045,7 @@ TOOLS: list[Tool] = [
                 },
                 "timeout": {
                     "type": "number",
-                    "description": "Execution timeout in seconds (default: 30)",
+                    "description": "Seconds the MCP server waits for Blender's reply (default: 30). The script is not interrupted: if it runs longer, Blender keeps running it and the call returns a timeout error.",
                 },
             },
             "required": ["script"],
@@ -2462,17 +2638,13 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="blender_ai_pipeline_status",
-        description="Get status of a pipeline run or resume from last successful stage.",
+        description="Get the status of a pipeline run started by blender_ai_pipeline_generate. Read-only; pipelines cannot be resumed.",
         input_schema={
             "type": "object",
             "properties": {
                 "pipeline_id": {
                     "type": "string",
                     "description": "Pipeline run ID from blender_ai_pipeline_generate",
-                },
-                "resume": {
-                    "type": "boolean",
-                    "description": "Resume from last successful stage",
                 },
             },
             "required": ["pipeline_id"],
@@ -3112,22 +3284,22 @@ TOOLS: list[Tool] = [
                 "point_a": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "First point [x, y, z] for DISTANCE mode",
+                    "description": "First point [x, y, z]. Required for DISTANCE mode",
                 },
                 "point_b": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Second point [x, y, z] for DISTANCE mode",
+                    "description": "Second point [x, y, z]. Required for DISTANCE mode",
                 },
                 "edge_indices": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Edge indices for EDGE_LENGTH mode",
+                    "description": "Edge indices. Required for EDGE_LENGTH mode",
                 },
                 "vertex_indices": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Two vertex indices for VERTEX_DISTANCE mode",
+                    "description": "Two vertex indices. Required for VERTEX_DISTANCE mode",
                 },
             },
             "required": ["object_name"],
@@ -5677,6 +5849,13 @@ TOOLS: list[Tool] = [
 ]
 
 
+_TOOLS_DECLARING_TIMEOUT = frozenset(
+    t.name.removeprefix("blender_")
+    for t in TOOLS
+    if "timeout" in t.input_schema.get("properties", {})
+)
+
+
 def create_server(host: str, port: int) -> Server:
     """Create and configure the MCP server."""
     server = Server("meshwire")
@@ -5698,9 +5877,15 @@ def create_server(host: str, port: int) -> Server:
             client = await get_client(host, port)
             # Map tool name to Blender command (remove 'blender_' prefix)
             command = name.replace("blender_", "")
-            # Extract timeout from arguments, or use longer defaults
-            # for known long-running commands
-            timeout = arguments.pop("timeout", None) if isinstance(arguments, dict) else None
+            # timeout is how long this server waits for Blender's reply. A tool
+            # whose schema declares it also receives it; for any other tool it
+            # is a transport option and is not forwarded.
+            timeout = None
+            if isinstance(arguments, dict):
+                if command in _TOOLS_DECLARING_TIMEOUT:
+                    timeout = arguments.get("timeout")
+                else:
+                    timeout = arguments.pop("timeout", None)
             if timeout is None:
                 _long_running = {
                     "ai_pipeline_generate", "ai_generate_model_sync",
