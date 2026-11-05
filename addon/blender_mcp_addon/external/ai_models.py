@@ -186,6 +186,13 @@ def generate_texture(
             "workflow_type": workflow_type,
             "object_name": object_name,
             "auto_apply": auto_apply,
+            # The backend arguments (image and mask paths, size, seed), so a redo can
+            # send them again. The job history is JSON, so only plain values are kept.
+            "inputs": {
+                k: v
+                for k, v in kwargs.items()
+                if isinstance(v, (str, int, float, bool, list, type(None)))
+            },
         },
     )
 

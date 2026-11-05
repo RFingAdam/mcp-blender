@@ -502,6 +502,7 @@ class AIHandlersMixin:
                 object_name=meta.get("object_name"),
                 auto_apply=meta.get("auto_apply", True),
                 backend=backend if backend != "auto" else None,
+                **meta.get("inputs", {}),
             )
 
         if last_job.image_path:

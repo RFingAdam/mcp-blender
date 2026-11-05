@@ -82,6 +82,45 @@ def test_redo_replays_a_texture_job_as_a_texture(ai, monkeypatch):
     assert kwargs["auto_apply"] is False
 
 
+def test_redo_replays_a_texture_jobs_backend_inputs(ai, monkeypatch):
+    # An inpaint job is useless without its image and mask, so redo must send them again.
+    _last_job(
+        ai,
+        monkeypatch,
+        metadata={
+            "kind": "texture",
+            "workflow_type": "inpaint",
+            "inputs": {"image_path": "/tex/a.png", "mask_path": "/tex/m.png", "seed": 4},
+        },
+    )
+    texture = MagicMock(return_value={"success": True})
+    monkeypatch.setattr(ai.models, "generate_texture", texture)
+    ai.mixin._handle_ai_redo_generation({})
+    kwargs = texture.call_args.kwargs
+    assert kwargs["workflow_type"] == "inpaint"
+    assert (kwargs["image_path"], kwargs["mask_path"], kwargs["seed"]) == (
+        "/tex/a.png",
+        "/tex/m.png",
+        4,
+    )
+
+
+def test_texture_jobs_record_their_backend_inputs(ai, monkeypatch):
+    queue = MagicMock()
+    queue.create_job.return_value = types.SimpleNamespace(id="j1")
+    monkeypatch.setattr(ai.models, "get_job_queue", lambda: queue)
+    manager = MagicMock()
+    manager.generate_texture.return_value = types.SimpleNamespace(
+        success=True, job_id="x", status=types.SimpleNamespace(value="pending"), metadata={}
+    )
+    monkeypatch.setattr(ai.models, "get_backend_manager", lambda: manager)
+    ai.models.generate_texture(
+        prompt="rust", workflow_type="inpaint", image_path="/tex/a.png", seed=4, size=[512, 512]
+    )
+    inputs = queue.create_job.call_args.kwargs["metadata"]["inputs"]
+    assert inputs == {"image_path": "/tex/a.png", "seed": 4, "size": [512, 512]}
+
+
 def test_redo_replays_a_model_job_as_a_model(ai, monkeypatch):
     _last_job(ai, monkeypatch, metadata={"kind": "model"})
     model = MagicMock(return_value={"success": True})
