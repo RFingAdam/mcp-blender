@@ -15,6 +15,9 @@ from ..validation import (
     validate_filepath,
 )
 
+# The schema offers friendly names; Blender's decimate_type ids are UNSUBDIV and DISSOLVE.
+_DECIMATE_METHOD_ALIASES = {"UN_SUBDIVIDE": "UNSUBDIV", "PLANAR": "DISSOLVE"}
+
 
 class AIHandlersMixin:
     """Mixin for AI, refinement, and script execution handlers."""
@@ -400,7 +403,10 @@ class AIHandlersMixin:
         return decimate_mesh(
             object_name=require_param(params, "object_name", str),
             ratio=params.get("ratio", 0.5),
-            method=params.get("method", "COLLAPSE"),
+            method=_DECIMATE_METHOD_ALIASES.get(
+                str(params.get("method", "COLLAPSE")).upper(),
+                str(params.get("method", "COLLAPSE")),
+            ),
             triangulate=params.get("triangulate", False),
             preserve_uvs=params.get("preserve_uvs", True),
             vertex_group=params.get("vertex_group"),
@@ -737,12 +743,16 @@ class AIHandlersMixin:
                 "error": f"Vision analysis failed: {e}",
             }
 
-        return {
-            "success": True,
+        # The renders exist either way; success says whether the analysis worked.
+        response = {
+            "success": analysis.get("success", True) is not False,
             "renders": render_paths,
             "analysis": analysis,
             "output_dir": render_result["output_dir"],
         }
+        if not response["success"]:
+            response["error"] = analysis.get("error", "Vision analysis failed")
+        return response
 
     # ========== AI Evaluation & Self-Refinement Handlers ==========
 

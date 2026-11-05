@@ -18,9 +18,9 @@ modeling, materials, sculpting, animation, AI 3D generation, and Microsoft Fligh
 
 <!-- generated:status -->
 > **Status:** every pull request runs each tool in real Blender 4.5 LTS and 5.2 LTS.
-> **186 of 218 tools work on both.**
-> 23 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
-> 9 have a known failure.
+> **192 of 218 tools work on both.**
+> 24 need what a headless test cannot provide, such as a GUI, an AI backend, or an earlier call.
+> 2 have a known failure.
 > Each list is under [Tools](#tools), and fixes are tracked in the [issues](https://github.com/RFingAdam/meshwire/issues).
 <!-- /generated:status -->
 
@@ -132,40 +132,33 @@ if they drift. More detail per area is in
 | Modifiers | 5 | 5 | 5 | `modifier_add`, `modifier_apply` |
 | Animation | 7 | 7 | 7 | `keyframe_delete`, `action_create` |
 | Render | 6 | 5 | 5 | `render_image`, `render_multi_angle` |
-| Import and export | 6 | 5 | 5 | `export_fbx`, `export_usd` |
+| Import and export | 6 | 6 | 6 | `export_fbx`, `export_usd` |
 | Measurement and validation | 7 | 7 | 7 | `measure_volume`, `measure_clearance` |
 | Baking | 6 | 6 | 6 | `bake_pbr_batch`, `bake_from_multires` |
 | Geometry nodes | 7 | 7 | 7 | `geonode_array_grid`, `geonode_extrude_profile` |
 | Sculpting | 8 | 4 | 4 | `sculpt_setup`, `sculpt_remesh_voxel` |
-| Rigging | 8 | 7 | 7 | `armature_create`, `autorig_preset` |
-| Physics | 6 | 4 | 4 | `physics_rigid_body_add`, `physics_cloth_add` |
+| Rigging | 8 | 8 | 8 | `armature_create`, `autorig_preset` |
+| Physics | 6 | 6 | 6 | `physics_rigid_body_add`, `physics_cloth_add` |
 | Collections and session | 8 | 6 | 6 | `collection_create`, `save_as` |
 | Annotations | 6 | 4 | 5 | `annotation_dimension`, `annotation_text` |
 | MSFS content | 20 | 20 | 20 | `msfs_create_lod_hierarchy`, `msfs_setup_material` |
 | MSFS livery | 18 | 15 | 15 | `msfs_livery_transfer`, `msfs_livery_create_package` |
-| AI generation and refinement | 29 | 16 | 16 | `ai_evaluate`, `refine_iteration` |
+| AI generation and refinement | 29 | 18 | 18 | `ai_evaluate`, `refine_iteration` |
 | Poly Haven | 2 | 2 | 2 | `polyhaven_search`, `polyhaven_download` |
-| **Total** | **218** | **186** | **187** |  |
+| **Total** | **218** | **192** | **193** |  |
 
-<details><summary>9 tools with a known failure</summary>
+<details><summary>2 tools with a known failure</summary>
 
 | Tool | Fails on |
 | --- | --- |
-| `ai_auto_uv` | 4.5, 5.2 |
-| `ai_mesh_decimate` | 4.5, 5.2 |
-| `ai_pipeline_generate` | 4.5, 5.2 |
 | `ai_texture_from_render` | 4.5, 5.2 |
-| `constraint_add` | 4.5, 5.2 |
-| `export_gltf` | 4.5, 5.2 |
 | `grease_pencil_markup` | 4.5, 5.2 |
-| `physics_fluid_quick` | 4.5, 5.2 |
-| `physics_simulate` | 4.5, 5.2 |
 
 Socket checks that still fail: `reply_16mb_complete`.
 
 </details>
 
-<details><summary>23 tools that cannot be checked headless</summary>
+<details><summary>24 tools that cannot be checked headless</summary>
 
 | Tool | Why |
 | --- | --- |
@@ -176,6 +169,7 @@ Socket checks that still fail: `reply_16mb_complete`.
 | `ai_generate_texture_sync` | no AI backend is reachable offline |
 | `ai_inpaint_texture` | no AI backend is reachable offline |
 | `ai_model_status` | needs a job id that only a live AI backend can issue |
+| `ai_pipeline_generate` | no AI backend is reachable offline |
 | `ai_pipeline_status` | needs a pipeline id that only a live AI backend can issue |
 | `annotation_add` | Blender 4.3 to 4.5 offers no Python call that creates an annotation stroke, so the tool says so; the socket test annotation_add_draws_or_says_why checks both outcomes |
 | `mesh_edge_slide` | needs a 3D viewport; socket lane covers it |

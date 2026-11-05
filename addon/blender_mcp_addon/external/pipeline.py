@@ -196,6 +196,7 @@ def run_pipeline(params, handlers):
             if stage == PipelineStage.GENERATE:
                 result = _run_generate(params, handlers)
                 sr.result = result
+                _raise_if_failed(result, "generation")
                 run.mesh_path = result.get("mesh_path")
 
             elif stage == PipelineStage.IMPORT:
@@ -203,6 +204,7 @@ def run_pipeline(params, handlers):
                     raise ValueError("No mesh path from generation stage")
                 result = handlers._handle_import_file({"filepath": run.mesh_path})
                 sr.result = result
+                _raise_if_failed(result, "import")
                 if result.get("imported_objects"):
                     run.object_name = result["imported_objects"][0]
 
@@ -292,6 +294,7 @@ def run_pipeline(params, handlers):
                             }
                         )
                         sr.result = result
+                        _raise_if_failed(result, "texture generation")
                     except Exception as tex_err:
                         sr.status = StageStatus.FAILED
                         sr.error = str(tex_err)
@@ -347,7 +350,25 @@ def run_pipeline(params, handlers):
                 break
 
     run.current_stage = None
-    return run.to_dict()
+    out = run.to_dict()
+    failed = {
+        name: sr.error or "stage reported failure"
+        for name, sr in run.stages.items()
+        if sr.status == StageStatus.FAILED
+    }
+    # Each stage's detail stays under "stages"; the top level says whether the run worked.
+    out["success"] = not failed
+    if failed:
+        out["error"] = "Pipeline stage failed: " + "; ".join(
+            f"{name}: {err}" for name, err in failed.items()
+        )
+    return out
+
+
+def _raise_if_failed(result, what):
+    """Turn a handler's failure reply into an exception so the stage is marked failed."""
+    if isinstance(result, dict) and (result.get("success") is False or result.get("error")):
+        raise ValueError(f"{what} failed: {result.get('error', 'unknown error')}")
 
 
 def _run_generate(params, handlers):

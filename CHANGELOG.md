@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Defects that hid behind SOFT_FAIL and PASS.** `ai_auto_uv` LIGHTMAP no longer passes the removed
+  `PREF_APPLY_IMAGE` and `PREF_IMG_PX_SIZE` keywords. `ai_mesh_decimate` maps `UN_SUBDIVIDE` to
+  `UNSUBDIV` and `PLANAR` to `DISSOLVE`. `constraint_add` sets `target` only on constraints that have
+  one, so `LIMIT_LOCATION` and `LIMIT_ROTATION` work. `physics_fluid_quick` maps `GAS` flows to the
+  `SMOKE` flow type. `physics_simulate` reads `RigidBodyWorld.collection` in place of the removed
+  `group`. `export_gltf` drops `GLTF_EMBEDDED` from its schema, since the exporter never accepted it.
+  `ai_pipeline_generate` returns `success: False` and an `error` when a stage fails, and a failed
+  generation, import or texture reply now marks its stage failed. `analyze_viewport` and `ai_refine`
+  return `success: False` when the vision analysis fails, in place of a successful reply that
+  carries a failed analysis; `refine_iteration` follows.
 - **Blender 5.x differences go through `compat.py`, by feature detection.** No handler or compat
   function compares a version number. `render_set_engine` accepts `EEVEE`, `BLENDER_EEVEE` and
   `BLENDER_EEVEE_NEXT` and sets the one this Blender registers; `ai_texture_from_render` no longer
