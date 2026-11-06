@@ -346,7 +346,9 @@ Which Blender the server talks to is decided in this order:
 1. `--port`, if given.
 2. The `MESHWIRE_PORT` environment variable, if set.
 3. Discovery. Each running add-on publishes a small file in `instances/` inside the Meshwire config
-   folder (next to the token), and the server picks the most recently started Blender that answers.
+   folder (next to the token), and the server picks the most recently started Blender. It moves on to an older one
+   only past a port that is not a Meshwire add-on holding your token. A busy or full newest
+   Blender gives an error naming it.
    It looks again at every connection, so a Blender that starts or restarts later is found, and it
    logs the port, Blender version and `.blend` file it chose. Discovery runs only when `--host` is
    a loopback address.

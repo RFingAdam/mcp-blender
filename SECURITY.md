@@ -76,11 +76,11 @@ against these:
 
 Rotate the token if you copied it somewhere you no longer trust, or if you think another user got it.
 
-1. Stop the server in the Meshwire tab.
+1. Stop the server in every Blender that runs Meshwire. Each one keeps the token it started with.
 2. Delete the token file. On Linux it is `${XDG_CONFIG_HOME:-~/.config}/meshwire/token`, on macOS
    `~/Library/Application Support/meshwire/token`, and on Windows `%APPDATA%\meshwire\token`. If
    `MESHWIRE_CONFIG_DIR` is set, it is `token` inside that folder.
-3. Start the server. It writes a new token.
+3. Start the servers again. The first one writes a new token and the others read it.
 4. Restart the MCP clients, and update `MESHWIRE_TOKEN` wherever you set it (use **Copy token** again).
 
 ## Remote use is plaintext
