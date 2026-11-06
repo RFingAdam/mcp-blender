@@ -83,9 +83,9 @@ class Budget:
         return self._end - time.monotonic()
 
 
-def proof(token: str, label: str, a: str, b: str) -> str:
+def proof(token: str, label: str, *parts: str) -> str:
     """Same HMAC as wire.proof, spelled out so the lane checks the protocol, not the module."""
-    return hmac.new(token.encode(), f"{label}\n{a}\n{b}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(token.encode(), "\n".join((label, *parts)).encode(), hashlib.sha256).hexdigest()
 
 
 def encode_request(req_id: int, method: str, params: dict) -> bytes:
@@ -151,8 +151,13 @@ class Conn:
         """The whole mutual handshake. The token is only ever an HMAC key here."""
         nonce_c, result = self.hello()
         ns = result["nonce"]
-        if not hmac.compare_digest(result["proof"], proof(token, "meshwire-addon", nonce_c, ns)):
+        seen = result["seen"]
+        if not hmac.compare_digest(
+            result["proof"], proof(token, "meshwire-addon", nonce_c, ns, seen)
+        ):
             raise BadReply("the add-on's proof did not verify")
+        if seen != f"127.0.0.1:{self.port}":
+            raise BadReply(f"the add-on says it saw {seen}, but this lane dialed port {self.port}")
         got = self.call("hello_proof", {"proof": proof(token, "meshwire-client", ns, nonce_c)})
         if got != {"ok": True}:
             raise BadReply(f"hello_proof was not accepted: {got!r}")

@@ -58,8 +58,11 @@ class _Client:
         self.dead = False  # drop on this tick's cleanup pass
 
 
-def _error(code: int, message: str, msg_id=None) -> dict:
-    return {"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": msg_id}
+def _error(code: int, message: str, msg_id=None, data=None) -> dict:
+    error = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "error": error, "id": msg_id}
 
 
 class MCPSocketServer:
@@ -236,8 +239,9 @@ class MCPSocketServer:
         taken = 0
         while taken < READ_PER_TICK and not client.dead and not client.eof and not client.wbuf:
             want = min(1024 * 1024, READ_PER_TICK - taken)
-            if not client.authed:
+            if not client.authed and not client.closing:
                 # Before the handshake is done nothing may buffer past one hello line.
+                # (A closing client's input is thrown away, so it reads at full size.)
                 want = min(want, wire.HELLO_MAX + 1 - len(client.rbuf))
                 if want <= 0:
                     return
@@ -313,6 +317,8 @@ class MCPSocketServer:
             else:
                 client.dead = True  # HTTP, garbage, binary: not a Meshwire client, so no reply
             return
+        if self._refuse_bad_id(client, message):
+            return
         msg_id = message.get("id")
         params = message.get("params")
         params = params if isinstance(params, dict) else {}
@@ -320,6 +326,14 @@ class MCPSocketServer:
             self._handle_proof(client, message, params, msg_id)
         else:
             self._handle_first(client, message, params, msg_id)
+
+    def _refuse_bad_id(self, client: _Client, message: dict) -> bool:
+        """JSON-RPC ids are a string, an integer (not a bool) or null. Nothing else is echoed."""
+        value = message.get("id")
+        if value is None or type(value) is str or type(value) is int:
+            return False
+        self._fail(client, -32600, "Invalid request: id must be a string, an integer or null")
+        return True
 
     def _handle_first(self, client: _Client, message: dict, params: dict, msg_id):
         if message.get("method") != "hello":
@@ -341,6 +355,7 @@ class MCPSocketServer:
                 f"Protocol mismatch: this add-on speaks protocol {wire.PROTOCOL}, "
                 f"the client speaks {theirs!r}. Update {side}.",
                 msg_id,
+                {"protocol": wire.PROTOCOL},  # numbers only, so a client can act on it unread
             )
             return
         nonce = params.get("nonce")
@@ -358,12 +373,17 @@ class MCPSocketServer:
         client.nonce_c = nonce
         client.nonce_s = wire.new_nonce()
         client.stage = "proof"
+        # The address these bytes actually arrived at. It is inside the proof, so a relay
+        # that forwards the exchange from another address or port cannot keep it valid.
+        local = client.sock.getsockname()
+        seen = wire.endpoint(str(local[0]), int(local[1]))
         result = {
             "protocol": wire.PROTOCOL,
             "addon": self._addon_version(),
             "port": self.port,
             "nonce": client.nonce_s,
-            "proof": wire.proof(self._token, wire.ADDON_LABEL, nonce, client.nonce_s),
+            "seen": seen,
+            "proof": wire.proof(self._token, wire.ADDON_LABEL, nonce, client.nonce_s, seen),
         }
         self._queue(client, {"jsonrpc": "2.0", "result": result, "id": msg_id}, msg_id)
 
@@ -423,12 +443,14 @@ class MCPSocketServer:
         if not isinstance(message, dict):
             self._fail(client, wire.E_PARSE, "Parse error: request must be a JSON object")
             return
+        if self._refuse_bad_id(client, message):
+            return
         self._queue(client, self._handle_message(message), message.get("id"))
 
-    def _fail(self, client: _Client, code: int, text: str, msg_id=None):
+    def _fail(self, client: _Client, code: int, text: str, msg_id=None, data=None):
         """Queue an error reply, then close once it has been sent."""
         client.rbuf.clear()
-        self._queue(client, _error(code, text, msg_id), msg_id)
+        self._queue(client, _error(code, text, msg_id, data), msg_id)
         client.closing = True
         now = self._now()
         client.close_at = now + CLOSE_GRACE

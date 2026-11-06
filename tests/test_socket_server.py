@@ -147,7 +147,9 @@ def handshake(srv, sock, token=None, nonce=None):
     sock.sendall(hello_line(nc))
     result = read_line(srv, sock)["result"]
     assert result["protocol"] == 1, result
-    assert result["proof"] == WIRE.proof(token, WIRE.ADDON_LABEL, nc, result["nonce"])
+    assert result["proof"] == WIRE.proof(
+        token, WIRE.ADDON_LABEL, nc, result["nonce"], result["seen"]
+    )
     sock.sendall(proof_line(WIRE.proof(token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
     assert read_line(srv, sock)["result"] == {"ok": True}
     return result
@@ -633,7 +635,10 @@ def test_good_handshake_authenticates(server):
     assert result["protocol"] == 1 and result["port"] == server.port
     assert isinstance(result["addon"], str)
     assert only_client(server).authed is False  # not until the client proves itself
-    assert result["proof"] == WIRE.proof(server.token, WIRE.ADDON_LABEL, nc, result["nonce"])
+    assert result["proof"] == WIRE.proof(
+        server.token, WIRE.ADDON_LABEL, nc, result["nonce"], result["seen"]
+    )
+    assert result["seen"] == f"127.0.0.1:{server.port}"
     assert len(result["nonce"]) >= 16
     sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc), 8))
     reply = read_line(server, sock)
@@ -965,7 +970,7 @@ def test_wrong_proof_client_that_never_reads_leaves_by_the_deadline(server, mod)
     assert sock
 
 
-def test_deadline_applies_only_before_the_handshake_finishes(server, mod):
+def test_deadline_applies_only_before_hello(server, mod):
     """A 10 s handler, run after auth, costs the client nothing."""
     clock = with_clock(server)
     sock = connect(server)
@@ -1111,3 +1116,102 @@ def test_empty_server_token_never_authenticates(server, mod):
     sock = connect(server, auth=False)
     sock.sendall(hello_line())
     assert read_all(server, sock) == b""
+
+
+# --- the proof is tied to the address the bytes arrived at ------------------------
+
+
+def test_seen_is_the_sockets_own_local_address(server):
+    sock = connect(server, auth=False)
+    result = hello_only(server, sock)[1]
+    assert result["seen"] == WIRE.endpoint("127.0.0.1", server.port)
+
+
+def test_seen_is_inside_the_proof(server):
+    """A relay that rewrites ``seen`` breaks Pa, because Pa covers it."""
+    sock = connect(server, auth=False)
+    nc, result = hello_only(server, sock)
+    good = WIRE.proof(server.token, WIRE.ADDON_LABEL, nc, result["nonce"], result["seen"])
+    assert result["proof"] == good
+    forged = WIRE.proof(server.token, WIRE.ADDON_LABEL, nc, result["nonce"], "127.0.0.1:1")
+    assert forged != result["proof"]
+    assert WIRE.proof(server.token, WIRE.ADDON_LABEL, nc, result["nonce"]) != result["proof"]
+
+
+# --- ids are echoed only when they are safe to ---------------------------------
+
+
+@pytest.mark.parametrize("depth", [1, 5, 940, 945, 950])
+def test_nested_list_id_gets_an_error_with_null_id(server, mod, capsys, depth):
+    sock = connect(server, auth=False)
+    nested = "[" * depth + "]" * depth
+    sock.sendall(('{"jsonrpc":"2.0","method":"hello","id":' + nested + "}\n").encode())
+    code, _, msg_id = error_of(server, sock)
+    assert code == -32600 and msg_id is None
+    out = capsys.readouterr()
+    assert "Traceback" not in out.out + out.err
+
+
+@pytest.mark.parametrize("bad", ["1.5", "true", "false", "[]", '{"a": 1}', "[[1]]", "1e3"])
+def test_only_str_int_or_null_ids_are_accepted(server, bad):
+    sock = connect(server, auth=False)
+    sock.sendall(('{"jsonrpc":"2.0","method":"hello","id":' + bad + "}\n").encode())
+    code, _, msg_id = error_of(server, sock)
+    assert code == -32600 and msg_id is None
+
+
+def test_a_bad_id_after_auth_is_refused_too(server):
+    sock = connect(server)
+    sock.sendall(b'{"jsonrpc":"2.0","method":"ping","id":[[1]]}\n')
+    code, _, msg_id = error_of(server, sock)
+    assert code == -32600 and msg_id is None
+    assert server.handlers.calls == []
+
+
+@pytest.mark.parametrize("good", ['"abc"', "7", "null", "-3", "0"])
+def test_str_int_and_null_ids_still_work(server, good):
+    sock = connect(server)
+    sock.sendall(('{"jsonrpc":"2.0","method":"ping","id":' + good + "}\n").encode())
+    assert read_line(server, sock)["id"] == json.loads(good)
+
+
+def test_a_bad_id_in_the_proof_line_is_refused(server):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(b'{"jsonrpc":"2.0","method":"hello_proof","params":{"proof":"a"},"id":[1]}\n')
+    code, _, msg_id = error_of(server, sock)
+    assert code == -32600 and msg_id is None
+
+
+# --- a closing pre-auth client is read in normal chunks ---------------------------
+
+
+def test_a_closing_pre_auth_client_is_not_read_in_tiny_chunks(server, mod):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(proof_line("0" * 64))
+    tick(server, 3)  # the bad proof closes it
+    client = only_client(server)
+    assert client.closing and not client.authed
+    sizes = []
+    real = client.sock
+
+    class Spy:
+        def recv(self, n):
+            sizes.append(n)
+            return real.recv(n)
+
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+    client.sock = Spy()
+    sock.sendall(b"x" * (2 * MIB))
+    tick(server, 3)
+    assert sizes and max(sizes) > 64 * 1024
+
+
+def test_protocol_mismatch_carries_the_addons_protocol_as_data(server, mod):
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line(protocol=2))
+    data = read_all(server, sock)
+    assert json.loads(data.split(b"\n", 1)[0])["error"]["data"] == {"protocol": 1}
