@@ -86,9 +86,21 @@ def tick(srv, n=1):
         assert srv._tick() == 0.01
 
 
+_OPEN: list = []
+
+
+@pytest.fixture(autouse=True)
+def _close_peers():
+    """Close every peer socket a test opened, so -W error::ResourceWarning passes."""
+    yield
+    while _OPEN:
+        _OPEN.pop().close()
+
+
 def connect(srv):
     sock = socket.create_connection(("127.0.0.1", srv.port), timeout=5)
     sock.setblocking(False)
+    _OPEN.append(sock)
     return sock
 
 
@@ -223,23 +235,6 @@ def test_ninth_client_gets_error_then_close(server, mod):
     assert server.client_count == mod.MAX_CLIENTS
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [b"\xff\xfe not utf8\n", b"[1, 2, 3]\n", b"{this is not json\n"],
-    ids=["non_utf8", "non_object", "malformed"],
-)
-def test_bad_line_gets_parse_error_then_close(server, mod, payload):
-    sock = connect(server)
-    sock.sendall(payload)
-    reply = json.loads(read_all(server, sock).split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_PARSE
-    assert reply["id"] is None
-    # A fresh connection still works.
-    fresh = connect(server)
-    request(fresh, "ping")
-    assert read_line(server, fresh)["result"] == {"echo": "ping"}
-
-
 def test_non_utf8_line_gets_parse_error_then_close(server, mod):
     sock = connect(server)
     sock.sendall(b"\xff\xfe\n")
@@ -258,9 +253,39 @@ def test_malformed_json_gets_parse_error_then_close(server, mod):
     sock = connect(server)
     sock.sendall(b"{nope\n")
     data = read_all(server, sock)
-    assert json.loads(data)["error"]["code"] == mod.wire.E_PARSE
+    reply = json.loads(data)
+    assert reply["error"]["code"] == mod.wire.E_PARSE and reply["id"] is None
     sock.close()
     pump(server, until=lambda: server.client_count == 0)
+    fresh = connect(server)
+    request(fresh, "ping")
+    assert read_line(server, fresh)["result"] == {"echo": "ping"}
+
+
+def test_deeply_nested_json_gets_parse_error_without_a_traceback(server, mod, capsys):
+    sock = connect(server)
+    sock.sendall(b"[" * 200_000 + b"\n")
+    reply = json.loads(read_all(server, sock).split(b"\n", 1)[0])
+    assert reply["error"]["code"] == mod.wire.E_PARSE
+    out = capsys.readouterr()
+    assert "Error processing client" not in out.out and "Traceback" not in out.err
+
+
+def test_line_of_exactly_max_line_is_accepted_and_one_more_is_not(server, mod, monkeypatch):
+    monkeypatch.setattr(mod, "MAX_LINE", 200)
+    body = json.dumps({"jsonrpc": "2.0", "id": 3, "method": "ping", "pad": ""})
+    pad = "x" * (200 - len(body))
+    exact = json.dumps({"jsonrpc": "2.0", "id": 3, "method": "ping", "pad": pad}).encode()
+    assert len(exact) == 200
+    ok = connect(server)
+    ok.sendall(exact)  # the newline arrives in a later recv
+    tick(server, 3)
+    ok.sendall(b"\n")
+    assert read_line(server, ok)["id"] == 3
+    over = connect(server)
+    over.sendall(exact[:-1] + b"xx}\n")  # 201 bytes before the newline
+    reply = json.loads(read_all(server, over).split(b"\n", 1)[0])
+    assert reply["error"]["code"] == mod.wire.E_TOO_LARGE
 
 
 def test_handler_error_keeps_the_connection(server):
@@ -285,7 +310,7 @@ def test_reply_over_wbuf_cap_becomes_error_reply(server, mod, monkeypatch):
     assert read_line(server, sock)["result"] == {"echo": "ping"}
 
 
-def test_vanished_client_is_dropped_without_raising(server):
+def test_vanished_client_is_dropped_without_raising(server, capsys):
     server.handlers.size = 8 * MIB
     gone = connect(server)
     tick(server)
@@ -300,6 +325,9 @@ def test_vanished_client_is_dropped_without_raising(server):
     other = connect(server)
     request(other, "ping")
     assert read_line(server, other)["result"] == {"echo": "ping"}
+    out = capsys.readouterr()
+    assert "Error processing client" not in out.out and "tick error" not in out.out
+    assert "Traceback" not in out.err
 
 
 def test_stop_closes_everything(server):
@@ -338,16 +366,17 @@ def test_closing_client_that_never_reads_is_dropped_after_grace(server, mod):
     tick(server)
     (client,) = server.clients.values()
     client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
-    sock.sendall(b"{nope\n")  # error reply queued, then closing; the peer never reads
+    # A big request, then a half-close: the client is closing with megabytes undrained.
+    request(sock, "big")
+    sock.shutdown(socket.SHUT_WR)
     tick(server, 3)
-    assert client.closing
+    assert client.closing and len(client.wbuf) > MIB
     clock.t += mod.CLOSE_GRACE - 0.1
     tick(server)
     assert server.client_count == 1
     clock.t += 0.2
     tick(server)
     assert server.client_count == 0
-    sock.close()
 
 
 def test_stalled_write_buffer_is_dropped(server, mod):
@@ -403,3 +432,99 @@ def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatc
     assert extra.recv(100) == b""  # closed with no reply
     assert server.client_count == 3
     keeper.close()
+
+
+def test_half_closed_client_still_gets_its_reply(server):
+    sock = connect(server)
+    request(sock, "ping", req_id=4)
+    sock.sendall(b'{"id": 5, "method": "ping"')  # a trailing partial line is dropped
+    sock.shutdown(socket.SHUT_WR)
+    data = read_all(server, sock)
+    lines = data.split(b"\n")
+    assert [json.loads(x)["id"] for x in lines if x] == [4]
+    pump(server, until=lambda: server.client_count == 0)
+
+
+def test_half_closed_client_with_pipelined_requests_gets_every_reply(server):
+    sock = connect(server)
+    for i in range(1, 6):
+        request(sock, "ping", req_id=i)
+    sock.shutdown(socket.SHUT_WR)
+    data = read_all(server, sock)
+    assert [json.loads(x)["id"] for x in data.split(b"\n") if x] == [1, 2, 3, 4, 5]
+
+
+def test_never_reading_client_keeps_wbuf_within_the_cap(server, mod, monkeypatch):
+    monkeypatch.setattr(mod, "MAX_WBUF", 10_000)
+    sock = connect(server)
+    tick(server)
+    (client,) = server.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    sock.settimeout(5)
+    sock.setblocking(False)
+    biggest = 0
+    for _ in range(300):
+        try:
+            sock.send(b"{}\n" * 2000)
+        except BlockingIOError:
+            pass
+        tick(server)
+        biggest = max(biggest, len(client.wbuf))
+    assert 0 < biggest <= 10_000
+    assert client.dead is False or server.client_count == 0
+
+
+def test_trickle_reader_keeps_wbuf_within_the_cap(server, mod, monkeypatch):
+    monkeypatch.setattr(mod, "MAX_WBUF", 10_000)
+    sock = connect(server)
+    tick(server)
+    (client,) = server.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    biggest = 0
+    for _ in range(300):
+        try:
+            sock.send(b"{}\n" * 500)
+        except BlockingIOError:
+            pass
+        tick(server)
+        biggest = max(biggest, len(client.wbuf))
+        try:
+            sock.recv(100)  # a trickle
+        except BlockingIOError:
+            pass
+    assert 0 < biggest <= 10_000
+
+
+def test_oversized_reply_and_error_that_cannot_fit_hang_up(server, mod, monkeypatch):
+    monkeypatch.setattr(mod, "MAX_WBUF", 50)  # smaller than any error reply
+    server.handlers.size = 1000
+    sock = connect(server)
+    request(sock, "big")
+    assert read_all(server, sock) == b""
+    assert len(next(iter(server.clients.values()), mod._Client(None)).wbuf) <= 50
+
+
+def test_requests_pipelined_behind_a_large_reply_are_answered_in_order(server):
+    server.handlers.size = 3 * MIB
+    sock = connect(server)
+    tick(server)
+    (client,) = server.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    request(sock, "big", req_id=1)
+    for i in (2, 3, 4):
+        request(sock, "ping", req_id=i)
+    got = bytearray()
+    ids = []
+    for _ in range(100_000):
+        tick(server)
+        try:
+            got.extend(sock.recv(1 << 20))
+        except BlockingIOError:
+            pass
+        while b"\n" in got:
+            line, _, rest = bytes(got).partition(b"\n")
+            got = bytearray(rest)
+            ids.append(json.loads(line)["id"])
+        if len(ids) == 4:
+            break
+    assert ids == [1, 2, 3, 4]

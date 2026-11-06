@@ -37,6 +37,7 @@ class _Client:
         self.deadline = 0.0  # monotonic time by which auth must finish; 0 means none
         self.closing = False  # close once wbuf drains; read nothing more
         self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
+        self.eof = False  # the peer shut its sending side; read nothing more
         self.half_closed = False  # SHUT_WR sent after the last reply byte left
         self.last_progress = 0.0  # when wbuf last became non-empty or last moved bytes
         self.dead = False  # drop on this tick's cleanup pass
@@ -179,8 +180,7 @@ class MCPSocketServer:
         for client in list(self.clients.values()):
             try:
                 self._read(client)
-                if not client.closing:
-                    self._run_lines(client)
+                self._run_lines(client)
                 self._flush(client)
                 self._expire(client, now)
             except Exception as e:
@@ -193,9 +193,13 @@ class MCPSocketServer:
                 self._drop(sock, client)
 
     def _read(self, client: _Client):
-        """Take up to READ_PER_TICK bytes. A closing client's input is thrown away."""
+        """Take up to READ_PER_TICK bytes. A closing client's input is thrown away.
+
+        A client with unsent reply bytes is not read at all: TCP pushes back on a peer
+        that sends requests but does not take the answers.
+        """
         taken = 0
-        while taken < READ_PER_TICK and not client.dead:
+        while taken < READ_PER_TICK and not client.dead and not client.eof and not client.wbuf:
             try:
                 data = client.sock.recv(min(1024 * 1024, READ_PER_TICK - taken))
             except (BlockingIOError, InterruptedError):
@@ -204,18 +208,30 @@ class MCPSocketServer:
                 client.dead = True
                 return
             if not data:
-                client.dead = True  # peer closed; anything unsent has nowhere to go
+                # The peer will send no more but may still read (a half-close). Answer
+                # every complete line it sent, drop a trailing partial one, then close,
+                # all inside CLOSE_GRACE.
+                client.eof = True
+                if not client.closing:
+                    client.closing = True
+                    client.close_at = self._now() + CLOSE_GRACE
                 return
             taken += len(data)
             if not client.closing:
                 client.rbuf += data
 
     def _run_lines(self, client: _Client):
-        """Run each complete line in rbuf. A bad line queues an error and ends the client."""
-        while not client.closing:
+        """Run each complete line in rbuf, one at a time, while no reply is waiting to leave.
+
+        A bad line queues an error and ends the client. A closing client runs nothing,
+        except one whose peer half-closed, which still gets its complete lines answered.
+        """
+        while not client.dead and not client.wbuf and (not client.closing or client.eof):
             end = client.rbuf.find(b"\n")
             if end < 0:
-                if len(client.rbuf) > MAX_LINE:
+                if client.eof:
+                    client.rbuf.clear()  # a partial last line is dropped
+                elif len(client.rbuf) > MAX_LINE:
                     self._too_large(client)
                 return
             if end > MAX_LINE:
@@ -226,6 +242,7 @@ class MCPSocketServer:
             if not line.strip():
                 continue
             self._handle_line(client, line)
+            self._flush(client)
 
     def _too_large(self, client: _Client):
         self._fail(
@@ -240,7 +257,7 @@ class MCPSocketServer:
         except UnicodeDecodeError:
             self._fail(client, wire.E_PARSE, "Parse error: request is not valid UTF-8")
             return
-        except ValueError as e:
+        except (ValueError, RecursionError) as e:
             self._fail(client, wire.E_PARSE, f"Parse error: {e}")
             return
         if not isinstance(message, dict):
@@ -256,7 +273,7 @@ class MCPSocketServer:
         client.close_at = self._now() + CLOSE_GRACE
 
     def _queue(self, client: _Client, response: dict, msg_id):
-        """Encode a reply into wbuf. One that would overflow MAX_WBUF becomes an error reply."""
+        """Encode a reply into wbuf, never past MAX_WBUF: an overflowing reply becomes an error reply."""
         try:
             data = (json.dumps(response, default=self._json_default) + "\n").encode("utf-8")
         except Exception as e:
@@ -270,6 +287,12 @@ class MCPSocketServer:
             code = wire.E_REPLY_TOO_LARGE
         if data is None or len(client.wbuf) + len(data) > MAX_WBUF:
             data = (json.dumps(_error(code, problem, msg_id)) + "\n").encode("utf-8")
+            if len(client.wbuf) + len(data) > MAX_WBUF:
+                # Not even the error fits: the bound beats the reply. Hang up.
+                if not client.closing:
+                    client.closing = True
+                    client.close_at = self._now() + CLOSE_GRACE
+                return
         if not client.wbuf:
             client.last_progress = self._now()
         client.wbuf += data
@@ -298,7 +321,7 @@ class MCPSocketServer:
         if client.dead:
             return
         if client.closing:
-            if now >= client.close_at:
+            if now >= client.close_at or (client.eof and not client.wbuf):
                 client.dead = True
             elif not client.wbuf and not client.half_closed:
                 client.half_closed = True
