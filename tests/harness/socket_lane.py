@@ -1641,6 +1641,35 @@ def check_copy_token_matches_running_server(ctx: Ctx) -> str:
     return "Copy token yields the token the running server accepts, even with the file gone"
 
 
+def check_instance_file_published(ctx: Ctx) -> str:
+    """After Start, one instance file names the bound port, is mode 0600 and holds no token."""
+    folder = ctx.out_dir / "config" / "instances"  # the run's own folder (BlenderSession)
+    named = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            raise CheckFailed(f"{path.name} is not JSON") from None
+        if isinstance(data, dict) and data.get("port") == ctx.conn.port:
+            named.append(path)
+    if len(named) != 1:
+        raise CheckFailed(f"{len(named)} instance files name port {ctx.conn.port}, expected 1")
+    path = named[0]
+    if path.name != f"{ctx.conn.port}.json":
+        raise CheckFailed(f"the file for port {ctx.conn.port} is called {path.name}")
+    mode = path.stat().st_mode & 0o777
+    if mode != 0o600:
+        raise CheckFailed(f"instance file mode is {mode:04o}, expected 0600")
+    text = path.read_text(encoding="utf-8")
+    if (ctx.out_dir / "config" / "token").read_text(encoding="utf-8").strip() in text:
+        raise CheckFailed("the instance file contains the token")
+    data = json.loads(text)
+    keys = {"port", "host", "pid", "protocol", "addon", "blender", "blend", "started"}
+    if set(data) != keys:
+        raise CheckFailed(f"instance file fields are {sorted(data)}")
+    return f"{path.name} published, mode 0600, no token"
+
+
 BAKE_SIZE = 32
 BAKE_ARGS = {"resolution": BAKE_SIZE, "samples": 1, "margin": 2}
 
@@ -2208,6 +2237,7 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("old_client_told_to_update", check_old_client_told_to_update, CHECK_TIMEOUT),
     ("hello_timeout_closes", check_hello_timeout_closes, CHECK_TIMEOUT),
     ("copy_token_matches_running_server", check_copy_token_matches_running_server, CHECK_TIMEOUT),
+    ("instance_file_published", check_instance_file_published, CHECK_TIMEOUT),
     ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
     ("bake_leaves_material_clean", check_bake_leaves_material_clean, 150.0),
     ("bake_tricks_leave_material_clean", check_bake_tricks_leave_material_clean, 180.0),

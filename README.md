@@ -34,7 +34,7 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 ```
 ┌─────────────────┐    stdio     ┌─────────────────┐   TCP/JSON-RPC   ┌─────────────────┐
 │  MCP client     │ ◄──────────► │   MCP Server    │ ◄──────────────► │  Blender Addon  │
-│  (Claude / …)   │              │  (Python proc)  │   port 9876      │  (bpy.app.timers)│
+│  (Claude / …)   │              │  (Python proc)  │  9876 to 9885    │  (bpy.app.timers)│
 └─────────────────┘              └─────────────────┘                  └─────────────────┘
 ```
 
@@ -306,7 +306,7 @@ your machine that can reach the port can still use the other tools, and can run 
 allow Python.
 
 - Only start the server on a machine you trust, and stop it when you're done.
-- Keep the host set to localhost. Don't bind it to `0.0.0.0` or expose port 9876.
+- Keep the host set to localhost. Don't bind it to `0.0.0.0` or expose the add-on's ports (9876 to 9885).
 - Don't run untrusted prompts or scripts against a Blender session with work you care about.
 
 Authentication is planned for the next stable release
@@ -324,10 +324,26 @@ Authentication is planned for the next stable release
 meshwire [--host HOST] [--port PORT]
 
   --host HOST   Blender addon host (default: 127.0.0.1)
-  --port PORT   Blender addon port (default: 9876)
+  --port PORT   Blender addon port (default: find it, see below)
 ```
 
-The **Meshwire** tab in Blender's sidebar sets the socket port and starts or stops the server.
+Which Blender the server talks to is decided in this order:
+
+1. `--port`, if given.
+2. The `MESHWIRE_PORT` environment variable, if set.
+3. Discovery. Each running add-on publishes a small file in `instances/` inside the Meshwire config
+   folder (next to the token), and the server picks the most recently started Blender that answers.
+   It looks again at every connection, so a Blender that starts or restarts later is found, and it
+   logs the port, Blender version and `.blend` file it chose. Discovery runs only when `--host` is
+   a loopback address.
+4. Port 9876.
+
+An explicit port is never second-guessed by discovery. With several Blenders open and no port given,
+the newest one wins; pass `--port` to talk to another.
+
+In Blender, the **Meshwire** tab sets the socket port and starts or stops the server. Port 0 (the
+default) takes the first free port from 9876 to 9885, so a second Blender simply gets the next one.
+A port you set yourself is bound exactly or the start fails with a message saying why.
 
 ---
 

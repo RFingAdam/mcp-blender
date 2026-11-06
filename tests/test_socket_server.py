@@ -36,6 +36,68 @@ class StubHandlers:
         return {"echo": method}
 
 
+class Throttled:
+    """Stands in for an accepted socket: ``send`` takes at most ``limit`` bytes a call.
+
+    A limit of 0 means nothing fits, as with a peer that never reads. This does not lean
+    on the kernel's buffer sizes, which differ between Linux, macOS and Windows. Set
+    ``limit`` at any time.
+    """
+
+    def __init__(self, sock, limit):
+        self._sock = sock
+        self.limit = limit
+
+    def send(self, data):
+        if self.limit <= 0:
+            raise BlockingIOError
+        return self._sock.send(data[: self.limit])
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+
+class Budgeted:
+    """Stands in for an accepted socket with a byte budget the test refills.
+
+    ``send`` takes bytes until the budget is spent, then raises BlockingIOError, as a
+    socket whose peer has stopped reading does. How much the real kernel would buffer
+    cannot change what a test sees. The bytes taken go on to the real socket.
+    """
+
+    def __init__(self, sock, budget=0):
+        self._sock = sock
+        self.budget = budget
+
+    def send(self, data):
+        if self.budget <= 0:
+            raise BlockingIOError
+        sent = self._sock.send(data[: self.budget])
+        self.budget -= sent
+        return sent
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+
+def budget(client, amount=0):
+    client.sock = Budgeted(client.sock, amount)
+    return client.sock
+
+
+def throttle(client, limit):
+    client.sock = Throttled(client.sock, limit)
+    return client.sock
+
+
+def send_some(sock, data):
+    """Send what the kernel takes right now on a non-blocking socket. Returns the count."""
+    try:
+        return sock.send(data)
+    except BlockingIOError:
+        return 0
+
+
 class CountingSock:
     """Wraps an accepted socket and records how each ``send`` went."""
 
@@ -81,11 +143,17 @@ def mod(monkeypatch):
     return module
 
 
+def free_port():
+    """A port the OS just handed out, so no test touches the real range 9876 to 9885."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
 @pytest.fixture
 def server(mod):
-    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
     assert srv.start()
-    srv.port = srv.socket.getsockname()[1]
     yield srv
     srv.stop()
 
@@ -227,9 +295,9 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 64 * 1024)
     tick(server)  # accept
     (client,) = server.clients.values()
-    # A small send buffer forces ``send`` to take a slice of the reply at a time.
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
-    counter = CountingSock(client.sock)
+    # The socket takes 128 KiB a tick, whatever the platform's buffers would hold.
+    gate = Budgeted(client.sock, 128 * 1024)
+    counter = CountingSock(gate)
     client.sock = counter
     request(sock, "big")
     tick(server)
@@ -238,6 +306,7 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     got = bytearray()
     ticks = 0
     while b"\n" not in got:
+        gate.budget = 128 * 1024
         tick(server)
         ticks += 1
         assert ticks < 200_000, "reply never completed"
@@ -351,11 +420,12 @@ def test_vanished_client_is_dropped_without_raising(server, capsys):
     gone = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    gate = budget(client, 4096)
     request(gone, "big")
     tick(server, 3)
     assert len(client.wbuf) > 0
     gone.close()
+    gate.budget = 1 << 40  # the socket takes bytes again, so the dead peer shows up as an error
     pump(server, until=lambda: server.client_count == 0)
     assert not client.wbuf
     other = connect(server)
@@ -376,9 +446,10 @@ def test_stop_closes_everything(server):
     assert sock.recv(10) == b""
 
 
-def test_start_returns_false_when_port_is_taken(mod, server):
+def test_start_raises_when_port_is_taken(mod, server):
     other = mod.MCPSocketServer("127.0.0.1", server.port)
-    assert other.start() is False
+    with pytest.raises(mod.BindError):
+        other.start()
 
 
 class Clock:
@@ -395,25 +466,12 @@ def with_clock(srv):
     return clock
 
 
-class BlockedSock:
-    """An accepted socket whose send never takes a byte."""
-
-    def __init__(self, sock):
-        self._sock = sock
-
-    def send(self, data):
-        raise BlockingIOError
-
-    def __getattr__(self, name):
-        return getattr(self._sock, name)
-
-
 def test_closing_client_that_never_reads_is_dropped_after_grace(server, mod):
     clock = with_clock(server)
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock = BlockedSock(client.sock)
+    throttle(client, 0)
     sock.sendall(b"{nope\n")  # an error close whose reply can never leave
     tick(server, 3)
     assert client.closing and len(client.wbuf) > 0
@@ -431,7 +489,7 @@ def test_stalled_write_buffer_is_dropped(server, mod):
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    throttle(client, 0)
     request(sock, "big")
     tick(server, 3)
     assert client.wbuf and not client.closing
@@ -469,7 +527,7 @@ def test_never_reading_client_keeps_wbuf_within_the_cap(server, mod, monkeypatch
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    throttle(client, 0)
     sock.settimeout(5)
     sock.setblocking(False)
     biggest = 0
@@ -489,13 +547,14 @@ def test_trickle_reader_keeps_wbuf_within_the_cap(server, mod, monkeypatch):
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    gate = budget(client)  # the peer takes a trickle: 100 bytes a tick
     biggest = 0
     for _ in range(300):
         try:
             sock.send(b"{}\n" * 500)
         except BlockingIOError:
             pass
+        gate.budget = 100
         tick(server)
         biggest = max(biggest, len(client.wbuf))
         try:
@@ -519,7 +578,7 @@ def test_requests_pipelined_behind_a_large_reply_are_answered_in_order(server):
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    throttle(client, 64 * 1024)
     request(sock, "big", req_id=1)
     for i in (2, 3, 4):
         request(sock, "ping", req_id=i)
@@ -550,10 +609,11 @@ def slow_handler(srv, clock, seconds):
     srv.handlers.handle = slow
 
 
-def small_sndbuf(srv):
+def small_sndbuf(srv, limit=64 * 1024):
+    """Accept the client and let each send take at most ``limit`` bytes (0: none)."""
     tick(srv)
     (client,) = srv.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    throttle(client, limit)
     return client
 
 
@@ -584,7 +644,7 @@ def test_half_closed_client_that_never_reads_is_closed_after_write_stall(server,
     clock = with_clock(server)
     server.handlers.size = 8 * MIB
     sock = connect(server)
-    small_sndbuf(server)
+    small_sndbuf(server, 0)
     request(sock, "big")
     sock.shutdown(socket.SHUT_WR)
     tick(server, 3)
@@ -892,7 +952,7 @@ def test_a_pre_auth_client_is_read_only_up_to_the_hello_limit(server, mod):
             return getattr(real, name)
 
     client.sock = Spy()
-    sock.sendall(b"x" * (2 * MIB))
+    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
     tick(server, 3)
     assert sizes and max(sizes) <= mod.wire.HELLO_MAX + 1
     assert sum(sizes) <= mod.wire.HELLO_MAX + 1 + len(sizes)  # at most one short read per tick
@@ -1072,6 +1132,7 @@ def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatc
     for _ in range(2):  # these two get a reply and fill the closing allowance
         sock = connect(server, auth=False)
         nc, result = hello_only(server, sock)
+        throttle(list(server.clients.values())[-1], 0)  # its refusal stays unsent: closing
         sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
         tick(server, 3)
         refused.append(sock)
@@ -1091,7 +1152,7 @@ def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatc
 
 def test_server_refuses_to_serve_with_a_short_token(mod, monkeypatch):
     monkeypatch.setattr(mod.wire, "ensure_token", lambda: "short")
-    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
     with pytest.raises(mod.TokenError, match="too short"):
         srv.start()
     assert not srv.is_running and srv.socket is None
@@ -1102,7 +1163,7 @@ def test_token_file_failure_has_its_own_error(mod, monkeypatch, tmp_path):
         raise OSError("permission denied")
 
     monkeypatch.setattr(mod.wire, "ensure_token", boom)
-    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
     with pytest.raises(mod.TokenError) as info:
         srv.start()
     text = str(info.value)
@@ -1205,7 +1266,7 @@ def test_a_closing_pre_auth_client_is_not_read_in_tiny_chunks(server, mod):
             return getattr(real, name)
 
     client.sock = Spy()
-    sock.sendall(b"x" * (2 * MIB))
+    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
     tick(server, 3)
     assert sizes and max(sizes) > 64 * 1024
 

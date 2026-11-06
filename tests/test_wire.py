@@ -16,7 +16,20 @@ ADDON_WIRE = ROOT / "addon" / "blender_mcp_addon" / "wire.py"
 SERVER_WIRE = ROOT / "src" / "mcp_blender" / "wire.py"
 
 # wire.py is loaded by the add-on inside Blender and by the server outside it.
-ALLOWED_IMPORTS = {"os", "sys", "stat", "secrets", "pathlib", "hmac", "hashlib", "time"}
+ALLOWED_IMPORTS = {
+    "hashlib",
+    "hmac",
+    "json",
+    "logging",
+    "os",
+    "pathlib",
+    "re",
+    "secrets",
+    "socket",
+    "stat",
+    "sys",
+    "time",
+}
 
 
 def load_wire() -> dict:
@@ -451,6 +464,7 @@ def test_read_token_without_a_file_or_dir_is_none(wire):
     assert wire.read_token() is None
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 def test_read_and_ensure_use_one_wording(wire, monkeypatch):
     wire.ensure_token()
     os.chmod(wire.config_dir(), 0o777)

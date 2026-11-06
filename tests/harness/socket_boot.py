@@ -63,7 +63,7 @@ def main(argv):
 
     try:
         import blender_mcp_addon
-        from blender_mcp_addon.socket_server import MCPSocketServer, TokenError
+        from blender_mcp_addon.socket_server import BindError, MCPSocketServer, TokenError
 
         # Register first, as Blender does when the addon is enabled, so a break in
         # class or property registration turns the lane red.
@@ -73,13 +73,13 @@ def main(argv):
         server = MCPSocketServer(host="127.0.0.1", port=args.port)
         _install_harness_handlers(server, args.scene)
         try:
-            started = server.start()
+            server.start()
         except TokenError as exc:
             # Not a taken port: exit with a different code so the lane does not retry.
             print(str(exc), flush=True)
             os._exit(3)
-        if not started:
-            print(f"server failed to start on port {args.port}", flush=True)
+        except BindError as exc:
+            print(f"server failed to start on port {args.port}: {exc}", flush=True)
             os._exit(BIND_FAILED_EXIT)
         # The panel's operators find the running server here, as they do in a real session.
         blender_mcp_addon._server = server

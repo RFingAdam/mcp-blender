@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 
 from mcp.server import (
@@ -20,7 +21,7 @@ from mcp.types import (
     Tool,
 )
 
-from . import __version__
+from . import __version__, wire
 from .blender_client import BlenderClient
 
 # Configure logging
@@ -32,7 +33,27 @@ _client: BlenderClient | None = None
 _client_lock = asyncio.Lock()
 
 
-async def get_client(host: str = "127.0.0.1", port: int = 9876) -> BlenderClient:
+def configured_port(flag: int | None) -> int | None:
+    """The port the user fixed: ``--port``, else MESHWIRE_PORT, else None (discover).
+
+    Raises ValueError, naming MESHWIRE_PORT, when that variable is set to something
+    that is not a port from 1024 to 65535.
+    """
+    if flag is not None:
+        if not wire.PORT_MIN <= flag <= wire.PORT_MAX:
+            raise ValueError(f"--port must be from {wire.PORT_MIN} to {wire.PORT_MAX}, not {flag}")
+        return flag
+    text = os.environ.get("MESHWIRE_PORT", "").strip()
+    if not text:
+        return None
+    if not text.isascii() or not text.isdigit() or not wire.PORT_MIN <= int(text) <= wire.PORT_MAX:
+        raise ValueError(
+            f"MESHWIRE_PORT must be a port from {wire.PORT_MIN} to {wire.PORT_MAX}, not {text!r}"
+        )
+    return int(text)
+
+
+async def get_client(host: str = "127.0.0.1", port: int | None = None) -> BlenderClient:
     """Get or create the Blender client connection."""
     global _client
     async with _client_lock:
@@ -6394,7 +6415,7 @@ def redact(arguments):
     return arguments
 
 
-def create_server(host: str, port: int) -> Server:
+def create_server(host: str, port: int | None) -> Server:
     """Create and configure the MCP server."""
     server = Server("meshwire")
 
@@ -6462,12 +6483,13 @@ def create_server(host: str, port: int) -> Server:
     return server
 
 
-async def run_server(host: str, port: int):
+async def run_server(host: str, port: int | None):
     """Run the MCP server with stdio transport."""
     server = create_server(host, port)
 
     async with stdio_server() as (read_stream, write_stream):
-        logger.info(f"MCP Blender server starting (Blender connection: {host}:{port})")
+        where = port if port is not None else "found at each connect"
+        logger.info(f"MCP Blender server starting (Blender connection: {host}, port {where})")
         await server.run(
             read_stream,
             write_stream,
@@ -6487,12 +6509,19 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=9876,
-        help="Blender addon port (default: 9876)",
+        default=None,
+        help=(
+            "Blender addon port. Without it, MESHWIRE_PORT is used, then the most recently "
+            "started running Blender is found for you (loopback hosts only), then 9876"
+        ),
     )
     args = parser.parse_args()
+    try:
+        port = configured_port(args.port)
+    except ValueError as e:
+        parser.error(str(e))
 
-    asyncio.run(run_server(args.host, args.port))
+    asyncio.run(run_server(args.host, port))
 
 
 if __name__ == "__main__":

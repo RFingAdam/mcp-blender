@@ -8,14 +8,27 @@ nothing from Blender or from either package.
 
 import hashlib
 import hmac
+import json
+import logging
 import os
+import re
 import secrets
+import socket
 import stat
 import sys
 import time
 from pathlib import Path
 
+logger = logging.getLogger("meshwire.wire")
+
 PROTOCOL = 1
+PORT_FIRST = 9876  # the add-on scans PORT_FIRST to PORT_LAST for a free port
+PORT_LAST = 9885
+PORT_MIN = 1024  # lowest port either side accepts when one is named
+PORT_MAX = 65535
+PROBE_SECONDS = 0.2  # how long live_instances() waits for a TCP connect
+INSTANCE_MAX = 65536  # most bytes read from one instance file
+INSTANCE_FIELDS = ("port", "host", "pid", "protocol", "addon", "blender", "blend", "started")
 HELLO_MAX = 4096  # most bytes the first line may hold
 HELLO_SECONDS = 2.0  # time from accept to a finished handshake (hello, then hello_proof)
 MIN_TOKEN = 32  # shortest token ensure_token() will keep
@@ -247,3 +260,214 @@ def hello_proof_request(proof_hex: str, msg_id) -> dict:
         "params": {"proof": proof_hex},
         "id": msg_id,
     }
+
+
+_INSTANCE_NAME = re.compile(r"[0-9]{1,5}\.json")
+_TEMP_NAME = re.compile(r"\.[0-9]+\.[0-9]+\.[0-9a-f]{8}\.tmp")
+TEMP_MAX_AGE = 3600.0  # seconds before clean_stale_temps() treats a leftover temp file as dead
+WILDCARD = {"0.0.0.0", "::", ""}
+
+
+def _make_private_dir(directory: Path) -> None:
+    """Create ``directory`` at 0700 if it is missing. The mode is not left to the umask."""
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        return
+    if sys.platform != "win32":
+        os.chmod(directory, 0o700)  # mkdir's mode is masked by the umask; 0700 only loses bits
+
+
+def write_instance(port: int, info: dict) -> Path:
+    """Publish ``instances/<port>.json`` for this Blender and return its path.
+
+    ``info`` supplies addon, blender, blend and host (the address the add-on bound).
+    pid, protocol and started are filled in unless given. There is no token in the file.
+    It is written whole to a private temp file in the same folder and renamed into
+    place, so a reader never sees half of it.
+    The Meshwire folder and the instances folder are created at 0700 when missing and
+    held to the same checks as the token's folder.
+    """
+    base, directory = config_dir(), instances_dir()
+    base.parent.mkdir(parents=True, exist_ok=True)
+    _make_private_dir(base)
+    _make_private_dir(directory)
+    _check_dir(base)
+    _check_dir(directory)
+    record = {
+        "port": port,
+        "host": "127.0.0.1",
+        "pid": os.getpid(),
+        "protocol": PROTOCOL,
+        "addon": "unknown",
+        "blender": "unknown",
+        "blend": "",
+        "started": time.time(),
+    }
+    record.update({k: v for k, v in info.items() if k in INSTANCE_FIELDS and k != "port"})
+    path = directory / f"{port}.json"
+    tmp = directory / f".{port}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(tmp, flags, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    return path
+
+
+def remove_instance(port: int) -> None:
+    """Delete this port's instance file if it is there and is a plain file."""
+    path = instances_dir() / f"{port}.json"
+    try:
+        if stat.S_ISREG(os.lstat(path).st_mode):
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+def clean_stale_temps() -> None:
+    """Delete temp files an interrupted write_instance left: plain files, over an hour old."""
+    try:
+        entries = list(os.scandir(instances_dir()))
+    except OSError:
+        return
+    cutoff = time.time() - TEMP_MAX_AGE
+    for entry in entries:
+        try:
+            if not _TEMP_NAME.fullmatch(entry.name):
+                continue
+            info = os.lstat(entry.path)
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff:
+                os.unlink(entry.path)
+        except OSError:
+            pass
+
+
+def _read_instance(path: Path) -> tuple[dict, tuple[int, int]] | None:
+    """The record in ``path`` and its (inode, mtime_ns), or None when it is not well formed."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            raw = handle.read(INSTANCE_MAX + 1)
+    finally:
+        os.close(fd)
+    if len(raw) > INSTANCE_MAX:
+        return None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(data, dict) or any(k not in data for k in INSTANCE_FIELDS):
+        return None
+    port, started = data["port"], data["started"]
+    if type(port) is not int or not PORT_MIN <= port <= PORT_MAX:
+        return None
+    if type(started) not in (int, float) or type(data["host"]) is not str:
+        return None
+    return {k: data[k] for k in INSTANCE_FIELDS}, (opened.st_ino, opened.st_mtime_ns)
+
+
+def _probe(host: str, port: int, timeout: float) -> str:
+    """Try a TCP connect: "live", "refused" (nothing listens) or "unknown" (anything else).
+
+    A timeout is "unknown", not "refused": a busy Blender with a full backlog times out,
+    and Windows takes longer than the timeout to refuse a loopback connect.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return "live"
+    except ConnectionRefusedError:
+        return "refused"
+    except OSError:
+        return "unknown"
+
+
+def _probe_host(host: str) -> str | None:
+    """Where to probe an instance bound to ``host``, or None if this machine cannot reach it."""
+    if host == "::" or host == "::1":
+        return "::1"
+    if host in WILDCARD or host.lower() == "localhost":
+        return "127.0.0.1"
+    if host.startswith("127."):
+        return host
+    return None
+
+
+def _delete_if_unchanged(path: str, ident: tuple[int, int]) -> None:
+    """Unlink a stale instance file unless it was replaced since it was read."""
+    try:
+        now = os.lstat(path)
+        if stat.S_ISREG(now.st_mode) and (now.st_ino, now.st_mtime_ns) == ident:
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+def live_instances() -> list[dict]:
+    """The Blenders that are running now, newest first by ``started``.
+
+    A file counts only if it is a plain file called ``<number>.json`` with every field,
+    a port in range that matches its name, and an address this machine can reach
+    (loopback or a wildcard; others are left alone, neither used nor deleted). The port
+    is probed at the recorded address. "live" chooses the instance. "refused" means nothing
+    listens: the file is stale and is deleted, if it is still the file that was read.
+    "unknown" (a timeout, say) keeps the file and skips the instance this time.
+    Symlinks are never followed. On POSIX the Meshwire folder and the instances folder
+    must be ours and closed to writes by others, as the token's folder must be; otherwise
+    nothing is trusted and the result is empty.
+    """
+    directory = instances_dir()
+    try:
+        _check_dir(config_dir())
+        _check_dir(directory)
+        entries = list(os.scandir(directory))
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        logger.warning("Ignoring the Meshwire instances in %s: %s", directory, e)
+        return []
+    found = []
+    for entry in entries:
+        if not _INSTANCE_NAME.fullmatch(entry.name):
+            continue
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        read = _read_instance(Path(entry.path))
+        if read is None or entry.name != f"{read[0]['port']}.json":
+            continue
+        record, ident = read
+        target = _probe_host(record["host"])
+        if target is None:
+            continue
+        answer = _probe(target, record["port"], PROBE_SECONDS)
+        if answer == "live":
+            found.append(record)
+        elif answer == "refused":
+            _delete_if_unchanged(entry.path, ident)
+        else:
+            logger.info(
+                "Port %s did not answer within %.1f s; keeping %s and not using it this time",
+                record["port"],
+                PROBE_SECONDS,
+                entry.name,
+            )
+    found.sort(key=lambda r: (-r["started"], r["port"]))
+    return found
