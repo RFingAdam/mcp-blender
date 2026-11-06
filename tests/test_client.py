@@ -294,3 +294,29 @@ async def test_reconnect_during_disconnect_is_not_wiped_out(mock_server):
     assert client.connected
     assert await client.ping() is True
     await client.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_send_command_opens_one_connection(mock_server):
+    accepted = []
+    original = mock_server._handle_client
+
+    async def counting(reader, writer):
+        accepted.append(1)
+        await original(reader, writer)
+
+    mock_server._server.close()
+    await mock_server._server.wait_closed()
+    mock_server._server = await asyncio.start_server(counting, mock_server.host, 0)
+    mock_server.port = mock_server._server.sockets[0].getsockname()[1]
+
+    client = BlenderClient(mock_server.host, mock_server.port)
+    try:
+        first, second = await asyncio.gather(
+            client.send_command("ping", timeout=5.0),
+            client.send_command("ping", timeout=5.0),
+        )
+    finally:
+        await client.disconnect()
+    assert first["pong"] and second["pong"]
+    assert len(accepted) == 1

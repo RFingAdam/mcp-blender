@@ -38,6 +38,7 @@ class BlenderClient:
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
+        self._connect_lock = asyncio.Lock()
         self._connected = False
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._read_task: asyncio.Task | None = None
@@ -60,6 +61,13 @@ class BlenderClient:
         if self._connected:
             return
 
+        # Concurrent callers queue here; the ones after the first find it connected.
+        async with self._connect_lock:
+            if self._connected:
+                return
+            await self._open(timeout)
+
+    async def _open(self, timeout: float) -> None:
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port),
