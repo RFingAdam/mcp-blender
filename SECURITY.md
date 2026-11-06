@@ -72,6 +72,17 @@ against these:
   Python in Blender until Blender closes.
 - **A compromised MCP client or server.** Both hold the token.
 
+## Rotating the token
+
+Rotate the token if you copied it somewhere you no longer trust, or if you think another user got it.
+
+1. Stop the server in the Meshwire tab.
+2. Delete the token file. On Linux it is `${XDG_CONFIG_HOME:-~/.config}/meshwire/token`, on macOS
+   `~/Library/Application Support/meshwire/token`, and on Windows `%APPDATA%\meshwire\token`. If
+   `MESHWIRE_CONFIG_DIR` is set, it is `token` inside that folder.
+3. Start the server. It writes a new token.
+4. Restart the MCP clients, and update `MESHWIRE_TOKEN` wherever you set it (use **Copy token** again).
+
 ## Remote use is plaintext
 
 The handshake is a mutual HMAC-SHA256 challenge-response over fresh nonces. The token never crosses
@@ -86,3 +97,8 @@ add-on on 127.0.0.1 and reach it through an SSH tunnel (for example
 (use **Copy token** in the Meshwire tab). If the server refuses the connection because the add-on
 sees a different address than the tunnel's local end, its message names the value to put in
 `MESHWIRE_ADDON_ADDRESS`.
+
+`MESHWIRE_ADDON_ADDRESS` turns off the relay check: the server then compares the add-on's address with
+that value instead of the address it dialled. Set it only for a tunnel or port forward you control. A
+tunnel whose local and remote ports are equal (`ssh -L 9876:127.0.0.1:9876`) needs no override and keeps
+the check on.

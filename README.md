@@ -308,7 +308,8 @@ The add-on's socket needs a token. On first start the add-on makes one in the Me
 machine there is nothing to set up. A connection must open with a `hello` within 2 seconds and prove it
 holds the token by HMAC-SHA256 over fresh nonces. The token itself never crosses the socket. Anything
 else is closed. For a server on another machine, set `MESHWIRE_TOKEN` there and use **Copy token** in the
-Meshwire tab.
+Meshwire tab. To revoke a token, see "Rotating the token" in
+[SECURITY.md](https://github.com/RFingAdam/meshwire/blob/main/SECURITY.md#rotating-the-token).
 
 `blender_execute_script` runs arbitrary Python inside Blender, so it refuses every call until you click
 **Allow Python** in the **Meshwire** sidebar tab. Only that button turns it on, and nothing a client sends
@@ -326,7 +327,7 @@ and `execute_script` ran any Python it was sent. Upgrade, and see [SECURITY.md](
 for what was confirmed and how to report a problem.
 
 `blender_ai_configure_backend` accepts only `enabled`, `api_key`, `host` (an http or https URL),
-`timeout` and `device`. Paths and endpoints (ComfyUI workflow, model paths, base URLs) are set in
+`timeout`, `device` and `model` (an Ollama model name). Paths and endpoints (ComfyUI workflow, model paths, base URLs) are set in
 **Preferences > Add-ons > Meshwire**.
 
 ---
