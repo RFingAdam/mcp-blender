@@ -1664,7 +1664,7 @@ def check_instance_file_published(ctx: Ctx) -> str:
     if (ctx.out_dir / "config" / "token").read_text(encoding="utf-8").strip() in text:
         raise CheckFailed("the instance file contains the token")
     data = json.loads(text)
-    keys = {"port", "pid", "protocol", "addon", "blender", "blend", "started"}
+    keys = {"port", "host", "pid", "protocol", "addon", "blender", "blend", "started"}
     if set(data) != keys:
         raise CheckFailed(f"instance file fields are {sorted(data)}")
     return f"{path.name} published, mode 0600, no token"
