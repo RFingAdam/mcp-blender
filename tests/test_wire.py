@@ -1,9 +1,12 @@
 """The wire constants live in two files that must never drift apart."""
 
 import ast
+import hashlib
+import hmac
 import os
 import stat
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -13,7 +16,7 @@ ADDON_WIRE = ROOT / "addon" / "blender_mcp_addon" / "wire.py"
 SERVER_WIRE = ROOT / "src" / "mcp_blender" / "wire.py"
 
 # wire.py is loaded by the add-on inside Blender and by the server outside it.
-ALLOWED_IMPORTS = {"os", "sys", "stat", "secrets", "pathlib"}
+ALLOWED_IMPORTS = {"os", "sys", "stat", "secrets", "pathlib", "hmac", "hashlib"}
 
 
 def load_wire() -> dict:
@@ -120,10 +123,110 @@ def test_config_dir_per_platform(wire, monkeypatch, tmp_path):
 
 
 def test_hello_request_shape(wire):
-    request = wire.hello_request("T", 7, client="meshwire 1.2.3")
+    request = wire.hello_request("N" * 20, 7, client="meshwire 1.2.3")
     assert request == {
         "jsonrpc": "2.0",
         "method": "hello",
-        "params": {"token": "T", "protocol": 1, "client": "meshwire 1.2.3"},
+        "params": {"protocol": 1, "client": "meshwire 1.2.3", "nonce": "N" * 20},
         "id": 7,
     }
+    assert "token" not in request["params"]
+
+
+def test_hello_proof_request_shape(wire):
+    assert wire.hello_proof_request("ab", 9) == {
+        "jsonrpc": "2.0",
+        "method": "hello_proof",
+        "params": {"proof": "ab"},
+        "id": 9,
+    }
+
+
+def test_proof_matches_the_stated_hmac(wire):
+    assert wire.ADDON_LABEL == "meshwire-addon" and wire.CLIENT_LABEL == "meshwire-client"
+    expected = hmac.new(b"tok", b"meshwire-addon\nA\nB", hashlib.sha256).hexdigest()
+    assert wire.proof("tok", wire.ADDON_LABEL, "A", "B") == expected
+    assert len(expected) == 64
+    # The two directions differ, so a proof cannot be replayed back at its sender.
+    assert wire.proof("tok", wire.CLIENT_LABEL, "B", "A") != expected
+
+
+def test_new_nonce_is_urlsafe_and_fresh(wire):
+    a, b = wire.new_nonce(), wire.new_nonce()
+    assert a != b and 16 <= len(a) <= 128
+
+
+# --- ensure_token hardening ----------------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_empty_loose_token_file_ends_0600_with_a_good_token(wire):
+    path = wire.token_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("")
+    os.chmod(path, 0o644)
+    token = wire.ensure_token()
+    assert len(token) >= 32
+    assert path.read_text().strip() == token
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_short_token_file_is_replaced(wire):
+    path = wire.token_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("short\n")
+    token = wire.ensure_token()
+    assert len(token) >= 32 and path.read_text().strip() == token
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_symlink_at_the_token_path_is_refused(wire, tmp_path):
+    target = tmp_path / "elsewhere"
+    target.write_text("")
+    path = wire.token_path()
+    path.parent.mkdir(parents=True)
+    path.symlink_to(target)
+    with pytest.raises(OSError) as info:
+        wire.ensure_token()
+    assert str(path) in str(info.value)
+    assert target.read_text() == ""  # nothing was written through the link
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_dangling_symlink_is_refused(wire, tmp_path):
+    path = wire.token_path()
+    path.parent.mkdir(parents=True)
+    path.symlink_to(tmp_path / "missing")
+    with pytest.raises(OSError, match="symlink"):
+        wire.ensure_token()
+    assert not (tmp_path / "missing").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_config_dir_is_created_0700(wire):
+    wire.ensure_token()
+    assert stat.S_IMODE(os.stat(wire.config_dir()).st_mode) == 0o700
+
+
+def test_concurrent_first_starts_agree_with_the_file(wire):
+    for _ in range(20):
+        path = wire.token_path()
+        if path.exists():
+            path.unlink()
+        barrier = threading.Barrier(8)
+        got: list = []
+
+        def start():
+            barrier.wait()
+            got.append(wire.ensure_token())
+
+        threads = [threading.Thread(target=start) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(set(got)) == 1, "two first starts returned different tokens"
+        assert path.read_text().strip() == got[0]
+        assert not list(path.parent.glob(".token.*")), "temp files left behind"

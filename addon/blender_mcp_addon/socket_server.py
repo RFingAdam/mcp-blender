@@ -8,6 +8,7 @@ take. Nothing here ever waits on a peer.
 
 import hmac
 import json
+import re
 import socket
 import sys
 import time
@@ -20,12 +21,21 @@ from .handlers import CommandHandlers
 
 MAX_LINE = 32 * 1024 * 1024  # largest request line accepted
 MAX_WBUF = 256 * 1024 * 1024  # most unsent reply bytes held for one client
-MAX_CLIENTS = 8
+MAX_CLIENTS = 8  # authenticated clients, closing ones included
+MAX_PENDING = 16  # sockets that have not finished the handshake; the oldest is dropped past this
 READ_PER_TICK = 4 * 1024 * 1024  # most bytes read from one client per tick
 SEND_CHUNK = 1024 * 1024
 MAX_CLOSING = 16  # clients already told to go; past this a refusal closes with no reply
 CLOSE_GRACE = 2.0  # seconds a closing client has to read its last reply, drained or not
 WRITE_STALL = 30.0  # seconds a client may leave unsent reply bytes without taking any
+
+
+NONCE_RE = re.compile(r"[A-Za-z0-9_-]{16,128}")
+PROOF_RE = re.compile(r"[0-9a-f]{64}")
+
+
+class TokenError(RuntimeError):
+    """The token file could not be read or created, or holds an unusable token."""
 
 
 class _Client:
@@ -35,8 +45,11 @@ class _Client:
         self.sock = sock
         self.rbuf = bytearray()  # bytes received, not yet a complete line
         self.wbuf = bytearray()  # reply bytes not yet sent
-        self.authed = False  # set by a good hello; until then only a hello is read
-        self.deadline = 0.0  # monotonic time by which hello must succeed; unused once authed
+        self.authed = False  # set by a good hello_proof; until then only the handshake is read
+        self.stage = "hello"  # "hello", then "proof", then authed
+        self.nonce_c = ""  # the client's nonce, kept for its proof
+        self.nonce_s = ""  # this add-on's nonce for the connection
+        self.deadline = 0.0  # monotonic time by which the handshake must finish; unused once authed
         self.closing = False  # close once wbuf drains; read nothing more
         self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
         self.eof = False  # the peer shut its sending side; read nothing more
@@ -66,7 +79,12 @@ class MCPSocketServer:
         self.handlers = CommandHandlers()
         self._timer_registered = False
         self._now = time.monotonic  # one clock for every timer; tests replace it
-        self._token = ""  # the token a hello must carry; set by start()
+        self._token = ""  # the secret both sides prove they hold; set by start()
+
+    @property
+    def token(self) -> str:
+        """The token this server accepts. Never log it."""
+        return self._token
 
     @property
     def client_count(self) -> int:
@@ -78,8 +96,8 @@ class MCPSocketServer:
         if self.is_running:
             return False
 
+        self._token = self._load_token()
         try:
-            self._token = wire.ensure_token()
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.setblocking(False)
@@ -101,6 +119,21 @@ class MCPSocketServer:
                 self.socket.close()
                 self.socket = None
             return False
+
+    @staticmethod
+    def _load_token() -> str:
+        try:
+            token = wire.ensure_token()
+        except Exception as e:
+            raise TokenError(
+                f"Could not read or create the Meshwire token at {wire.token_path()}: {e}"
+            ) from e
+        if len(token) < wire.MIN_TOKEN:
+            raise TokenError(
+                f"The Meshwire token at {wire.token_path()} is too short to use "
+                f"(under {wire.MIN_TOKEN} characters). Delete it and start the server again"
+            )
+        return token
 
     def stop(self):
         """Stop the socket server."""
@@ -164,19 +197,13 @@ class MCPSocketServer:
             sock.setblocking(False)
             client = _Client(sock)
             client.deadline = self._now() + wire.HELLO_SECONDS
-            if len(self.clients) >= MAX_CLIENTS:
-                closing = sum(1 for c in self.clients.values() if c.closing)
-                if closing >= MAX_CLOSING:
-                    sock.close()  # refusals are capped too: no reply, no slot
-                    continue
-                self._fail(
-                    client,
-                    wire.E_TOO_MANY,
-                    f"Too many clients: this add-on serves at most {MAX_CLIENTS} at once",
-                )
-                print(f"MCP client refused (limit {MAX_CLIENTS}): {addr}")
-            else:
-                print(f"MCP client connected: {addr}")
+            pending = [sk for sk, c in self.clients.items() if not c.authed]
+            if len(pending) >= MAX_PENDING:
+                # Sockets that have not proved the token cannot crowd out ones that can:
+                # the oldest of them goes, with no reply.
+                oldest = pending[0]
+                self._drop(oldest, self.clients[oldest])
+            print(f"MCP client connected: {addr}")
             self.clients[sock] = client
 
     def _process_clients(self):
@@ -208,8 +235,14 @@ class MCPSocketServer:
         """
         taken = 0
         while taken < READ_PER_TICK and not client.dead and not client.eof and not client.wbuf:
+            want = min(1024 * 1024, READ_PER_TICK - taken)
+            if not client.authed:
+                # Before the handshake is done nothing may buffer past one hello line.
+                want = min(want, wire.HELLO_MAX + 1 - len(client.rbuf))
+                if want <= 0:
+                    return
             try:
-                data = client.sock.recv(min(1024 * 1024, READ_PER_TICK - taken))
+                data = client.sock.recv(want)
             except (BlockingIOError, InterruptedError):
                 return
             except OSError:
@@ -264,16 +297,31 @@ class MCPSocketServer:
         )
 
     def _handle_hello(self, client: _Client, line: bytes):
-        """The first line of a connection. One try: a bad hello gets one reply or none, then a close."""
+        """One pre-auth line. One try: a bad line gets one reply or none, then a close.
+
+        The handshake is two lines. The client sends hello with a nonce and no token; the
+        add-on answers with its own nonce and a proof that it holds the token. The client
+        checks that proof, then sends hello_proof with its own, and only then is it authed.
+        """
         try:
             message = json.loads(line.decode("utf-8"))
         except (ValueError, RecursionError):
-            client.dead = True  # HTTP, garbage, binary: not a Meshwire client, so no reply
-            return
+            message = None
         if not isinstance(message, dict):
-            client.dead = True
+            if client.stage == "proof":
+                self._fail(client, wire.E_UNAUTHORIZED, self._unauthorized_text())
+            else:
+                client.dead = True  # HTTP, garbage, binary: not a Meshwire client, so no reply
             return
         msg_id = message.get("id")
+        params = message.get("params")
+        params = params if isinstance(params, dict) else {}
+        if client.stage == "proof":
+            self._handle_proof(client, message, params, msg_id)
+        else:
+            self._handle_first(client, message, params, msg_id)
+
+    def _handle_first(self, client: _Client, message: dict, params: dict, msg_id):
         if message.get("method") != "hello":
             self._fail(
                 client,
@@ -283,24 +331,9 @@ class MCPSocketServer:
                 msg_id,
             )
             return
-        params = message.get("params")
-        params = params if isinstance(params, dict) else {}
-        token = params.get("token")
-        good = isinstance(token, str) and hmac.compare_digest(
-            token.encode("utf-8"), self._token.encode("utf-8")
-        )
-        if not good:
-            self._fail(
-                client,
-                wire.E_UNAUTHORIZED,
-                "Unauthorized: the token is missing or wrong. It must match the token "
-                "in Blender's Meshwire tab.",
-                msg_id,
-            )
-            return
         theirs = params.get("protocol")
-        if theirs != wire.PROTOCOL:
-            newer = isinstance(theirs, int) and theirs > wire.PROTOCOL
+        if type(theirs) is not int or theirs != wire.PROTOCOL:
+            newer = type(theirs) is int and theirs > wire.PROTOCOL
             side = "the Meshwire add-on in Blender" if newer else "the Meshwire server"
             self._fail(
                 client,
@@ -310,10 +343,65 @@ class MCPSocketServer:
                 msg_id,
             )
             return
+        nonce = params.get("nonce")
+        if not isinstance(nonce, str) or not NONCE_RE.fullmatch(nonce):
+            self._fail(
+                client,
+                wire.E_PROTOCOL,
+                "hello needs a nonce of 16 to 128 URL-safe characters (A-Z a-z 0-9 _ -).",
+                msg_id,
+            )
+            return
+        if len(self._token) < wire.MIN_TOKEN:
+            client.dead = True  # no usable token: serve nobody
+            return
+        client.nonce_c = nonce
+        client.nonce_s = wire.new_nonce()
+        client.stage = "proof"
+        result = {
+            "protocol": wire.PROTOCOL,
+            "addon": self._addon_version(),
+            "port": self.port,
+            "nonce": client.nonce_s,
+            "proof": wire.proof(self._token, wire.ADDON_LABEL, nonce, client.nonce_s),
+        }
+        self._queue(client, {"jsonrpc": "2.0", "result": result, "id": msg_id}, msg_id)
+
+    @staticmethod
+    def _unauthorized_text() -> str:
+        return (
+            "Unauthorized: the proof did not match. The token must match the one in "
+            "Blender's Meshwire tab."
+        )
+
+    def _handle_proof(self, client: _Client, message: dict, params: dict, msg_id):
+        theirs = params.get("proof")
+        expected = wire.proof(self._token, wire.CLIENT_LABEL, client.nonce_s, client.nonce_c)
+        good = (
+            message.get("method") == "hello_proof"
+            and isinstance(theirs, str)
+            and PROOF_RE.fullmatch(theirs) is not None
+            and hmac.compare_digest(theirs.encode("ascii"), expected.encode("ascii"))
+        )
+        if not good:
+            self._fail(client, wire.E_UNAUTHORIZED, self._unauthorized_text(), msg_id)
+            return
+        authed = sum(1 for c in self.clients.values() if c.authed)
+        if authed >= MAX_CLIENTS:
+            closing = sum(1 for c in self.clients.values() if c.closing)
+            if closing >= MAX_CLOSING:
+                client.dead = True  # refusals are capped too: no reply, no slot
+                return
+            self._fail(
+                client,
+                wire.E_TOO_MANY,
+                f"Too many clients: this add-on serves at most {MAX_CLIENTS} at once",
+                msg_id,
+            )
+            return
         client.authed = True
         client.deadline = 0.0
-        result = {"protocol": wire.PROTOCOL, "addon": self._addon_version(), "port": self.port}
-        self._queue(client, {"jsonrpc": "2.0", "result": result, "id": msg_id}, msg_id)
+        self._queue(client, {"jsonrpc": "2.0", "result": {"ok": True}, "id": msg_id}, msg_id)
 
     @staticmethod
     def _addon_version() -> str:

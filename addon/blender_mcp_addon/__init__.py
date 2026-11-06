@@ -18,7 +18,7 @@ _logger.info("Meshwire addon loaded, version %s", ".".join(map(str, bl_info["ver
 import bpy
 
 from . import security, wire
-from .socket_server import MCPSocketServer
+from .socket_server import MCPSocketServer, TokenError
 
 # The id Blender files this add-on's preferences under. It is the package name, so it
 # follows the add-on when it is installed as an extension. Never spell it out elsewhere.
@@ -149,7 +149,13 @@ class MCP_OT_StartServer(bpy.types.Operator):
         ports = [port] if port else range(PORT_FIRST, PORT_LAST + 1)
         for candidate in ports:
             server = MCPSocketServer(host=host, port=candidate)
-            if server.start():
+            try:
+                started = server.start()
+            except TokenError as e:
+                _server = None
+                self.report({"ERROR"}, str(e))  # not a port problem: do not try the next port
+                return {"CANCELLED"}
+            if started:
                 _server = server
                 self.report({"INFO"}, f"MCP server started on {host}:{candidate}")
                 return {"FINISHED"}
@@ -207,11 +213,17 @@ class MESHWIRE_OT_CopyToken(bpy.types.Operator):
     )
 
     def execute(self, context):
-        try:
-            token = wire.ensure_token()
-        except OSError as e:
-            self.report({"ERROR"}, f"Could not read or create the token file: {e}")
-            return {"CANCELLED"}
+        if _server is not None and _server.is_running:
+            token = _server.token  # what the running server accepts, not whatever the file says now
+        else:
+            try:
+                token = wire.ensure_token()
+            except OSError as e:
+                self.report(
+                    {"ERROR"},
+                    f"Could not read or create the Meshwire token at {wire.token_path()}: {e}",
+                )
+                return {"CANCELLED"}
         context.window_manager.clipboard = token
         self.report({"INFO"}, "Token copied to the clipboard")
         return {"FINISHED"}

@@ -1,6 +1,7 @@
 """Async TCP client for communicating with the Meshwire addon."""
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -72,70 +73,70 @@ class BlenderClient:
             await self._open(timeout)
 
     async def _open(self, timeout: float) -> None:
-        """Connect, say hello and read its one reply. Only then is the client connected.
+        """Connect, run the handshake and only then become connected.
 
         The token is read afresh on every connect, so a token that changed since the
-        last connection is noticed here and not cached past a restart of Blender.
+        last connection is noticed here. The reader and writer stay local until the
+        handshake is done and no disconnect() has intervened; they are installed
+        together, with no await after the last check, so a disconnect can never leave
+        _connected True over a closed writer, or an open socket nobody owns.
         """
         token = wire.read_token()
         if not token:
             raise BlenderConnectionError(
-                f"No Meshwire token found at {wire.token_path()}. "
-                "Start the server in Blender's Meshwire tab first."
+                f"No Meshwire token at {wire.token_path()}. Start the server in Blender's "
+                "Meshwire tab, which writes it there. If Blender keeps its token elsewhere "
+                "(MESHWIRE_TOKEN set only in Blender, or a sandboxed Blender such as "
+                "Flatpak), use Copy token in the Meshwire tab and set MESHWIRE_TOKEN for "
+                "the MCP client."
             )
         epoch = self._epoch
+        writer: asyncio.StreamWriter | None = None
         try:
-            self._reader, self._writer = await asyncio.wait_for(
+            reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port),
                 timeout=timeout,
             )
-            reader, writer = self._reader, self._writer
             await self._hello(reader, writer, token, timeout)
             if epoch != self._epoch:
                 raise BlenderConnectionError("Disconnected")
-            # No await between here and the end: a disconnect() cannot slip in and
-            # leave _connected True over a closed writer.
+            self._reader, self._writer = reader, writer
             self._connected = True
             logger.info(f"Connected to Blender at {self.host}:{self.port}")
             self._read_task = asyncio.create_task(self._read_loop())
-
-        except asyncio.TimeoutError:
-            await self._abandon(epoch)
-            raise BlenderConnectionError(
-                f"Connection to Blender timed out ({self.host}:{self.port})"
-            )
-        except ConnectionRefusedError:
-            await self._abandon(epoch)
-            raise BlenderConnectionError(
-                f"Connection refused. Is Blender running with MCP addon enabled? ({self.host}:{self.port})"
-            )
-        except BlenderConnectionError:
-            await self._abandon(epoch)
+        except BaseException as exc:
+            if writer is not None:
+                writer.close()  # whatever failed, this socket is ours to close
+            if isinstance(exc, asyncio.TimeoutError):
+                raise BlenderConnectionError(
+                    f"Connection to Blender timed out ({self.host}:{self.port})"
+                ) from None
+            if isinstance(exc, ConnectionRefusedError):
+                raise BlenderConnectionError(
+                    f"Connection refused. Is Blender running with MCP addon enabled? ({self.host}:{self.port})"
+                ) from None
+            if isinstance(exc, OSError):
+                raise BlenderConnectionError(f"Connection failed: {exc}") from None
             raise
-        except OSError as e:
-            await self._abandon(epoch)
-            raise BlenderConnectionError(f"Connection failed: {e}")
 
-    async def _abandon(self, epoch: int) -> None:
-        """Close a half-open connection, unless a disconnect() already did."""
-        if epoch == self._epoch:
-            await self.disconnect()
+    def _token_help(self) -> str:
+        text = (
+            f"The token must match the one in Blender's Meshwire tab (Copy token); "
+            f"this server reads {wire.token_path()}."
+        )
+        text += (
+            " MESHWIRE_TOKEN, when set, overrides that file"
+            + (" (it is set here)" if os.environ.get("MESHWIRE_TOKEN", "").strip() else "")
+            + ". If the token or MESHWIRE_TOKEN changed, restart the MCP client."
+        )
+        return text
 
-    async def _hello(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-        token: str,
-        timeout: float,
-    ) -> None:
-        """Send the hello line and check the add-on's one reply."""
-        request = wire.hello_request(token, str(uuid.uuid4()), client=f"meshwire {__version__}")
-        writer.write((json.dumps(request) + "\n").encode("utf-8"))
-        await asyncio.wait_for(writer.drain(), timeout=timeout)
+    async def _read_reply(self, reader: asyncio.StreamReader, timeout: float) -> dict:
+        """One reply line of the handshake, as a dict."""
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=timeout)
         except (ValueError, asyncio.LimitOverrunError):
-            raise BlenderConnectionError("Blender sent an unreadable reply to the hello")
+            raise BlenderConnectionError("Blender sent an unreadable reply during the handshake")
         except (ConnectionError, asyncio.IncompleteReadError):
             line = b""
         if not line.strip():
@@ -151,36 +152,80 @@ class BlenderClient:
             raise BlenderConnectionError(
                 f"Whatever answered on {self.host}:{self.port} is not a Meshwire add-on"
             )
-        error = reply.get("error")
-        if error is not None:
-            raise self._hello_error(error)
-        result = reply.get("result")
-        if not isinstance(result, dict) or result.get("protocol") != wire.PROTOCOL:
+        if reply.get("error") is not None:
+            raise self._hello_error(reply["error"])
+        return reply
+
+    async def _hello(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        token: str,
+        timeout: float,
+    ) -> None:
+        """Mutual proof of the token. The token itself never goes on the wire.
+
+        hello carries a nonce. The add-on answers with its own nonce and a proof that it
+        holds the token; only if that checks out does this side send its own proof.
+        Anything else listening on the port learns nothing and is sent no command.
+        """
+        nonce_c = wire.new_nonce()
+        request = wire.hello_request(nonce_c, str(uuid.uuid4()), client=f"meshwire {__version__}")
+        writer.write((json.dumps(request) + "\n").encode("utf-8"))
+        await asyncio.wait_for(writer.drain(), timeout=timeout)
+        result = (await self._read_reply(reader, timeout)).get("result")
+        result = result if isinstance(result, dict) else {}
+
+        theirs = result.get("protocol")
+        if type(theirs) is not int or theirs != wire.PROTOCOL:
+            side = (
+                "the Meshwire server"
+                if type(theirs) is int and theirs > wire.PROTOCOL
+                else "the Meshwire add-on in Blender"
+            )
             raise BlenderConnectionError(
-                "The Meshwire add-on in Blender speaks a different protocol "
-                f"({result.get('protocol') if isinstance(result, dict) else None!r}, "
-                f"this server speaks {wire.PROTOCOL}). Update the older side."
+                f"The Meshwire add-on in Blender speaks protocol {theirs!r}, this server "
+                f"speaks {wire.PROTOCOL}. Update {side}."
+            )
+        nonce_s, proof_a = result.get("nonce"), result.get("proof")
+        well_formed = (
+            isinstance(nonce_s, str)
+            and 16 <= len(nonce_s) <= 128
+            and all(c.isascii() and (c.isalnum() or c in "_-") for c in nonce_s)
+            and isinstance(proof_a, str)
+            and len(proof_a) == 64
+            and all(c in "0123456789abcdef" for c in proof_a)
+        )
+        expected = wire.proof(token, wire.ADDON_LABEL, nonce_c, nonce_s) if well_formed else ""
+        if not well_formed or not hmac.compare_digest(
+            proof_a.encode("utf-8"), expected.encode("utf-8")
+        ):
+            # Not the add-on that made this token. Say nothing more to it.
+            writer.close()
+            raise BlenderConnectionError(
+                f"The program answering on {self.host}:{self.port} did not prove it holds the "
+                "Meshwire token, so nothing was sent to it. "
+                f"{self._token_help()} Another program may be using port {self.port}."
             )
 
-    @staticmethod
-    def _hello_error(error: Any) -> BlenderConnectionError:
+        proof_c = wire.proof(token, wire.CLIENT_LABEL, nonce_s, nonce_c)
+        writer.write(
+            (json.dumps(wire.hello_proof_request(proof_c, str(uuid.uuid4()))) + "\n").encode()
+        )
+        await asyncio.wait_for(writer.drain(), timeout=timeout)
+        ok = (await self._read_reply(reader, timeout)).get("result")
+        if not (isinstance(ok, dict) and ok.get("ok") is True):
+            raise BlenderConnectionError("The Meshwire add-on did not accept the handshake")
+
+    def _hello_error(self, error: Any) -> BlenderConnectionError:
         code = error.get("code") if isinstance(error, dict) else None
         message = str(error.get("message", error)) if isinstance(error, dict) else str(error)
         if code == wire.E_UNAUTHORIZED:
-            text = (
-                f"Blender refused the Meshwire token. The token must match the one in "
-                f"Blender's Meshwire tab; this server reads {wire.token_path()}."
+            return BlenderConnectionError(
+                f"The Meshwire add-on in Blender rejected this server's proof. {self._token_help()}"
             )
-            if os.environ.get("MESHWIRE_TOKEN", "").strip():
-                text += (
-                    " MESHWIRE_TOKEN is set and overrides that file. "
-                    "Restart the MCP client after changing it."
-                )
-            else:
-                text += " If the token changed, restart the MCP client."
-            return BlenderConnectionError(text)
         # A v0.4.0 add-on has no hello: its dispatcher raises ValueError("Unknown
-        # method: hello") and the server wraps that as -32603. A -32601 is accepted too.
+        # method: hello") and the socket server wraps that as -32603. A -32601 is accepted too.
         if code == -32601 or (code == -32603 and message.startswith("Unknown method")):
             return BlenderConnectionError(
                 "The Meshwire add-on in Blender is older than this server. Update the add-on."

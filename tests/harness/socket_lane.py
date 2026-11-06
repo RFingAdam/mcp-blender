@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import socket
@@ -80,6 +83,11 @@ class Budget:
         return self._end - time.monotonic()
 
 
+def proof(token: str, label: str, a: str, b: str) -> str:
+    """Same HMAC as wire.proof, spelled out so the lane checks the protocol, not the module."""
+    return hmac.new(token.encode(), f"{label}\n{a}\n{b}".encode(), hashlib.sha256).hexdigest()
+
+
 def encode_request(req_id: int, method: str, params: dict) -> bytes:
     msg = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
     return json.dumps(msg).encode("utf-8") + b"\n"
@@ -128,10 +136,26 @@ class Conn:
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=left)
         if token is not None:
             try:
-                self.call("hello", {"token": token, "protocol": 1, "client": "socket-lane"})
+                self.handshake(token)
             except BaseException:
                 self.close()
                 raise
+
+    def hello(self) -> tuple[str, dict]:
+        """Send hello with a fresh nonce; return (nonce, the add-on's result)."""
+        nonce = secrets.token_urlsafe(32)
+        result = self.call("hello", {"protocol": 1, "client": "socket-lane", "nonce": nonce})
+        return nonce, result
+
+    def handshake(self, token: str) -> None:
+        """The whole mutual handshake. The token is only ever an HMAC key here."""
+        nonce_c, result = self.hello()
+        ns = result["nonce"]
+        if not hmac.compare_digest(result["proof"], proof(token, "meshwire-addon", nonce_c, ns)):
+            raise BadReply("the add-on's proof did not verify")
+        got = self.call("hello_proof", {"proof": proof(token, "meshwire-client", ns, nonce_c)})
+        if got != {"ok": True}:
+            raise BadReply(f"hello_proof was not accepted: {got!r}")
 
     def fresh(self, authed: bool = True) -> "Conn":
         """Another connection to the same server, with or without hello."""
@@ -1518,11 +1542,12 @@ def check_unauthenticated_call_refused(ctx: Ctx) -> str:
 def check_wrong_token_rejected(ctx: Ctx) -> str:
     raw = ctx.conn.fresh(authed=False)
     try:
+        nonce_c, result = raw.hello()
+        wrong = proof("not-the-token", "meshwire-client", result["nonce"], nonce_c)
         raw.send_raw(
-            encode_request(7, "hello", {"token": "not-the-token", "protocol": 1, "client": "lane"})
-            + encode_request(8, "ping", {})
+            encode_request(7, "hello_proof", {"proof": wrong}) + encode_request(8, "ping", {})
         )
-        data = _read_until_closed(raw.sock, raw.budget, "after a wrong token")
+        data = _read_until_closed(raw.sock, raw.budget, "after a wrong proof")
     finally:
         raw.close()
     lines = [json.loads(line) for line in data.split(b"\n") if line.strip()]
@@ -1566,22 +1591,49 @@ def check_hello_timeout_closes(ctx: Ctx) -> str:
         raise CheckFailed(f"a silent client was sent {sent[:80]!r}")
     if not 1.5 <= waited <= 5.0:
         raise CheckFailed(f"closed after {waited:.1f}s, expected about 2s")
-    # The deadline is for hello only: an authenticated client idle past it stays.
+    # The deadline covers both lines: a hello with no hello_proof is closed too.
+    started = time.monotonic()
+    half = ctx.conn.fresh(authed=False)
+    try:
+        half.hello()
+        sent = _read_until_closed(half.sock, Budget(6.0), "after hello with no proof")
+    finally:
+        half.close()
+    if sent:
+        raise CheckFailed(f"a client that stalled after hello was sent {sent[:80]!r}")
+    if time.monotonic() - started > 5.0:
+        raise CheckFailed("a client that stalled after hello was held past the deadline")
+    # The deadline is for the handshake only: an authenticated client idle past it stays.
     if ctx.conn.call("ping").get("pong") is not True:
         raise CheckFailed("the authenticated connection was dropped")
     return f"a silent client was closed after {waited:.1f}s; the authenticated one stayed"
 
 
-def check_copy_token_copies_the_token(ctx: Ctx) -> str:
-    ok = ctx.conn.exec(
-        "bpy.context.window_manager.clipboard = ''\n"
-        "r = bpy.ops.meshwire.copy_token()\n"
-        "from blender_mcp_addon import wire\n"
-        "result = [list(r), bpy.context.window_manager.clipboard == wire.read_token()]"
-    )
-    if ok != [["FINISHED"], True]:
-        raise CheckFailed(f"copy_token did not put the token on the clipboard: {ok!r}")
-    return "meshwire.copy_token puts the token on the clipboard"
+def check_copy_token_matches_running_server(ctx: Ctx) -> str:
+    """With the token file gone, Copy token must still give the token the server accepts."""
+    path = ctx.out_dir / "config" / "token"  # the run's own folder (BlenderSession)
+    saved = path.read_bytes()
+    path.unlink()
+    try:
+        copied = ctx.conn.exec(
+            "bpy.context.window_manager.clipboard = ''\n"
+            "r = bpy.ops.meshwire.copy_token()\n"
+            "result = [list(r), bpy.context.window_manager.clipboard]"
+        )
+        if copied[0] != ["FINISHED"] or not copied[1]:
+            raise CheckFailed(f"copy_token did not put a token on the clipboard: {copied[0]!r}")
+        if path.exists():
+            raise CheckFailed("copy_token wrote a new token file under a running server")
+        try:
+            Conn(ctx.conn.port, ctx.conn.budget, copied[1]).close()
+        except (CheckFailed, ConnectionClosed, BadReply, ReplyTimeout, OSError) as exc:
+            raise CheckFailed(
+                f"the server does not accept the copied token ({type(exc).__name__})"
+            ) from None
+    finally:
+        path.write_bytes(saved)
+        path.chmod(0o600)
+    return "Copy token yields the token the running server accepts, even with the file gone"
 
 
 BAKE_SIZE = 32
@@ -2150,7 +2202,7 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("wrong_token_rejected", check_wrong_token_rejected, CHECK_TIMEOUT),
     ("old_client_told_to_update", check_old_client_told_to_update, CHECK_TIMEOUT),
     ("hello_timeout_closes", check_hello_timeout_closes, CHECK_TIMEOUT),
-    ("copy_token_copies_the_token", check_copy_token_copies_the_token, CHECK_TIMEOUT),
+    ("copy_token_matches_running_server", check_copy_token_matches_running_server, CHECK_TIMEOUT),
     ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
     ("bake_leaves_material_clean", check_bake_leaves_material_clean, 150.0),
     ("bake_tricks_leave_material_clean", check_bake_tricks_leave_material_clean, 180.0),

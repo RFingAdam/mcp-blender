@@ -25,8 +25,10 @@ class StubHandlers:
 
     def __init__(self):
         self.size = 0
+        self.calls = []
 
     def handle(self, method, params):
+        self.calls.append(method)
         if method == "big":
             return "x" * self.size
         if method == "boom":
@@ -105,21 +107,50 @@ def _close_peers():
 
 
 def connect(srv, auth=True):
-    """Open a client socket. By default it also says hello and reads the good reply."""
+    """Open a client socket. By default it also runs the whole handshake."""
     sock = socket.create_connection(("127.0.0.1", srv.port), timeout=5)
     sock.setblocking(False)
     _OPEN.append(sock)
     if auth:
-        sock.sendall(hello_line(srv))
-        reply = read_line(srv, sock)
-        assert reply["result"]["protocol"] == 1, reply
+        handshake(srv, sock)
     return sock
 
 
-def hello_line(srv, token=None, protocol=1, req_id=1):
-    params = {"token": srv._token if token is None else token, "protocol": protocol}
-    msg = {"jsonrpc": "2.0", "method": "hello", "params": params, "id": req_id}
-    return json.dumps(msg).encode() + b"\n"
+def jline(obj):
+    return json.dumps(obj).encode() + b"\n"
+
+
+def hello_line(nonce=None, protocol=1, req_id=1, **params):
+    body = {"protocol": protocol, "client": "test", "nonce": nonce or WIRE.new_nonce()}
+    body.update(params)
+    return jline({"jsonrpc": "2.0", "method": "hello", "params": body, "id": req_id})
+
+
+def proof_line(value, req_id=2, method="hello_proof"):
+    return jline({"jsonrpc": "2.0", "method": method, "params": {"proof": value}, "id": req_id})
+
+
+class _Wire:
+    """The add-on's wire module, loaded without Blender."""
+
+    def __getattr__(self, name):
+        return getattr(sys.modules[f"{ROOT}.wire"], name)
+
+
+WIRE = _Wire()
+
+
+def handshake(srv, sock, token=None, nonce=None):
+    """Run hello and hello_proof as a client holding the token. Returns the hello result."""
+    token = srv.token if token is None else token
+    nc = nonce or WIRE.new_nonce()
+    sock.sendall(hello_line(nc))
+    result = read_line(srv, sock)["result"]
+    assert result["protocol"] == 1, result
+    assert result["proof"] == WIRE.proof(token, WIRE.ADDON_LABEL, nc, result["nonce"])
+    sock.sendall(proof_line(WIRE.proof(token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert read_line(srv, sock)["result"] == {"ok": True}
+    return result
 
 
 def pump(srv, sock=None, until=None, seconds=10.0):
@@ -236,24 +267,6 @@ def test_complete_line_over_cap_gets_error_then_close(server, mod, monkeypatch):
     sock.sendall(b'{"method": "' + b"x" * 4096 + b'"}\n')
     reply = json.loads(read_all(server, sock).split(b"\n", 1)[0])
     assert reply["error"]["code"] == mod.wire.E_TOO_LARGE
-
-
-def test_ninth_client_gets_error_then_close(server, mod):
-    socks = []
-    for _ in range(mod.MAX_CLIENTS):
-        socks.append(connect(server))
-        tick(server)
-    assert server.client_count == mod.MAX_CLIENTS
-    ninth = connect(server, auth=False)
-    data = read_all(server, ninth)
-    reply = json.loads(data.split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_TOO_MANY
-    ninth.close()
-    pump(server, until=lambda: server.client_count == mod.MAX_CLIENTS)
-    # The first eight are untouched.
-    request(socks[0], "ping")
-    assert read_line(server, socks[0])["result"] == {"echo": "ping"}
-    assert server.client_count == mod.MAX_CLIENTS
 
 
 def test_non_utf8_line_gets_parse_error_then_close(server, mod):
@@ -429,42 +442,6 @@ def test_stalled_write_buffer_is_dropped(server, mod):
     sock.close()
 
 
-def test_closing_clients_count_toward_the_cap(server, mod):
-    with_clock(server)
-    socks = []
-    for _ in range(mod.MAX_CLIENTS - 1):
-        socks.append(connect(server))
-        tick(server)
-    bad = connect(server)
-    tick(server)
-    bad.sendall(b"{nope\n")
-    tick(server, 3)  # it is closing now, and still holds a slot
-    assert server.client_count == mod.MAX_CLIENTS
-    late = connect(server, auth=False)
-    reply = json.loads(read_all(server, late).split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_TOO_MANY
-
-
-def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatch):
-    with_clock(server)
-    monkeypatch.setattr(mod, "MAX_CLIENTS", 1)
-    monkeypatch.setattr(mod, "MAX_CLOSING", 2)
-    keeper = connect(server)
-    tick(server)
-    refused = []
-    for _ in range(2):  # these two get a reply and fill the closing allowance
-        refused.append(connect(server, auth=False))
-        tick(server)
-    assert sum(c.closing for c in server.clients.values()) == 2
-    extra = connect(server, auth=False)
-    tick(server)
-    extra.setblocking(True)
-    extra.settimeout(5)
-    assert extra.recv(100) == b""  # closed with no reply
-    assert server.client_count == 3
-    keeper.close()
-
-
 def test_half_closed_client_still_gets_its_reply(server):
     sock = connect(server)
     request(sock, "ping", req_id=4)
@@ -618,7 +595,7 @@ def test_half_closed_client_that_never_reads_is_closed_after_write_stall(server,
     assert server.client_count == 0
 
 
-# --- token and hello -------------------------------------------------------------
+# --- token and handshake ---------------------------------------------------------
 
 
 def only_client(srv):
@@ -626,29 +603,66 @@ def only_client(srv):
     return client
 
 
+def hello_only(srv, sock, **kw):
+    """Send a good hello and return (nc, hello result)."""
+    nc = WIRE.new_nonce()
+    sock.sendall(hello_line(nc, **kw))
+    return nc, read_line(srv, sock)["result"]
+
+
+def error_of(srv, sock):
+    """Read to EOF and return the single error reply's (code, message, id)."""
+    data = read_all(srv, sock)
+    lines = [line for line in data.split(b"\n") if line]
+    assert len(lines) == 1, data
+    reply = json.loads(lines[0])
+    return reply["error"]["code"], reply["error"]["message"], reply["id"]
+
+
 def test_start_creates_the_token(server, tmp_path):
-    assert (tmp_path / "meshwire" / "token").read_text().strip() == server._token
+    assert (tmp_path / "meshwire" / "token").read_text().strip() == server.token
 
 
-def test_good_hello_reply_and_auth(server):
+def test_good_handshake_authenticates(server):
     sock = connect(server, auth=False)
-    sock.sendall(hello_line(server, req_id=7))
+    nc = WIRE.new_nonce()
+    sock.sendall(hello_line(nc, req_id=7))
     reply = read_line(server, sock)
     assert reply["id"] == 7
-    assert reply["result"]["protocol"] == 1
-    assert reply["result"]["port"] == server.port
-    assert isinstance(reply["result"]["addon"], str)
+    result = reply["result"]
+    assert result["protocol"] == 1 and result["port"] == server.port
+    assert isinstance(result["addon"], str)
+    assert only_client(server).authed is False  # not until the client proves itself
+    assert result["proof"] == WIRE.proof(server.token, WIRE.ADDON_LABEL, nc, result["nonce"])
+    assert len(result["nonce"]) >= 16
+    sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc), 8))
+    reply = read_line(server, sock)
+    assert reply == {"jsonrpc": "2.0", "result": {"ok": True}, "id": 8}
     assert only_client(server).authed is True
+    request(sock, "ping", req_id=9)
+    assert read_line(server, sock)["result"] == {"echo": "ping"}
+
+
+def test_token_never_leaves_the_addon(server):
+    sock = connect(server, auth=False)
+    _, result = hello_only(server, sock)
+    assert server.token not in json.dumps(result)
+
+
+def test_each_connection_gets_a_fresh_server_nonce(server):
+    first = hello_only(server, connect(server, auth=False))[1]
+    second = hello_only(server, connect(server, auth=False))[1]
+    assert first["nonce"] != second["nonce"]
 
 
 def test_request_before_hello_is_refused(server, mod):
     sock = connect(server, auth=False)
     request(sock, "ping", req_id=5)
-    data = read_all(server, sock)
-    reply = json.loads(data.split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_PROTOCOL
-    assert reply["id"] == 5
-    assert data.count(b"\n") == 1
+    code, message, msg_id = error_of(server, sock)
+    assert code == mod.wire.E_PROTOCOL and msg_id == 5
+    assert "needs a newer Meshwire server" in message
+    assert "uvx meshwire@latest" in message
+    assert "ping" not in server.handlers.calls
 
 
 def test_http_request_closed_without_reply(server):
@@ -657,6 +671,7 @@ def test_http_request_closed_without_reply(server):
     sock.sendall(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 39\r\n\r\n" + body + b"\n")
     assert read_all(server, sock) == b""
     pump(server, until=lambda: server.client_count == 0)
+    assert server.handlers.calls == []
 
 
 def test_garbage_first_line_closed_without_reply(server):
@@ -665,59 +680,168 @@ def test_garbage_first_line_closed_without_reply(server):
     assert read_all(server, sock) == b""
 
 
-def test_wrong_token_rejected_once_then_closed(server, mod):
+def test_bad_client_proof_rejected_then_closed(server, mod):
     sock = connect(server, auth=False)
-    sock.sendall(hello_line(server, token="nope", req_id=9) + b'{"method":"ping","id":2}\n')
-    data = read_all(server, sock)
-    lines = data.split(b"\n")
-    assert len(lines) == 2 and lines[1] == b""  # one reply, then EOF
-    reply = json.loads(lines[0])
-    assert reply["error"]["code"] == mod.wire.E_UNAUTHORIZED
-    assert reply["id"] == 9
-    assert "nope" not in lines[0].decode() and server._token not in lines[0].decode()
+    nc, result = hello_only(server, sock)
+    sock.sendall(proof_line("0" * 64, 9) + jline({"method": "ping", "id": 3}))
+    code, message, msg_id = error_of(server, sock)
+    assert code == mod.wire.E_UNAUTHORIZED and msg_id == 9
+    assert server.token not in message
+    assert server.handlers.calls == []
     pump(server, until=lambda: server.client_count == 0)
 
 
-def test_missing_token_is_unauthorized(server, mod):
+def test_right_proof_for_the_wrong_token_is_rejected(server, mod):
+    sock = connect(server, auth=False)
+    nc, result = hello_only(server, sock)
+    sock.sendall(proof_line(WIRE.proof("some-other-token", WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+
+
+def test_the_addons_own_proof_cannot_be_replayed_as_the_clients(server, mod):
+    sock = connect(server, auth=False)
+    nc, result = hello_only(server, sock)
+    sock.sendall(proof_line(result["proof"]))
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "a" * 63,
+        "a" * 65,
+        "A" * 64,
+        "g" * 64,
+        " " + "a" * 63,
+        "\ud800" * 64,
+        "\ud800",
+        123,
+        None,
+        True,
+        ["a" * 64],
+        {"proof": "a" * 64},
+    ],
+)
+def test_proof_must_be_64_hex(server, mod, capsys, value):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(proof_line(value))
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+    out = capsys.readouterr()
+    assert "Traceback" not in out.out + out.err
+
+
+def test_uppercase_form_of_the_right_proof_is_rejected(server, mod):
+    sock = connect(server, auth=False)
+    nc, result = hello_only(server, sock)
+    good = WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)
+    sock.sendall(proof_line(good.upper()))
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+
+
+def test_missing_proof_param_is_unauthorized(server, mod):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(jline({"jsonrpc": "2.0", "method": "hello_proof", "params": [], "id": 4}))
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+
+
+@pytest.mark.parametrize("method", ["ping", "hello", "scene_info", "hello_proof2"])
+def test_second_line_must_be_hello_proof(server, mod, method):
+    sock = connect(server, auth=False)
+    nc, result = hello_only(server, sock)
+    good = WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)
+    sock.sendall(proof_line(good, method=method))  # right proof, wrong method
+    code, _, _ = error_of(server, sock)
+    assert code == mod.wire.E_UNAUTHORIZED
+    assert server.handlers.calls == []
+
+
+def test_non_json_second_line_is_unauthorized_then_closed(server, mod):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(b"not json\n")
+    assert error_of(server, sock)[0] == mod.wire.E_UNAUTHORIZED
+
+
+def test_request_pipelined_behind_hello_never_runs(server, mod):
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line() + jline({"jsonrpc": "2.0", "method": "ping", "id": 2}))
+    data = read_all(server, sock)
+    lines = [json.loads(line) for line in data.split(b"\n") if line]
+    assert "result" in lines[0] and lines[1]["error"]["code"] == mod.wire.E_UNAUTHORIZED
+    assert len(lines) == 2
+    assert server.handlers.calls == []
+
+
+@pytest.mark.parametrize(
+    "nonce",
+    [
+        "short",
+        "a" * 15,
+        "a" * 129,
+        "a" * 15 + "!",
+        "a" * 16 + " ",
+        12345,
+        None,
+        ["a" * 20],
+        "\ud800" * 20,
+    ],
+)
+def test_nonce_must_be_urlsafe_16_to_128(server, mod, nonce):
+    sock = connect(server, auth=False)
+    sock.sendall(
+        jline(
+            {
+                "jsonrpc": "2.0",
+                "method": "hello",
+                "params": {"protocol": 1, "client": "t", "nonce": nonce},
+                "id": 1,
+            }
+        )
+    )
+    assert error_of(server, sock)[0] == mod.wire.E_PROTOCOL
+
+
+@pytest.mark.parametrize("nonce", ["a" * 16, "a" * 128, "A-_" * 10 + "9"])
+def test_nonce_bounds_are_inclusive(server, nonce):
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line(nonce))
+    assert read_line(server, sock)["result"]["protocol"] == 1
+
+
+def test_hello_without_a_nonce_is_refused(server, mod):
     sock = connect(server, auth=False)
     msg = {"jsonrpc": "2.0", "method": "hello", "params": {"protocol": 1}, "id": 1}
-    sock.sendall(json.dumps(msg).encode() + b"\n")
-    reply = json.loads(read_all(server, sock).split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_UNAUTHORIZED
+    sock.sendall(jline(msg))
+    assert error_of(server, sock)[0] == mod.wire.E_PROTOCOL
 
 
-def test_old_client_told_to_update(server, mod):
+def test_protocol_mismatch_names_the_side_to_update(server, mod):
+    newer = connect(server, auth=False)
+    newer.sendall(hello_line(protocol=2))
+    code, message, _ = error_of(server, newer)
+    assert code == mod.wire.E_PROTOCOL
+    assert "protocol 1" in message and "2" in message
+    assert message.endswith("Update the Meshwire add-on in Blender.")
+    older = connect(server, auth=False)
+    older.sendall(hello_line(protocol=0))
+    code, message, _ = error_of(server, older)
+    assert code == mod.wire.E_PROTOCOL
+    assert message.endswith("Update the Meshwire server.")
+
+
+@pytest.mark.parametrize("value", [True, 1.0, "1", None, [1]])
+def test_protocol_must_be_the_int_one(server, mod, value):
     sock = connect(server, auth=False)
-    request(sock, "scene_info", req_id=3)
-    data = read_all(server, sock)
-    reply = json.loads(data.split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_PROTOCOL
-    assert reply["id"] == 3
-    assert "needs a newer Meshwire server" in reply["error"]["message"]
-    assert "uvx meshwire@latest" in reply["error"]["message"]
-
-
-def test_protocol_mismatch_names_both_versions(server, mod):
-    sock = connect(server, auth=False)
-    sock.sendall(hello_line(server, protocol=2))
-    reply = json.loads(read_all(server, sock).split(b"\n", 1)[0])
-    assert reply["error"]["code"] == mod.wire.E_PROTOCOL
-    message = reply["error"]["message"]
-    assert "2" in message and "1" in message
-    assert "add-on" in message  # the client is newer, so the add-on is the side to update
-    assert only_client_gone(server)
-
-
-def only_client_gone(srv):
-    pump(srv, until=lambda: srv.client_count == 0)
-    return True
+    sock.sendall(hello_line(protocol=value))
+    assert error_of(server, sock)[0] == mod.wire.E_PROTOCOL
 
 
 def test_hello_over_4k_closed(server, mod):
     sock = connect(server, auth=False)
-    pad = "x" * (mod.wire.HELLO_MAX + 10)
-    msg = {"jsonrpc": "2.0", "method": "hello", "params": {"token": pad, "protocol": 1}, "id": 1}
-    sock.sendall(json.dumps(msg).encode() + b"\n")
+    sock.sendall(hello_line(pad="x" * (mod.wire.HELLO_MAX + 10)))
     assert read_all(server, sock) == b""
 
 
@@ -727,25 +851,67 @@ def test_4k_without_newline_closed(server, mod):
     assert read_all(server, sock) == b""
 
 
+def test_proof_line_over_4k_closed(server, mod):
+    sock = connect(server, auth=False)
+    hello_only(server, sock)
+    sock.sendall(proof_line("a" * (mod.wire.HELLO_MAX + 10)))
+    assert read_all(server, sock) == b""
+
+
 def test_hello_of_exactly_the_limit_is_accepted(server, mod):
     sock = connect(server, auth=False)
-    base = hello_line(server)
-    pad = mod.wire.HELLO_MAX - (len(base) - 1)
+    base = hello_line("n" * 20)
     msg = json.loads(base)
-    msg["params"]["client"] = "c" * (pad - len(', "client": ""'))
+    msg["params"]["client"] = ""
+    room = mod.wire.HELLO_MAX - len(json.dumps(msg).encode())
+    msg["params"]["client"] = "c" * room
     line = json.dumps(msg).encode()
     assert len(line) == mod.wire.HELLO_MAX
     sock.sendall(line + b"\n")
     assert read_line(server, sock)["result"]["protocol"] == 1
 
 
+def test_a_pre_auth_client_is_read_only_up_to_the_hello_limit(server, mod):
+    sock = connect(server, auth=False)
+    tick(server)
+    client = only_client(server)
+    sizes = []
+    real = client.sock
+
+    class Spy:
+        def recv(self, n):
+            sizes.append(n)
+            return real.recv(n)
+
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+    client.sock = Spy()
+    sock.sendall(b"x" * (2 * MIB))
+    tick(server, 3)
+    assert sizes and max(sizes) <= mod.wire.HELLO_MAX + 1
+    assert sum(sizes) <= mod.wire.HELLO_MAX + 1 + len(sizes)  # at most one short read per tick
+
+
 def test_hello_after_deadline_closed(server, mod):
     clock = with_clock(server)
     sock = connect(server, auth=False)
-    tick(server)  # accept at t0
+    tick(server)
     clock.t += mod.wire.HELLO_SECONDS + 0.01
-    sock.sendall(hello_line(server))
+    sock.sendall(hello_line())
     assert read_all(server, sock) == b""
+
+
+def test_proof_after_deadline_closed(server, mod):
+    """The deadline covers both lines: a slow second step is closed too."""
+    clock = with_clock(server)
+    sock = connect(server, auth=False)
+    tick(server)
+    nc, result = hello_only(server, sock)
+    clock.t += mod.wire.HELLO_SECONDS + 0.01
+    sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert read_all(server, sock) == b""
+    assert server.client_count == 0
 
 
 def test_hello_just_before_deadline_is_accepted(server, mod):
@@ -753,8 +919,8 @@ def test_hello_just_before_deadline_is_accepted(server, mod):
     sock = connect(server, auth=False)
     tick(server)
     clock.t += mod.wire.HELLO_SECONDS - 0.01
-    sock.sendall(hello_line(server))
-    assert read_line(server, sock)["result"]["protocol"] == 1
+    handshake(server, sock)
+    assert only_client(server).authed
 
 
 def test_silent_client_closed_at_deadline(server, mod):
@@ -779,34 +945,43 @@ def test_dripping_client_closed_at_deadline(server, mod):
 def test_half_closed_before_hello_is_closed(server, mod):
     clock = with_clock(server)
     sock = connect(server, auth=False)
-    sock.sendall(b'{"jsonrpc":"2.0","method":"hello"')  # no newline
+    sock.sendall(b'{"jsonrpc":"2.0","method":"hello"')
     sock.shutdown(socket.SHUT_WR)
     tick(server, 3)
     clock.t += mod.wire.HELLO_SECONDS + 0.01
     assert read_all(server, sock) == b""
 
 
-def test_wrong_token_client_that_never_reads_leaves_by_the_deadline(server, mod):
+def test_wrong_proof_client_that_never_reads_leaves_by_the_deadline(server, mod):
     clock = with_clock(server)
     sock = connect(server, auth=False)
     tick(server)
-    sock.sendall(hello_line(server, token="bad"))
+    hello_only(server, sock)
+    sock.sendall(proof_line("0" * 64))
     tick(server, 3)
     clock.t += mod.wire.HELLO_SECONDS + 0.01
     tick(server, 3)
     assert server.client_count == 0
-    assert sock  # never read a byte
+    assert sock
 
 
-def test_deadline_applies_only_before_hello(server, mod):
-    """A handler that runs for 10 s must not cost the client its connection."""
+def test_deadline_applies_only_before_the_handshake_finishes(server, mod):
+    """A 10 s handler, run after auth, costs the client nothing."""
     clock = with_clock(server)
     sock = connect(server)
-    clock.t += 10.0
-    tick(server, 3)
-    assert server.client_count == 1
-    request(sock, "ping", req_id=4)
-    assert read_line(server, sock)["id"] == 4
+    real = server.handlers.handle
+
+    def slow(method, params):
+        if method == "slow":
+            clock.t += 10.0  # the handler "runs" for 10 s on the injected clock
+            return {"done": True}
+        return real(method, params)
+
+    server.handlers.handle = slow
+    request(sock, "slow", req_id=4)
+    reply = read_line(server, sock)
+    assert reply["id"] == 4 and reply["result"] == {"done": True}
+    assert server.client_count == 1 and only_client(server).authed
     clock.t += 3600.0
     tick(server, 3)
     request(sock, "ping", req_id=5)
@@ -816,7 +991,123 @@ def test_deadline_applies_only_before_hello(server, mod):
 def test_deadline_counts_from_accept_not_from_connect(server, mod):
     clock = with_clock(server)
     sock = connect(server, auth=False)
-    clock.t += 5.0  # the client connected but the server had not run a tick yet
-    sock.sendall(hello_line(server))
-    tick(server)  # accept stamps t0 + 5; the hello arrives inside its own 2 s
+    clock.t += 5.0
+    sock.sendall(hello_line())
+    tick(server)
     assert read_line(server, sock)["result"]["protocol"] == 1
+
+
+# --- pools -----------------------------------------------------------------------
+
+
+def test_idle_pre_auth_sockets_do_not_lock_out_the_real_client(server, mod):
+    idle = []
+    for _ in range(mod.MAX_PENDING):
+        idle.append(connect(server, auth=False))
+        tick(server)  # accept, so the listen backlog never fills
+    assert server.client_count == mod.MAX_PENDING
+    real = connect(server)  # evicts the oldest idle socket, then authenticates
+    request(real, "ping")
+    assert read_line(server, real)["result"] == {"echo": "ping"}
+    assert idle  # still referenced
+
+
+def test_a_full_pending_pool_evicts_the_oldest(server, mod, monkeypatch):
+    monkeypatch.setattr(mod, "MAX_PENDING", 3)
+    first = connect(server, auth=False)
+    tick(server)
+    others = []
+    for _ in range(3):
+        others.append(connect(server, auth=False))
+        tick(server)
+    assert server.client_count == 3
+    assert read_all(server, first) == b""  # the oldest was dropped, not answered
+    assert others
+
+
+def test_ninth_authenticated_client_gets_too_many_after_proof(server, mod):
+    socks = [connect(server) for _ in range(mod.MAX_CLIENTS)]
+    ninth = connect(server, auth=False)
+    nc, result = hello_only(server, ninth)
+    ninth.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc), 6))
+    code, _, msg_id = error_of(server, ninth)
+    assert code == mod.wire.E_TOO_MANY and msg_id == 6
+    pump(server, until=lambda: server.client_count == mod.MAX_CLIENTS)
+    request(socks[0], "ping")
+    assert read_line(server, socks[0])["result"] == {"echo": "ping"}
+
+
+def test_http_noise_is_not_told_the_server_is_full(server, mod):
+    socks = [connect(server) for _ in range(mod.MAX_CLIENTS)]
+    noise = connect(server, auth=False)
+    noise.sendall(b"GET / HTTP/1.1\r\n\r\n")
+    assert read_all(server, noise) == b""
+    assert socks
+
+
+def test_closing_authenticated_clients_still_count_toward_the_cap(server, mod):
+    with_clock(server)
+    socks = [connect(server) for _ in range(mod.MAX_CLIENTS - 1)]
+    bad = connect(server)
+    bad.sendall(b"{nope\n")
+    tick(server, 3)  # it is closing now, and still holds a slot
+    late = connect(server, auth=False)
+    nc, result = hello_only(server, late)
+    late.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert error_of(server, late)[0] == mod.wire.E_TOO_MANY
+    assert socks
+
+
+def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatch):
+    with_clock(server)
+    monkeypatch.setattr(mod, "MAX_CLIENTS", 1)
+    monkeypatch.setattr(mod, "MAX_CLOSING", 2)
+    keeper = connect(server)
+    refused = []
+    for _ in range(2):  # these two get a reply and fill the closing allowance
+        sock = connect(server, auth=False)
+        nc, result = hello_only(server, sock)
+        sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+        tick(server, 3)
+        refused.append(sock)
+    assert sum(c.closing for c in server.clients.values()) == 2
+    extra = connect(server, auth=False)
+    nc, result = hello_only(server, extra)
+    extra.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    tick(server, 3)
+    extra.setblocking(True)
+    extra.settimeout(5)
+    assert extra.recv(100) == b""  # closed with no reply
+    assert keeper
+
+
+# --- token guards ----------------------------------------------------------------
+
+
+def test_server_refuses_to_serve_with_a_short_token(mod, monkeypatch):
+    monkeypatch.setattr(mod.wire, "ensure_token", lambda: "short")
+    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    with pytest.raises(mod.TokenError, match="too short"):
+        srv.start()
+    assert not srv.is_running and srv.socket is None
+
+
+def test_token_file_failure_has_its_own_error(mod, monkeypatch, tmp_path):
+    def boom():
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(mod.wire, "ensure_token", boom)
+    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    with pytest.raises(mod.TokenError) as info:
+        srv.start()
+    text = str(info.value)
+    assert text.startswith("Could not read or create the Meshwire token at ")
+    assert str(mod.wire.token_path()) in text and "permission denied" in text
+    assert not srv.is_running and srv.socket is None  # nothing was bound
+
+
+def test_empty_server_token_never_authenticates(server, mod):
+    server._token = ""
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line())
+    assert read_all(server, sock) == b""

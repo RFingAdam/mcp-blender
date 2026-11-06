@@ -6,6 +6,8 @@ allows it to import only a short list of standard-library modules. It must impor
 nothing from Blender or from either package.
 """
 
+import hashlib
+import hmac
 import os
 import secrets
 import stat
@@ -14,10 +16,13 @@ from pathlib import Path
 
 PROTOCOL = 1
 HELLO_MAX = 4096  # most bytes the first line may hold
-HELLO_SECONDS = 2.0  # time from accept to a good hello
+HELLO_SECONDS = 2.0  # time from accept to a finished handshake (hello, then hello_proof)
+MIN_TOKEN = 32  # shortest token ensure_token() will keep
+ADDON_LABEL = "meshwire-addon"  # what the add-on proves with
+CLIENT_LABEL = "meshwire-client"  # what the client proves with
 
 # JSON-RPC error codes the add-on sends on its own, outside any tool call.
-E_UNAUTHORIZED = -32001  # the hello token was missing or wrong
+E_UNAUTHORIZED = -32001  # the client's proof was wrong, or the second line was not hello_proof
 E_PROTOCOL = -32002  # the first line was not a hello, or the protocol versions differ
 E_TOO_MANY = -32003  # all client slots are taken
 E_TOO_LARGE = -32004  # a request line passed the inbound cap
@@ -59,26 +64,70 @@ def read_token() -> str | None:
     return text or None
 
 
-def ensure_token() -> str:
-    """Return the token, creating the 0600 file on first use."""
-    existing = read_token()
-    if existing:
-        _tighten(token_path())
-        return existing
-    path = token_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    token = secrets.token_urlsafe(32)
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+def _read_file_token(path: Path) -> str | None:
+    """The token in the file, never following a symlink. None when absent."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        fd = os.open(path, flags, 0o600)
-    except FileExistsError:
-        # Another process won the race, or the file is empty: overwrite only if empty.
-        if path.read_text(encoding="utf-8").strip():
-            return path.read_text(encoding="utf-8").strip()
-        fd = os.open(path, os.O_WRONLY | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(token + "\n")
-    return token
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise OSError(f"{path} must be a plain file, not a symlink: {e.strerror}") from e
+    with os.fdopen(fd, "rb") as handle:
+        return handle.read(4096).decode("utf-8", "replace").strip()
+
+
+def ensure_token() -> str:
+    """Return the token, creating the token file (0600, in a 0700 folder) on first use.
+
+    The token is never written to a file with looser permissions, and a symlink at the
+    path is refused. A file is created whole: written to a private temp file, then
+    linked into place, so no reader sees it empty and two first starts agree.
+    """
+    env = os.environ.get("MESHWIRE_TOKEN", "").strip()
+    if env:
+        return env
+    path = token_path()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise OSError(f"{path} is a symlink; Meshwire will not follow it. Remove it and retry")
+    existing = _read_file_token(path)
+    if existing is not None and len(existing) >= MIN_TOKEN:
+        _tighten(path)
+        return existing
+
+    token = secrets.token_urlsafe(32)
+    tmp = path.with_name(f".token.{os.getpid()}.{secrets.token_hex(4)}")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(tmp, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token + "\n")
+        if existing is not None:
+            # An empty or short file is stale (Meshwire never leaves one). Replace it,
+            # which also replaces rather than follows anything at the path.
+            os.replace(tmp, path)
+            return _read_file_token(path) or token
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            winner = _read_file_token(path)
+            if winner and len(winner) >= MIN_TOKEN:
+                _tighten(path)
+                return winner
+            os.replace(tmp, path)
+            return _read_file_token(path) or token
+        except OSError:
+            # No hard links here (some Windows and network volumes): exclusive create.
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(token + "\n")
+        return token
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def _tighten(path: Path) -> None:
@@ -94,11 +143,30 @@ def _tighten(path: Path) -> None:
         pass
 
 
-def hello_request(token: str, msg_id, client: str = "meshwire") -> dict:
-    """The first line a client sends."""
+def new_nonce() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def proof(token: str, label: str, a: str, b: str) -> str:
+    """HMAC-SHA256 of ``label``, ``a`` and ``b`` keyed by the token, as 64 hex characters."""
+    return hmac.new(token.encode(), f"{label}\n{a}\n{b}".encode(), hashlib.sha256).hexdigest()
+
+
+def hello_request(nonce: str, msg_id, client: str = "meshwire") -> dict:
+    """The first line a client sends. It carries a nonce, never the token."""
     return {
         "jsonrpc": "2.0",
         "method": "hello",
-        "params": {"token": token, "protocol": PROTOCOL, "client": client},
+        "params": {"protocol": PROTOCOL, "client": client, "nonce": nonce},
+        "id": msg_id,
+    }
+
+
+def hello_proof_request(proof_hex: str, msg_id) -> dict:
+    """The second line a client sends, after it has checked the add-on's proof."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "hello_proof",
+        "params": {"proof": proof_hex},
         "id": msg_id,
     }
