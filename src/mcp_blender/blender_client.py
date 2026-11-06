@@ -240,7 +240,9 @@ class BlenderClient:
         override = os.environ.get("MESHWIRE_ADDON_ADDRESS", "").strip()
         voided()
         if override:
-            if seen not in await self._override_endpoints(override):
+            endpoints = await self._override_endpoints(override, timeout)
+            voided()
+            if seen not in endpoints:
                 raise BlenderConnectionError(
                     f"MESHWIRE_ADDON_ADDRESS is set to {override}, but the add-on that answered "
                     f"is listening on {seen}. That variable is what this server compared "
@@ -264,11 +266,12 @@ class BlenderClient:
             raise BlenderConnectionError("The Meshwire add-on did not accept the handshake")
 
     @staticmethod
-    async def _override_endpoints(value: str) -> set[str]:
+    async def _override_endpoints(value: str, timeout: float) -> set[str]:
         """Every ``host:port`` MESHWIRE_ADDON_ADDRESS can mean, normalised like ``seen``.
 
         A literal address is normalised (brackets, IPv4-mapped prefix). A hostname such as
-        ``localhost:9876`` is resolved and any of its addresses matches.
+        ``localhost:9876`` is resolved, within ``timeout``, and any of its addresses
+        matches. A port outside 0 to 65535 matches nothing.
         """
         if value.startswith("["):
             host, _, rest = value[1:].partition("]")
@@ -277,15 +280,17 @@ class BlenderClient:
             host, _, port_text = value.partition(":")
         else:  # a bare IPv6 literal with the port after the last colon
             host, _, port_text = value.rpartition(":")
-        if not port_text.isdigit():
-            return set()
+        if not port_text.isdigit() or int(port_text) > 65535:
+            return set()  # getaddrinfo would wrap 70000 to 4464
         port = int(port_text)
         found = {wire.endpoint(host, port)}
         try:
-            infos = await asyncio.get_running_loop().getaddrinfo(
-                host, port, type=socket.SOCK_STREAM
+            infos = await asyncio.wait_for(
+                asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM),
+                timeout=timeout,
             )
-        except OSError:
+        except (OSError, UnicodeError, asyncio.TimeoutError):
+            # Unresolvable, unencodable (``a..b``) or too slow: only the literal form matches.
             return found
         found.update(wire.endpoint(str(info[4][0]), int(info[4][1])) for info in infos)
         return found

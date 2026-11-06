@@ -902,6 +902,77 @@ async def test_override_is_normalised_and_hostnames_resolve(mock_server, monkeyp
             assert await client.ping() is True
 
 
+@pytest.mark.parametrize("host", ["a..b", "x" * 64])
+@pytest.mark.asyncio
+async def test_override_with_an_unencodable_hostname_is_a_clean_error(
+    mock_server, monkeypatch, host
+):
+    # The idna codec raises UnicodeError, not OSError, for an empty or over-long label.
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", f"{host}:{mock_server.port}")
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError, match="MESHWIRE_ADDON_ADDRESS is set to"):
+        await client.connect(timeout=5.0)
+    assert mock_server.proofs == []
+
+
+@pytest.mark.asyncio
+async def test_override_port_above_65535_never_matches(mock_server, monkeypatch):
+    # getaddrinfo wraps the port, so localhost:<port + 65536> would match <port>.
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", f"localhost:{mock_server.port + 65536}")
+    client = BlenderClient(mock_server.host, mock_server.port)
+    try:
+        with pytest.raises(BlenderConnectionError, match="MESHWIRE_ADDON_ADDRESS is set to"):
+            await client.connect(timeout=5.0)
+    finally:
+        await client.disconnect()
+    assert mock_server.proofs == []
+
+
+@pytest.mark.asyncio
+async def test_override_lookup_is_bounded_by_the_connect_timeout(mock_server, monkeypatch):
+    loop = asyncio.get_running_loop()
+    real = loop.getaddrinfo
+
+    async def stuck(host, *args, **kwargs):
+        if host == "stuck.invalid":
+            await asyncio.sleep(10)
+        return await real(host, *args, **kwargs)
+
+    monkeypatch.setattr(loop, "getaddrinfo", stuck)
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", f"stuck.invalid:{mock_server.port}")
+    client = BlenderClient(mock_server.host, mock_server.port)
+    started = loop.time()
+    with pytest.raises(BlenderConnectionError):
+        await client.connect(timeout=0.5)
+    assert loop.time() - started < 5
+    assert mock_server.proofs == []
+
+
+@pytest.mark.asyncio
+async def test_disconnect_during_override_lookup_sends_no_proof(mock_server, monkeypatch):
+    loop = asyncio.get_running_loop()
+    real = loop.getaddrinfo
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def held(host, *args, **kwargs):
+        if host == "held.invalid":
+            started.set()
+            await release.wait()
+            raise OSError("no such host")
+        return await real(host, *args, **kwargs)
+
+    monkeypatch.setattr(loop, "getaddrinfo", held)
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", f"held.invalid:{mock_server.port}")
+    client = BlenderClient(mock_server.host, mock_server.port)
+    task = asyncio.create_task(client.connect(timeout=5.0))
+    await started.wait()
+    await client.disconnect()
+    release.set()
+    with pytest.raises(BlenderConnectionError, match="Disconnected"):
+        await task
+    assert mock_server.proofs == []
+
+
 class _RawReplyServer:
     def __init__(self, payload: bytes):
         self.payload = payload
