@@ -55,7 +55,8 @@ against these:
   command runs.
 - **Websites in your browser.** A web page can send a request to a local port. Anything that is not a
   valid `hello` in the first 4 KiB within 2 seconds is closed with nothing run, and a web page cannot
-  read the token. The Blender socket tests in CI send an HTTP POST with a JSON-RPC body and check that nothing runs and the connection closes.
+  read the token. The Blender socket tests in CI send an HTTP POST with a JSON-RPC body and check
+  that nothing runs and the connection closes.
 - **The network, when the host is not loopback.** See the next section. The handshake keeps
   strangers from running commands, but it does not hide or protect the traffic.
 - **Prompts that try to make the model run code.** `execute_script` refuses every call until you click
