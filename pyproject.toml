@@ -34,6 +34,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "jsonschema>=4.0.0",
     "ruff>=0.3.0",
+    "tomli>=2; python_version < '3.11'",
 ]
 
 [project.scripts]
@@ -65,7 +66,7 @@ select = ["E", "F", "I", "W"]
 ignore = ["E501"]  # Line length handled pragmatically for readability
 
 [tool.ruff.lint.per-file-ignores]
-# Blender addons require bl_info before imports
+# The logger is set up before the bpy import
 "addon/blender_mcp_addon/__init__.py" = ["E402"]
 # Blender integration test requires conditional imports and has intentional unused results
 "tests/blender_integration_test.py" = ["E402", "F841"]

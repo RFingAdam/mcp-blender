@@ -1,19 +1,9 @@
 """Meshwire addon: socket server for MCP clients."""
 
-bl_info = {
-    "name": "Meshwire",
-    "author": "Meshwire contributors",
-    "version": (0, 5, 0),
-    "blender": (4, 2, 0),
-    "location": "View3D > Sidebar > Meshwire",
-    "description": "Socket server for Model Context Protocol integration with AI assistants",
-    "category": "Interface",
-}
-
 import logging
 
 _logger = logging.getLogger(__name__)
-_logger.info("Meshwire addon loaded, version %s", ".".join(map(str, bl_info["version"])))
+_logger.info("Meshwire addon loaded")
 
 import bpy
 
@@ -23,6 +13,14 @@ from .socket_server import BindError, MCPSocketServer, TokenError
 # The id Blender files this add-on's preferences under. It is the package name, so it
 # follows the add-on when it is installed as an extension. Never spell it out elsewhere.
 ADDON_ID = __package__
+
+# The module name of add-ons installed from a zip older than 0.5.0. An extension does not
+# replace that copy, so the two can be enabled together.
+LEGACY_ADDON_ID = "blender_mcp_addon"
+LEGACY_WARNING = (
+    f"An older Meshwire add-on ({LEGACY_ADDON_ID}) is still enabled. "
+    "Remove it in Preferences > Add-ons, then restart Blender."
+)
 
 DEFAULT_HOST = "127.0.0.1"
 
@@ -47,6 +45,26 @@ def get_preferences():
         return addon.preferences if addon else None
     except Exception:
         return None
+
+
+def legacy_addon_enabled() -> bool:
+    """True when the older copy is enabled next to this one.
+
+    The test harness loads the source folder under the old name. That is this add-on, not
+    a second copy, so it never counts.
+    """
+    if ADDON_ID == LEGACY_ADDON_ID:
+        return False
+    try:
+        return LEGACY_ADDON_ID in bpy.context.preferences.addons
+    except Exception as e:
+        # Fail open: a broken check must not stop the server for everyone.
+        _logger.warning(
+            "Could not check whether the older Meshwire add-on (%s) is enabled: %s",
+            LEGACY_ADDON_ID,
+            e,
+        )
+        return False
 
 
 def server_address() -> tuple[str, int]:
@@ -138,6 +156,10 @@ class MCP_OT_StartServer(bpy.types.Operator):
         global _server
         if _server is not None and _server.is_running:
             self.report({"WARNING"}, "Server is already running")
+            return {"CANCELLED"}
+
+        if legacy_addon_enabled():
+            self.report({"ERROR"}, LEGACY_WARNING)
             return {"CANCELLED"}
 
         host, port = server_address()
@@ -242,6 +264,11 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
 
         # Server status and controls
         layout.separator()
+
+        running = get_server()
+        if legacy_addon_enabled() and not (running is not None and running.is_running):
+            layout.label(text=LEGACY_WARNING, icon="ERROR")
+            return
 
         global _server
         if _server is not None and _server.is_running:

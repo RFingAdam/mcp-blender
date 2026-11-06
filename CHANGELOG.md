@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The add-on installs as a Blender extension.** The release ZIP is now `meshwire-addon-<version>.zip`,
+  with a `blender_manifest.toml` at its root, and installs from Edit > Preferences > Get Extensions >
+  dropdown > Install from Disk... on Blender 4.2 and later. CI validates the built ZIP, installs it into a
+  fresh Blender and runs the handshake and `ping` against it, on 4.5 and 5.2. The manifest declares the
+  `network` and `files` permissions, and `bl_info` is gone. An older Meshwire add-on still enabled
+  (installed from a pre-0.5.0 ZIP as `blender_mcp_addon`) makes the new one show a warning in its sidebar
+  tab and refuse to start its server, so two servers never run together. Remove the old copy in
+  Preferences > Add-ons and restart Blender.
 - **Several Blenders at once.** Each running add-on now writes a small file, `instances/<port>.json`, in the
   Meshwire config folder next to the token, and removes it when its server stops. The file names the port,
   process, Blender version, add-on version and `.blend` file, and holds no token. With no `--port`, the

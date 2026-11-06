@@ -80,6 +80,35 @@ class Budgeted:
         return getattr(self._sock, name)
 
 
+class Chunked:
+    """Stands in for an accepted socket that delivers ``total`` bytes, at most ``per_call`` a recv.
+
+    It records the size each ``recv`` asked for. Then how the kernel splits or delays
+    delivery cannot change what a test sees. Everything else goes to the real socket.
+    """
+
+    def __init__(self, sock, total, per_call=1 << 20):
+        self._sock = sock
+        self.left = total
+        self.per_call = per_call
+        self.wanted = []
+
+    @property
+    def calls(self):
+        return len(self.wanted)
+
+    def recv(self, n):
+        self.wanted.append(n)
+        if self.left <= 0:
+            raise BlockingIOError
+        take = min(n, self.left, self.per_call)
+        self.left -= take
+        return b"x" * take
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+
 def budget(client, amount=0):
     client.sock = Budgeted(client.sock, amount)
     return client.sock
@@ -88,14 +117,6 @@ def budget(client, amount=0):
 def throttle(client, limit):
     client.sock = Throttled(client.sock, limit)
     return client.sock
-
-
-def send_some(sock, data):
-    """Send what the kernel takes right now on a non-blocking socket. Returns the count."""
-    try:
-        return sock.send(data)
-    except BlockingIOError:
-        return 0
 
 
 class CountingSock:
@@ -300,7 +321,9 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     counter = CountingSock(gate)
     client.sock = counter
     request(sock, "big")
-    tick(server)
+    # Loopback may take a few ticks to deliver the request (macOS does). The budget is
+    # not refilled meanwhile, so at most 128 KiB of the reply can leave before this.
+    pump(server, until=lambda: len(client.wbuf) > 0)
     assert len(client.wbuf) > 0, "a 32 MiB reply must not leave in one tick"
 
     got = bytearray()
@@ -422,8 +445,7 @@ def test_vanished_client_is_dropped_without_raising(server, capsys):
     (client,) = server.clients.values()
     gate = budget(client, 4096)
     request(gone, "big")
-    tick(server, 3)
-    assert len(client.wbuf) > 0
+    pump(server, until=lambda: len(client.wbuf) > 0)
     gone.close()
     gate.budget = 1 << 40  # the socket takes bytes again, so the dead peer shows up as an error
     pump(server, until=lambda: server.client_count == 0)
@@ -473,8 +495,7 @@ def test_closing_client_that_never_reads_is_dropped_after_grace(server, mod):
     (client,) = server.clients.values()
     throttle(client, 0)
     sock.sendall(b"{nope\n")  # an error close whose reply can never leave
-    tick(server, 3)
-    assert client.closing and len(client.wbuf) > 0
+    pump(server, until=lambda: client.closing and len(client.wbuf) > 0)
     clock.t += mod.CLOSE_GRACE - 0.1
     tick(server)
     assert server.client_count == 1
@@ -491,7 +512,7 @@ def test_stalled_write_buffer_is_dropped(server, mod):
     (client,) = server.clients.values()
     throttle(client, 0)
     request(sock, "big")
-    tick(server, 3)
+    pump(server, until=lambda: len(client.wbuf) > 0)  # delivery can take ticks (macOS)
     assert client.wbuf and not client.closing
     clock.t += mod.WRITE_STALL - 1
     tick(server)
@@ -644,10 +665,12 @@ def test_half_closed_client_that_never_reads_is_closed_after_write_stall(server,
     clock = with_clock(server)
     server.handlers.size = 8 * MIB
     sock = connect(server)
-    small_sndbuf(server, 0)
+    tick(server)
+    (client,) = server.clients.values()
+    budget(client, 0)  # nothing can leave, whatever the kernel would buffer
     request(sock, "big")
     sock.shutdown(socket.SHUT_WR)
-    tick(server, 3)
+    pump(server, until=lambda: len(client.wbuf) > 0)  # the stall clock starts here
     assert server.client_count == 1
     clock.t += mod.CLOSE_GRACE + 5  # the error-close grace does not apply to it
     tick(server)
@@ -937,24 +960,14 @@ def test_hello_of_exactly_the_limit_is_accepted(server, mod):
 
 
 def test_a_pre_auth_client_is_read_only_up_to_the_hello_limit(server, mod):
-    sock = connect(server, auth=False)
+    connect(server, auth=False)
     tick(server)
     client = only_client(server)
-    sizes = []
-    real = client.sock
-
-    class Spy:
-        def recv(self, n):
-            sizes.append(n)
-            return real.recv(n)
-
-        def __getattr__(self, name):
-            return getattr(real, name)
-
-    client.sock = Spy()
-    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
-    tick(server, 3)
-    assert sizes and max(sizes) <= mod.wire.HELLO_MAX + 1
+    stub = client.sock = Chunked(client.sock, 2 * MIB)
+    pump(server, until=lambda: client not in server.clients.values())  # over the limit: closed
+    sizes = stub.wanted
+    assert sizes
+    assert max(sizes) <= mod.wire.HELLO_MAX + 1
     assert sum(sizes) <= mod.wire.HELLO_MAX + 1 + len(sizes)  # at most one short read per tick
 
 
@@ -1115,7 +1128,9 @@ def test_closing_authenticated_clients_still_count_toward_the_cap(server, mod):
     socks = [connect(server) for _ in range(mod.MAX_CLIENTS - 1)]
     bad = connect(server)
     bad.sendall(b"{nope\n")
-    tick(server, 3)  # it is closing now, and still holds a slot
+    pump(
+        server, until=lambda: any(c.closing for c in server.clients.values())
+    )  # still holds a slot
     late = connect(server, auth=False)
     nc, result = hello_only(server, late)
     late.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
@@ -1132,15 +1147,17 @@ def test_refusals_beyond_max_closing_close_without_reply(server, mod, monkeypatc
     for _ in range(2):  # these two get a reply and fill the closing allowance
         sock = connect(server, auth=False)
         nc, result = hello_only(server, sock)
-        throttle(list(server.clients.values())[-1], 0)  # its refusal stays unsent: closing
+        refusing = list(server.clients.values())[-1]
+        throttle(refusing, 0)  # its refusal stays unsent: closing
         sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
-        tick(server, 3)
+        pump(server, until=lambda: refusing.closing)
         refused.append(sock)
     assert sum(c.closing for c in server.clients.values()) == 2
     extra = connect(server, auth=False)
     nc, result = hello_only(server, extra)
+    dropped = list(server.clients.values())[-1]
     extra.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
-    tick(server, 3)
+    pump(server, until=lambda: dropped not in server.clients.values())
     extra.setblocking(True)
     extra.settimeout(5)
     assert extra.recv(100) == b""  # closed with no reply
@@ -1202,11 +1219,30 @@ def test_seen_is_inside_the_proof(server):
 # --- ids are echoed only when they are safe to ---------------------------------
 
 
+def _parses_from_a_deep_stack(document, frames=40):
+    """Can json parse ``document`` with about as much stack under it as a server tick has?
+
+    The recursion limit differs between Python versions, so a depth near it parses on
+    some and not on others.
+    """
+    if frames:
+        return _parses_from_a_deep_stack(document, frames - 1)
+    try:
+        json.loads(document)
+    except RecursionError:
+        return False
+    return True
+
+
 @pytest.mark.parametrize("depth", [1, 5, 940, 945, 950])
 def test_nested_list_id_gets_an_error_with_null_id(server, mod, capsys, depth):
-    sock = connect(server, auth=False)
     nested = "[" * depth + "]" * depth
-    sock.sendall(('{"jsonrpc":"2.0","method":"hello","id":' + nested + "}\n").encode())
+    document = '{"jsonrpc":"2.0","method":"hello","id":' + nested + "}"
+    if not _parses_from_a_deep_stack(document):
+        # Where json itself gives up, the server closes the line unanswered, as designed.
+        pytest.skip("this interpreter's recursion limit cannot parse that deep")
+    sock = connect(server, auth=False)
+    sock.sendall((document + "\n").encode())
     code, _, msg_id = error_of(server, sock)
     assert code == -32600 and msg_id is None
     out = capsys.readouterr()
@@ -1251,24 +1287,12 @@ def test_a_closing_pre_auth_client_is_not_read_in_tiny_chunks(server, mod):
     sock = connect(server, auth=False)
     hello_only(server, sock)
     sock.sendall(proof_line("0" * 64))
-    tick(server, 3)  # the bad proof closes it
     client = only_client(server)
-    assert client.closing and not client.authed
-    sizes = []
-    real = client.sock
-
-    class Spy:
-        def recv(self, n):
-            sizes.append(n)
-            return real.recv(n)
-
-        def __getattr__(self, name):
-            return getattr(real, name)
-
-    client.sock = Spy()
-    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
-    tick(server, 3)
-    assert sizes and max(sizes) > 64 * 1024
+    pump(server, until=lambda: client.closing)  # the bad proof closes it
+    assert not client.authed
+    stub = client.sock = Chunked(client.sock, 2 * MIB)
+    pump(server, until=lambda: stub.calls >= 1)
+    assert max(stub.wanted) > 64 * 1024
 
 
 def test_protocol_mismatch_carries_the_addons_protocol_as_data(server, mod):

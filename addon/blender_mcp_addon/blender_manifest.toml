@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+
+id = "meshwire"
+version = "0.5.0"
+name = "Meshwire"
+tagline = "Drive Blender from an MCP client"
+maintainer = "RFingAdam"
+type = "add-on"
+
+website = "https://github.com/RFingAdam/meshwire"
+
+tags = ["3D View"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:AGPL-3.0-or-later"]
+
+[permissions]
+network = "Local socket for the Meshwire server; AI backends you configure"
+files = "Imports, exports, renders and bakes files you name"
