@@ -28,7 +28,7 @@ PORT_MIN = 1024  # lowest port either side accepts when one is named
 PORT_MAX = 65535
 PROBE_SECONDS = 0.2  # how long live_instances() waits for a TCP connect
 INSTANCE_MAX = 65536  # most bytes read from one instance file
-INSTANCE_FIELDS = ("port", "pid", "protocol", "addon", "blender", "blend", "started")
+INSTANCE_FIELDS = ("port", "host", "pid", "protocol", "addon", "blender", "blend", "started")
 HELLO_MAX = 4096  # most bytes the first line may hold
 HELLO_SECONDS = 2.0  # time from accept to a finished handshake (hello, then hello_proof)
 MIN_TOKEN = 32  # shortest token ensure_token() will keep
@@ -263,6 +263,9 @@ def hello_proof_request(proof_hex: str, msg_id) -> dict:
 
 
 _INSTANCE_NAME = re.compile(r"[0-9]{1,5}\.json")
+_TEMP_NAME = re.compile(r"\.[0-9]+\.[0-9]+\.[0-9a-f]{8}\.tmp")
+TEMP_MAX_AGE = 3600.0  # seconds before clean_stale_temps() treats a leftover temp file as dead
+WILDCARD = {"0.0.0.0", "::", ""}
 
 
 def _make_private_dir(directory: Path) -> None:
@@ -278,8 +281,8 @@ def _make_private_dir(directory: Path) -> None:
 def write_instance(port: int, info: dict) -> Path:
     """Publish ``instances/<port>.json`` for this Blender and return its path.
 
-    ``info`` supplies addon, blender and blend. pid, protocol and started are filled in
-    unless given. There is no token in the file. It is written whole to a private temp
+    ``info`` supplies addon, blender, blend and host (the address the add-on bound).
+    pid, protocol and started are filled in unless given. There is no token in the file. It is written whole to a private temp
     file in the same folder and renamed into place, so a reader never sees half of it.
     The Meshwire folder and the instances folder are created at 0700 when missing and
     held to the same checks as the token's folder.
@@ -292,6 +295,7 @@ def write_instance(port: int, info: dict) -> Path:
     _check_dir(directory)
     record = {
         "port": port,
+        "host": "127.0.0.1",
         "pid": os.getpid(),
         "protocol": PROTOCOL,
         "addon": "unknown",
@@ -328,15 +332,34 @@ def remove_instance(port: int) -> None:
         pass
 
 
-def _read_instance(path: Path) -> dict | None:
-    """The instance record in ``path``, or None when it is not a well-formed one."""
+def clean_stale_temps() -> None:
+    """Delete temp files an interrupted write_instance left: plain files, over an hour old."""
+    try:
+        entries = list(os.scandir(instances_dir()))
+    except OSError:
+        return
+    cutoff = time.time() - TEMP_MAX_AGE
+    for entry in entries:
+        try:
+            if not _TEMP_NAME.fullmatch(entry.name):
+                continue
+            info = os.lstat(entry.path)
+            if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff:
+                os.unlink(entry.path)
+        except OSError:
+            pass
+
+
+def _read_instance(path: Path) -> tuple[dict, tuple[int, int]] | None:
+    """The record in ``path`` and its (inode, mtime_ns), or None when it is not well formed."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
     except OSError:
         return None
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
             return None
         with os.fdopen(fd, "rb", closefd=False) as handle:
             raw = handle.read(INSTANCE_MAX + 1)
@@ -353,28 +376,59 @@ def _read_instance(path: Path) -> dict | None:
     port, started = data["port"], data["started"]
     if type(port) is not int or not PORT_MIN <= port <= PORT_MAX:
         return None
-    if type(started) not in (int, float):
+    if type(started) not in (int, float) or type(data["host"]) is not str:
         return None
-    return {k: data[k] for k in INSTANCE_FIELDS}
+    return {k: data[k] for k in INSTANCE_FIELDS}, (opened.st_ino, opened.st_mtime_ns)
 
 
-def _accepts_connections(port: int) -> bool:
+def _probe(host: str, port: int, timeout: float) -> str:
+    """Try a TCP connect: "live", "refused" (nothing listens) or "unknown" (anything else).
+
+    A timeout is "unknown", not "refused": a busy Blender with a full backlog times out,
+    and Windows takes longer than the timeout to refuse a loopback connect.
+    """
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=PROBE_SECONDS):
-            return True
+        with socket.create_connection((host, port), timeout=timeout):
+            return "live"
+    except ConnectionRefusedError:
+        return "refused"
     except OSError:
-        return False
+        return "unknown"
+
+
+def _probe_host(host: str) -> str | None:
+    """Where to probe an instance bound to ``host``, or None if this machine cannot reach it."""
+    if host == "::" or host == "::1":
+        return "::1"
+    if host in WILDCARD or host.lower() == "localhost":
+        return "127.0.0.1"
+    if host.startswith("127."):
+        return host
+    return None
+
+
+def _delete_if_unchanged(path: str, ident: tuple[int, int]) -> None:
+    """Unlink a stale instance file unless it was replaced since it was read."""
+    try:
+        now = os.lstat(path)
+        if stat.S_ISREG(now.st_mode) and (now.st_ino, now.st_mtime_ns) == ident:
+            os.unlink(path)
+    except OSError:
+        pass
 
 
 def live_instances() -> list[dict]:
     """The Blenders that are running now, newest first by ``started``.
 
     A file counts only if it is a plain file called ``<number>.json`` with every field,
-    a port in range that matches its name, and a port that accepts a TCP connect within
-    PROBE_SECONDS. A file whose port does not answer is stale and is deleted, if it is
-    a plain file. Symlinks are never followed. On POSIX the Meshwire folder and the
-    instances folder must be ours and closed to writes by others, as the token's folder
-    must be; otherwise nothing is trusted and the result is empty.
+    a port in range that matches its name, and an address this machine can reach
+    (loopback or a wildcard; others are left alone, neither used nor deleted). The port
+    is probed at the recorded address. "live" chooses the instance. "refused" means nothing
+    listens: the file is stale and is deleted, if it is still the file that was read.
+    "unknown" (a timeout, say) keeps the file and skips the instance this time.
+    Symlinks are never followed. On POSIX the Meshwire folder and the instances folder
+    must be ours and closed to writes by others, as the token's folder must be; otherwise
+    nothing is trusted and the result is empty.
     """
     directory = instances_dir()
     try:
@@ -395,16 +449,24 @@ def live_instances() -> list[dict]:
                 continue
         except OSError:
             continue
-        record = _read_instance(Path(entry.path))
-        if record is None or entry.name != f"{record['port']}.json":
+        read = _read_instance(Path(entry.path))
+        if read is None or entry.name != f"{read[0]['port']}.json":
             continue
-        if _accepts_connections(record["port"]):
+        record, ident = read
+        target = _probe_host(record["host"])
+        if target is None:
+            continue
+        answer = _probe(target, record["port"], PROBE_SECONDS)
+        if answer == "live":
             found.append(record)
-            continue
-        try:
-            if stat.S_ISREG(os.lstat(entry.path).st_mode):
-                os.unlink(entry.path)
-        except OSError:
-            pass
+        elif answer == "refused":
+            _delete_if_unchanged(entry.path, ident)
+        else:
+            logger.info(
+                "Port %s did not answer within %.1f s; keeping %s and not using it this time",
+                record["port"],
+                PROBE_SECONDS,
+                entry.name,
+            )
     found.sort(key=lambda r: (-r["started"], r["port"]))
     return found

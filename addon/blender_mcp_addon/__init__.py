@@ -150,6 +150,8 @@ class MCP_OT_StartServer(bpy.types.Operator):
             return {"CANCELLED"}
         _server = server
         self.report({"INFO"}, f"MCP server started on {host}:{server.port}")
+        if server.discovery_warning:
+            self.report({"WARNING"}, server.discovery_warning)
         return {"FINISHED"}
 
 
@@ -248,6 +250,8 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
             # Show connected clients count
             client_count = _server.client_count
             layout.label(text=f"Connected clients: {client_count}")
+            if _server.discovery_warning:
+                layout.label(text=_server.discovery_warning, icon="ERROR")
             layout.operator("meshwire.copy_token", icon="COPYDOWN")
         else:
             layout.label(text="Status: Stopped", icon="SNAP_FACE")

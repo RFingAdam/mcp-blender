@@ -57,10 +57,14 @@ def _configure_listener(sock) -> None:
 
 
 def _port_taken(error: OSError) -> bool:
-    if error.errno == errno.EADDRINUSE:
+    """Is this the error for a port someone else holds, so the scan should try the next?
+
+    Windows reports Winsock codes in ``winerror``: 10048 (address in use) and 10013
+    (access denied, which an exclusive bind gives when another socket holds the port).
+    """
+    if getattr(error, "winerror", None) in (10048, 10013):
         return True
-    # An exclusive bind that loses to another listener can report access denied.
-    return sys.platform == "win32" and error.errno == errno.EACCES
+    return error.errno in (errno.EADDRINUSE, errno.EACCES)
 
 
 def bind_listener(host: str, port: int) -> tuple[socket.socket, int]:
@@ -135,7 +139,9 @@ class MCPSocketServer:
 
     def __init__(self, host: str = "127.0.0.1", port: int = 9876):
         self.host = host
-        self.port = port
+        self.requested_port = port  # 0 means the first free port; start() scans afresh each time
+        self.port = port  # the port held while running
+        self.discovery_warning = ""  # set when the instance file could not be written
         self.socket: socket.socket | None = None
         self.clients: dict[socket.socket, _Client] = {}
         self.is_running = False
@@ -159,13 +165,15 @@ class MCPSocketServer:
         """Start the socket server on the port given, or the first free one when it is 0.
 
         Raises BindError when no port can be bound and TokenError when the token cannot
-        be used. On success ``self.port`` is the port actually held.
+        be used. Returns False if already running. On success ``self.port`` is the port
+        actually held.
         """
         if self.is_running:
             return False
+        self.discovery_warning = ""
 
         self._token = self._load_token()
-        self.socket, self.port = bind_listener(self.host, self.port)
+        self.socket, self.port = bind_listener(self.host, self.requested_port)
         try:
             self.is_running = True
 
@@ -190,17 +198,25 @@ class MCPSocketServer:
     def _publish_instance(self) -> None:
         """Tell the MCP server this Blender is here. A failure costs discovery, not the server."""
         try:
+            wire.clean_stale_temps()
             version = self._text(getattr(bpy.app, "version_string", ""))
             self._instance_path = wire.write_instance(
                 self.port,
                 {
+                    "host": self.host,
                     "addon": self._addon_version(),
                     "blender": version or "unknown",
                     "blend": self._text(getattr(bpy.data, "filepath", "")),
                 },
             )
         except Exception as e:
-            print(f"Could not write the Meshwire instance file: {e}")
+            reason = e.strerror if isinstance(e, OSError) and e.strerror else e
+            where = wire.instances_dir() / f"{self.port}.json"
+            self.discovery_warning = (
+                f"Discovery is off: could not write the instance file at {where}: {reason}. "
+                f"Clients need --port {self.port}."
+            )
+            print(self.discovery_warning)
 
     @staticmethod
     def _load_token() -> str:
@@ -240,6 +256,7 @@ class MCPSocketServer:
         if self._instance_path is not None:
             wire.remove_instance(self.port)
             self._instance_path = None
+        self.discovery_warning = ""
 
         # Unregister timer
         if self._timer_registered:
@@ -569,12 +586,22 @@ class MCPSocketServer:
     def _flush(self, client: _Client):
         """Send from wbuf until the socket stops taking bytes."""
         while client.wbuf and not client.dead:
+            # Release both views before wbuf is touched again: a send that raised keeps its
+            # arguments alive in the traceback, and a live view forbids resizing wbuf.
+            view = memoryview(client.wbuf)
+            chunk = view[:SEND_CHUNK]
+            failed = False
             try:
-                with memoryview(client.wbuf) as view:
-                    sent = client.sock.send(view[:SEND_CHUNK])
+                sent = client.sock.send(chunk)
             except (BlockingIOError, InterruptedError):
                 return
             except OSError:
+                failed = True
+                sent = 0
+            finally:
+                chunk.release()
+                view.release()
+            if failed:
                 client.dead = True
                 client.wbuf.clear()
                 return

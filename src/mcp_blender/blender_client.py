@@ -76,34 +76,42 @@ class BlenderClient:
                 return
             await self._open(timeout)
 
+    async def _discover(self) -> list[dict]:
+        """Live instances to try, newest first. Empty when the port is fixed or the host remote.
+
+        Blender can start, restart or move after this server did, so this runs at every
+        open. Discovery makes blocking probes, so it runs off the event loop.
+        """
+        if self._fixed_port is not None or self.host.lower() not in LOOPBACK_HOSTS:
+            return []
+        return await asyncio.to_thread(wire.live_instances)
+
     async def _resolve_port(self) -> int:
-        """The port to connect to now, and ``self.port`` is set to it.
+        """The port to connect to first, and ``self.port`` is set to it.
 
         A port given to the constructor is used as it is, with no discovery. Otherwise,
-        for a loopback host, the newest live instance file names it, and with none the
-        first port of the add-on's range is the answer. Blender can start, restart or
-        move after this server did, so this runs at every open. Discovery makes blocking
-        probes, so it runs off the event loop.
+        for a loopback host, the newest live instance names it, and with none the first
+        port of the add-on's range is the answer.
         """
         if self._fixed_port is not None:
             self.port = self._fixed_port
             return self.port
-        self.port = wire.PORT_FIRST
-        if self.host.lower() not in LOOPBACK_HOSTS:
-            return self.port
-        found = await asyncio.to_thread(wire.live_instances)
+        found = await self._discover()
+        self.port = found[0]["port"] if found else wire.PORT_FIRST
         if found:
-            pick = found[0]
-            self.port = pick["port"]
-            more = f", the most recently started of {len(found)}" if len(found) > 1 else ""
-            logger.info(
-                "Using the Blender on port %s (Blender %s, file %s)%s",
-                pick["port"],
-                pick["blender"],
-                pick["blend"] or "unsaved",
-                more,
-            )
+            self._log_pick(found[0], len(found))
         return self.port
+
+    @staticmethod
+    def _log_pick(pick: dict, total: int) -> None:
+        more = f", the most recently started of {total}" if total > 1 else ""
+        logger.info(
+            "Using the Blender on port %s (Blender %r, file %r)%s",
+            pick["port"],
+            pick["blender"],
+            pick["blend"] or "unsaved",
+            more,
+        )
 
     async def _open(self, timeout: float) -> None:
         """Connect, run the handshake and only then become connected.
@@ -113,6 +121,10 @@ class BlenderClient:
         handshake is done and no disconnect() has intervened; they are installed
         together, with no await after the last check, so a disconnect can never leave
         _connected True over a closed writer, or an open socket nobody owns.
+
+        With no fixed port, each live instance is tried in turn, newest first, with the
+        full handshake, until one accepts. A port that is live but not Meshwire (a crashed
+        Blender's port taken by another program) so cannot shadow a healthy older Blender.
         """
         try:
             token = wire.read_token()
@@ -127,9 +139,46 @@ class BlenderClient:
                 "the MCP client."
             )
         epoch = self._epoch
-        await self._resolve_port()
+        if self._fixed_port is not None:
+            self.port = self._fixed_port
+            await self._connect_to(token, timeout, epoch)
+            return
+        found = await self._discover()
         if epoch != self._epoch:
             raise BlenderConnectionError("Disconnected")
+        if not found:
+            self.port = wire.PORT_FIRST
+            await self._connect_to(token, timeout, epoch)
+            return
+        failures = []
+        for position, instance in enumerate(found):
+            self.port = instance["port"]
+            if position == 0:
+                self._log_pick(instance, len(found))
+            else:
+                logger.info("Trying the next Blender, on port %s", instance["port"])
+            try:
+                await self._connect_to(token, timeout, epoch)
+                return
+            except BlenderConnectionError as e:
+                if epoch != self._epoch:
+                    raise
+                reason = str(e).splitlines()[0] if str(e) else type(e).__name__
+                failures.append((instance, reason))
+        lines = [
+            f"  port {i['port']} ({wire.instances_dir() / (str(i['port']) + '.json')}, "
+            f"Blender {i['blender']!r}): {reason}"
+            for i, reason in failures
+        ]
+        raise BlenderConnectionError(
+            "Could not connect to any of the Meshwire instances found:\n"
+            + "\n".join(lines)
+            + "\nA file here may be stale, or another program may hold that port. "
+            "Pass --port or set MESHWIRE_PORT to pick the Blender to use."
+        )
+
+    async def _connect_to(self, token: str, timeout: float, epoch: int) -> None:
+        """One connection attempt at ``self.port``: connect, handshake, install."""
 
         def voided() -> None:
             """Stop at once if a disconnect() ran while this open was waiting."""

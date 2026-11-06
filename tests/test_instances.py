@@ -5,6 +5,7 @@ tests/test_socket_server.py. The server half uses the server's own wire.py.
 """
 
 import asyncio
+import errno
 import json
 import logging
 import os
@@ -163,6 +164,82 @@ def test_posix_keeps_reuseaddr(mod, monkeypatch):  # noqa: F811
     assert (socket.SO_REUSEADDR, 1) in calls
 
 
+def test_windows_error_codes_count_as_a_taken_port(mod):  # noqa: F811
+    class Winerror(OSError):
+        def __init__(self, code):
+            super().__init__(0, "fake")
+            self.winerror = code
+            self.errno = None
+
+    assert mod._port_taken(Winerror(10048))
+    assert mod._port_taken(Winerror(10013))
+    assert not mod._port_taken(Winerror(10049))
+    assert mod._port_taken(OSError(errno.EADDRINUSE, "in use"))
+    assert mod._port_taken(OSError(errno.EACCES, "denied"))
+    assert not mod._port_taken(OSError(errno.EADDRNOTAVAIL, "bad address"))
+
+
+def test_auto_scan_moves_past_a_windows_access_denied(mod, narrow_range, held, monkeypatch):  # noqa: F811
+    real = mod.socket.socket
+    calls = []
+
+    class Denying:
+        """The first port refuses the way an exclusive bind does on Windows."""
+
+        def __init__(self, *args):
+            self._sock = real(*args)
+
+        def bind(self, address):
+            calls.append(address[1])
+            if address[1] == narrow_range:
+                err = OSError(0, "denied")
+                err.winerror, err.errno = 10013, None
+                raise err
+            return self._sock.bind(address)
+
+        def __getattr__(self, name):
+            return getattr(self._sock, name)
+
+    monkeypatch.setattr(mod.socket, "socket", Denying)
+    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    assert srv.start()
+    try:
+        assert srv.port == narrow_range + 1 and calls == [narrow_range, narrow_range + 1]
+    finally:
+        srv.stop()
+
+
+def test_a_second_start_scans_the_range_again(mod, narrow_range, held):  # noqa: F811
+    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    assert srv.start()
+    assert srv.port == narrow_range and srv.requested_port == 0
+    srv.stop()
+    held.append(hold(narrow_range))
+    assert srv.start()
+    try:
+        assert srv.port == narrow_range + 1
+    finally:
+        srv.stop()
+
+
+def test_a_taken_instance_file_failure_is_reported_not_fatal(mod, narrow_range, monkeypatch):  # noqa: F811
+    def broken(port, info):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(sys.modules[f"{ROOT}.wire"], "write_instance", broken)
+    srv = mod.MCPSocketServer("127.0.0.1", 0)
+    assert srv.start()  # the server still serves
+    try:
+        warning = srv.discovery_warning
+        assert warning.startswith("Discovery is off: could not write the instance file at ")
+        assert str(wire.instances_dir() / f"{srv.port}.json") in warning
+        assert "Permission denied" in warning
+        assert f"Clients need --port {srv.port}." in warning
+    finally:
+        srv.stop()
+    assert srv.discovery_warning == ""
+
+
 @WINDOWS_ONLY
 def test_windows_second_bind_on_the_same_port_fails(mod, narrow_range):  # noqa: F811
     first = mod.MCPSocketServer("127.0.0.1", narrow_range)
@@ -183,7 +260,17 @@ def test_instance_file_written_and_removed(mod, narrow_range):  # noqa: F811
     path = wire.instances_dir() / f"{srv.port}.json"
     try:
         data = json.loads(path.read_text())
-        assert set(data) == {"port", "pid", "protocol", "addon", "blender", "blend", "started"}
+        assert set(data) == {
+            "port",
+            "host",
+            "pid",
+            "protocol",
+            "addon",
+            "blender",
+            "blend",
+            "started",
+        }
+        assert data["host"] == "127.0.0.1"
         assert data["port"] == srv.port and data["pid"] == os.getpid()
         assert data["protocol"] == wire.PROTOCOL
         assert abs(data["started"] - time.time()) < 60
@@ -258,6 +345,7 @@ def test_most_recent_live_instance_wins(cfg, held):
     assert found[0]["blend"] == "/new.blend"
 
 
+@POSIX_ONLY
 def test_stale_instance_file_is_removed(cfg, held):
     good = live(held, 1000.0)
     with closing(socket.socket()) as probe:
@@ -266,6 +354,122 @@ def test_stale_instance_file_is_removed(cfg, held):
     stale = wire.write_instance(dead, info(started=5000.0))
     assert [i["port"] for i in wire.live_instances()] == [good]
     assert not stale.exists()
+
+
+# --- the probe's three answers ---------------------------------------------------
+
+
+def fake_probe(monkeypatch, answers, seen=None):
+    def probe(host, port, timeout):
+        if seen is not None:
+            seen.append((host, port, timeout))
+        return answers[port]
+
+    monkeypatch.setattr(wire, "_probe", probe)
+
+
+def test_probe_answers_decide_choose_delete_or_keep(cfg, monkeypatch, caplog):
+    paths = {p: wire.write_instance(p, info(started=float(p))) for p in (9001, 9002, 9003)}
+    fake_probe(monkeypatch, {9001: "live", 9002: "refused", 9003: "unknown"})
+    with caplog.at_level(logging.INFO, logger="meshwire.wire"):
+        assert [i["port"] for i in wire.live_instances()] == [9001]
+    assert paths[9001].exists()
+    assert not paths[9002].exists()  # refused: nothing listens, so the file is stale
+    assert paths[9003].exists()  # unknown (a timeout): kept, and not chosen this time
+    assert "9003" in caplog.text
+
+
+def test_probe_timeout_does_not_delete_a_live_blenders_file(cfg, monkeypatch):
+    path = wire.write_instance(9004, info())
+    monkeypatch.setattr(wire, "_probe", lambda host, port, timeout: "unknown")
+    assert wire.live_instances() == []
+    assert path.exists()
+    monkeypatch.setattr(wire, "_probe", lambda host, port, timeout: "live")
+    assert [i["port"] for i in wire.live_instances()] == [9004]
+
+
+def test_real_probe_sees_a_live_listener(held):
+    sock = listener()
+    held.append(sock)
+    assert wire._probe("127.0.0.1", sock.getsockname()[1], 1.0) == "live"
+
+
+@POSIX_ONLY
+def test_real_probe_sees_a_refusal():
+    with closing(socket.socket()) as probe:
+        probe.bind(("127.0.0.1", 0))
+        dead = probe.getsockname()[1]
+    assert wire._probe("127.0.0.1", dead, 1.0) == "refused"
+
+
+def test_probe_timeout_is_unknown_not_refused(monkeypatch):
+    def slow(*args, **kwargs):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr(wire.socket, "create_connection", slow)
+    assert wire._probe("127.0.0.1", 9999, 0.2) == "unknown"
+
+
+def test_probe_uses_the_recorded_host_and_maps_wildcards(cfg, monkeypatch):
+    wire.write_instance(9010, info(host="127.0.0.1"))
+    wire.write_instance(9011, info(host="0.0.0.0"))
+    wire.write_instance(9012, info(host="::"))
+    wire.write_instance(9013, info(host="::1"))
+    seen = []
+    fake_probe(monkeypatch, {p: "live" for p in (9010, 9011, 9012, 9013)}, seen)
+    wire.live_instances()
+    assert {(h, p) for h, p, _ in seen} == {
+        ("127.0.0.1", 9010),
+        ("127.0.0.1", 9011),
+        ("::1", 9012),
+        ("::1", 9013),
+    }
+    assert all(t == wire.PROBE_SECONDS for _, _, t in seen)
+
+
+def test_instances_bound_elsewhere_are_left_alone(cfg, monkeypatch):
+    path = wire.write_instance(9020, info(host="192.168.1.50"))
+    seen = []
+    fake_probe(monkeypatch, {}, seen)
+    assert wire.live_instances() == []
+    assert seen == [] and path.exists()
+
+
+def test_a_file_replaced_during_the_probe_is_not_deleted(cfg, monkeypatch):
+    path = wire.write_instance(9030, info(started=1.0))
+
+    def probe(host, port, timeout):
+        wire.write_instance(9030, info(started=2.0))  # a new Blender took the port
+        return "refused"
+
+    monkeypatch.setattr(wire, "_probe", probe)
+    assert wire.live_instances() == []
+    assert path.exists() and json.loads(path.read_text())["started"] == 2.0
+
+
+def test_a_failed_write_leaves_no_temp_file(cfg, monkeypatch):
+    def boom(fd):
+        raise OSError(5, "I/O error")
+
+    monkeypatch.setattr(os, "fsync", boom)
+    with pytest.raises(OSError):
+        wire.write_instance(9040, info())
+    assert list(wire.instances_dir().iterdir()) == []
+
+
+def test_old_temp_files_are_cleaned_and_other_files_are_not(cfg):
+    wire.write_instance(9041, info())
+    d = wire.instances_dir()
+    old = d / ".9041.123.deadbeef.tmp"
+    fresh = d / ".9041.124.cafef00d.tmp"
+    other = d / ".9041.notes.tmp"
+    for f in (old, fresh, other):
+        f.write_text("x")
+    os.utime(old, (time.time() - 7200,) * 2)
+    os.utime(other, (time.time() - 7200,) * 2)
+    wire.clean_stale_temps()
+    assert not old.exists() and fresh.exists() and other.exists()
+    assert (d / "9041.json").exists()
 
 
 def test_malformed_files_are_ignored_and_kept(cfg, held):
@@ -322,6 +526,7 @@ def test_no_instances_folder_is_just_empty(cfg):
 def fake_instance(port, started, blend="", blender="4.5.15"):
     return {
         "port": port,
+        "host": "127.0.0.1",
         "pid": 1,
         "protocol": 1,
         "addon": "0.5.0",
@@ -354,6 +559,14 @@ def test_discovery_picks_newest_and_logs_it(monkeypatch, caplog):
     text = caplog.text
     assert "9880" in text and "5.2.3" in text and "/work/new.blend" in text
     assert "the most recently started of 2" in text
+
+
+def test_log_shows_file_values_escaped(monkeypatch, caplog):
+    found = [fake_instance(9877, 1.0, blend="/a\nFAKE LOG LINE.blend")]
+    monkeypatch.setattr(wire, "live_instances", lambda: found)
+    with caplog.at_level(logging.INFO, logger="meshwire.client"):
+        asyncio.run(BlenderClient("127.0.0.1", None)._resolve_port())
+    assert "\nFAKE LOG LINE" not in caplog.text
 
 
 def test_discovery_log_for_a_single_instance_has_no_count(monkeypatch, caplog):
@@ -420,6 +633,74 @@ def test_open_uses_the_discovered_port(cfg, monkeypatch):
     with pytest.raises(BlenderConnectionError, match="9881"):
         asyncio.run(client.connect(timeout=1))
     assert seen == [9881]
+
+
+# --- falling through to the next instance ---------------------------------------
+
+
+def test_a_foreign_listener_on_the_newest_port_does_not_shadow_a_healthy_blender(
+    cfg, held, monkeypatch
+):
+    wire.ensure_token()
+    older = live(held, 1000.0, blend="/old.blend")
+    newer = live(held, 2000.0, blend="/new.blend")
+    tried = []
+
+    async def hello(self, reader, writer, token, timeout, voided):
+        port = writer.get_extra_info("peername")[1]
+        tried.append(port)
+        if port == newer:
+            raise BlenderConnectionError("did not prove it holds the Meshwire token")
+
+    monkeypatch.setattr(BlenderClient, "_hello", hello)
+
+    async def go():
+        client = BlenderClient("127.0.0.1", None)
+        await client.connect(timeout=2)
+        try:
+            return client.port
+        finally:
+            await client.disconnect()
+
+    assert asyncio.run(go()) == older
+    assert tried == [newer, older]
+
+
+def test_every_instance_failing_names_them_all(cfg, held, monkeypatch):
+    wire.ensure_token()
+    first = live(held, 1000.0)
+    second = live(held, 2000.0)
+
+    async def hello(self, reader, writer, token, timeout, voided):
+        raise BlenderConnectionError(f"refused handshake on {writer.get_extra_info('peername')[1]}")
+
+    monkeypatch.setattr(BlenderClient, "_hello", hello)
+    client = BlenderClient("127.0.0.1", None)
+    with pytest.raises(BlenderConnectionError) as raised:
+        asyncio.run(client.connect(timeout=2))
+    text = str(raised.value)
+    for port in (first, second):
+        assert str(port) in text and f"{port}.json" in text
+        assert f"refused handshake on {port}" in text
+    assert "--port" in text and "MESHWIRE_PORT" in text
+
+
+def test_an_explicit_port_never_falls_through(cfg, held, monkeypatch):
+    wire.ensure_token()
+    other = live(held, 2000.0)
+    fixed = live(held, 1000.0)
+    tried = []
+
+    async def hello(self, reader, writer, token, timeout, voided):
+        tried.append(writer.get_extra_info("peername")[1])
+        raise BlenderConnectionError("explicit port failed")
+
+    monkeypatch.setattr(BlenderClient, "_hello", hello)
+    monkeypatch.setattr(wire, "live_instances", lambda: pytest.fail("no discovery"))
+    client = BlenderClient("127.0.0.1", fixed)
+    with pytest.raises(BlenderConnectionError, match="explicit port failed"):
+        asyncio.run(client.connect(timeout=2))
+    assert tried == [fixed] and other not in tried
 
 
 # --- the server's port setting --------------------------------------------------
