@@ -8,14 +8,27 @@ nothing from Blender or from either package.
 
 import hashlib
 import hmac
+import json
+import logging
 import os
+import re
 import secrets
+import socket
 import stat
 import sys
 import time
 from pathlib import Path
 
+logger = logging.getLogger("meshwire.wire")
+
 PROTOCOL = 1
+PORT_FIRST = 9876  # the add-on scans PORT_FIRST to PORT_LAST for a free port
+PORT_LAST = 9885
+PORT_MIN = 1024  # lowest port either side accepts when one is named
+PORT_MAX = 65535
+PROBE_SECONDS = 0.2  # how long live_instances() waits for a TCP connect
+INSTANCE_MAX = 65536  # most bytes read from one instance file
+INSTANCE_FIELDS = ("port", "pid", "protocol", "addon", "blender", "blend", "started")
 HELLO_MAX = 4096  # most bytes the first line may hold
 HELLO_SECONDS = 2.0  # time from accept to a finished handshake (hello, then hello_proof)
 MIN_TOKEN = 32  # shortest token ensure_token() will keep
@@ -247,3 +260,151 @@ def hello_proof_request(proof_hex: str, msg_id) -> dict:
         "params": {"proof": proof_hex},
         "id": msg_id,
     }
+
+
+_INSTANCE_NAME = re.compile(r"[0-9]{1,5}\.json")
+
+
+def _make_private_dir(directory: Path) -> None:
+    """Create ``directory`` at 0700 if it is missing. The mode is not left to the umask."""
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        return
+    if sys.platform != "win32":
+        os.chmod(directory, 0o700)  # mkdir's mode is masked by the umask; 0700 only loses bits
+
+
+def write_instance(port: int, info: dict) -> Path:
+    """Publish ``instances/<port>.json`` for this Blender and return its path.
+
+    ``info`` supplies addon, blender and blend. pid, protocol and started are filled in
+    unless given. There is no token in the file. It is written whole to a private temp
+    file in the same folder and renamed into place, so a reader never sees half of it.
+    The Meshwire folder and the instances folder are created at 0700 when missing and
+    held to the same checks as the token's folder.
+    """
+    base, directory = config_dir(), instances_dir()
+    base.parent.mkdir(parents=True, exist_ok=True)
+    _make_private_dir(base)
+    _make_private_dir(directory)
+    _check_dir(base)
+    _check_dir(directory)
+    record = {
+        "port": port,
+        "pid": os.getpid(),
+        "protocol": PROTOCOL,
+        "addon": "unknown",
+        "blender": "unknown",
+        "blend": "",
+        "started": time.time(),
+    }
+    record.update({k: v for k, v in info.items() if k in INSTANCE_FIELDS and k != "port"})
+    path = directory / f"{port}.json"
+    tmp = directory / f".{port}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(tmp, flags, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    return path
+
+
+def remove_instance(port: int) -> None:
+    """Delete this port's instance file if it is there and is a plain file."""
+    path = instances_dir() / f"{port}.json"
+    try:
+        if stat.S_ISREG(os.lstat(path).st_mode):
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+def _read_instance(path: Path) -> dict | None:
+    """The instance record in ``path``, or None when it is not a well-formed one."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            raw = handle.read(INSTANCE_MAX + 1)
+    finally:
+        os.close(fd)
+    if len(raw) > INSTANCE_MAX:
+        return None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(data, dict) or any(k not in data for k in INSTANCE_FIELDS):
+        return None
+    port, started = data["port"], data["started"]
+    if type(port) is not int or not PORT_MIN <= port <= PORT_MAX:
+        return None
+    if type(started) not in (int, float):
+        return None
+    return {k: data[k] for k in INSTANCE_FIELDS}
+
+
+def _accepts_connections(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=PROBE_SECONDS):
+            return True
+    except OSError:
+        return False
+
+
+def live_instances() -> list[dict]:
+    """The Blenders that are running now, newest first by ``started``.
+
+    A file counts only if it is a plain file called ``<number>.json`` with every field,
+    a port in range that matches its name, and a port that accepts a TCP connect within
+    PROBE_SECONDS. A file whose port does not answer is stale and is deleted, if it is
+    a plain file. Symlinks are never followed. On POSIX the Meshwire folder and the
+    instances folder must be ours and closed to writes by others, as the token's folder
+    must be; otherwise nothing is trusted and the result is empty.
+    """
+    directory = instances_dir()
+    try:
+        _check_dir(config_dir())
+        _check_dir(directory)
+        entries = list(os.scandir(directory))
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        logger.warning("Ignoring the Meshwire instances in %s: %s", directory, e)
+        return []
+    found = []
+    for entry in entries:
+        if not _INSTANCE_NAME.fullmatch(entry.name):
+            continue
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        record = _read_instance(Path(entry.path))
+        if record is None or entry.name != f"{record['port']}.json":
+            continue
+        if _accepts_connections(record["port"]):
+            found.append(record)
+            continue
+        try:
+            if stat.S_ISREG(os.lstat(entry.path).st_mode):
+                os.unlink(entry.path)
+        except OSError:
+            pass
+    found.sort(key=lambda r: (-r["started"], r["port"]))
+    return found

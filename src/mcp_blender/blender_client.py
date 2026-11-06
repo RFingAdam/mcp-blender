@@ -16,6 +16,7 @@ logger = logging.getLogger("meshwire.client")
 # The add-on holds at most 256 MiB of reply per client, so no honest reply line is longer.
 MAX_REPLY_LINE = 256 * 1024 * 1024 + 1024 * 1024
 READ_SIZE = 1024 * 1024
+LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 class BlenderConnectionError(Exception):
@@ -37,9 +38,11 @@ class BlenderClient:
     Uses JSON-RPC 2.0 protocol over TCP with newline-delimited messages.
     """
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 9876):
+    def __init__(self, host: str = "127.0.0.1", port: int | None = None):
+        """``port=None`` finds the Blender to use on every connect (see ``_resolve_port``)."""
         self.host = host
-        self.port = port
+        self._fixed_port = port
+        self.port = port if port is not None else wire.PORT_FIRST  # the port in use now
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
@@ -73,6 +76,35 @@ class BlenderClient:
                 return
             await self._open(timeout)
 
+    async def _resolve_port(self) -> int:
+        """The port to connect to now, and ``self.port`` is set to it.
+
+        A port given to the constructor is used as it is, with no discovery. Otherwise,
+        for a loopback host, the newest live instance file names it, and with none the
+        first port of the add-on's range is the answer. Blender can start, restart or
+        move after this server did, so this runs at every open. Discovery makes blocking
+        probes, so it runs off the event loop.
+        """
+        if self._fixed_port is not None:
+            self.port = self._fixed_port
+            return self.port
+        self.port = wire.PORT_FIRST
+        if self.host.lower() not in LOOPBACK_HOSTS:
+            return self.port
+        found = await asyncio.to_thread(wire.live_instances)
+        if found:
+            pick = found[0]
+            self.port = pick["port"]
+            more = f", the most recently started of {len(found)}" if len(found) > 1 else ""
+            logger.info(
+                "Using the Blender on port %s (Blender %s, file %s)%s",
+                pick["port"],
+                pick["blender"],
+                pick["blend"] or "unsaved",
+                more,
+            )
+        return self.port
+
     async def _open(self, timeout: float) -> None:
         """Connect, run the handshake and only then become connected.
 
@@ -95,6 +127,9 @@ class BlenderClient:
                 "the MCP client."
             )
         epoch = self._epoch
+        await self._resolve_port()
+        if epoch != self._epoch:
+            raise BlenderConnectionError("Disconnected")
 
         def voided() -> None:
             """Stop at once if a disconnect() ran while this open was waiting."""

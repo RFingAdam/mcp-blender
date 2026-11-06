@@ -376,9 +376,10 @@ def test_stop_closes_everything(server):
     assert sock.recv(10) == b""
 
 
-def test_start_returns_false_when_port_is_taken(mod, server):
+def test_start_raises_when_port_is_taken(mod, server):
     other = mod.MCPSocketServer("127.0.0.1", server.port)
-    assert other.start() is False
+    with pytest.raises(mod.BindError):
+        other.start()
 
 
 class Clock:

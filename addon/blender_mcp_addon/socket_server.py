@@ -6,6 +6,7 @@ each complete request, queues the reply and sends as much of it as the socket wi
 take. Nothing here ever waits on a peer.
 """
 
+import errno
 import hmac
 import json
 import re
@@ -36,6 +37,65 @@ PROOF_RE = re.compile(r"[0-9a-f]{64}")
 
 class TokenError(RuntimeError):
     """The token file could not be read or created, or holds an unusable token."""
+
+
+class BindError(RuntimeError):
+    """No listening socket could be bound. The message says why, in words for the user."""
+
+
+def _configure_listener(sock) -> None:
+    """Socket options for the listener.
+
+    Windows: SO_EXCLUSIVEADDRUSE and never SO_REUSEADDR, which there lets a second
+    process bind a port that is already taken. Elsewhere SO_REUSEADDR stays on so a
+    restart is not blocked by TIME_WAIT.
+    """
+    if sys.platform == "win32":
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    else:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+def _port_taken(error: OSError) -> bool:
+    if error.errno == errno.EADDRINUSE:
+        return True
+    # An exclusive bind that loses to another listener can report access denied.
+    return sys.platform == "win32" and error.errno == errno.EACCES
+
+
+def bind_listener(host: str, port: int) -> tuple[socket.socket, int]:
+    """Bind and listen. Port 0 takes the first free port of the shared range.
+
+    Any other port is bound exactly or not at all. Returns the non-blocking listening
+    socket and the port it holds. Raises BindError with a message fit to show.
+    """
+    if port == 0:
+        candidates = range(wire.PORT_FIRST, wire.PORT_LAST + 1)
+    elif wire.PORT_MIN <= port <= wire.PORT_MAX:
+        candidates = [port]
+    else:
+        raise BindError(f"Port must be 0 (automatic) or {wire.PORT_MIN} to {wire.PORT_MAX}")
+    for candidate in candidates:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            _configure_listener(sock)
+            sock.setblocking(False)
+            sock.bind((host, candidate))
+            sock.listen(5)
+            return sock, candidate
+        except OSError as e:
+            sock.close()
+            if not _port_taken(e):
+                raise BindError(f"Could not listen on {host}:{candidate}: {e.strerror or e}") from e
+    if port == 0:
+        raise BindError(
+            f"No free port on {host} from {wire.PORT_FIRST} to {wire.PORT_LAST}: every one is "
+            "in use. Close a Blender server you no longer need, or set a port in Preferences"
+        )
+    raise BindError(
+        f"Port {port} on {host} is already in use. Pick another port in Preferences, "
+        "or set it to 0 to take the first free one"
+    )
 
 
 class _Client:
@@ -83,6 +143,7 @@ class MCPSocketServer:
         self._timer_registered = False
         self._now = time.monotonic  # one clock for every timer; tests replace it
         self._token = ""  # the secret both sides prove they hold; set by start()
+        self._instance_path = None  # the file start() published, removed by stop()
 
     @property
     def token(self) -> str:
@@ -95,33 +156,51 @@ class MCPSocketServer:
         return len(self.clients)
 
     def start(self) -> bool:
-        """Start the socket server."""
+        """Start the socket server on the port given, or the first free one when it is 0.
+
+        Raises BindError when no port can be bound and TokenError when the token cannot
+        be used. On success ``self.port`` is the port actually held.
+        """
         if self.is_running:
             return False
 
         self._token = self._load_token()
+        self.socket, self.port = bind_listener(self.host, self.port)
         try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.setblocking(False)
-            self.socket.bind((self.host, self.port))
-            self.socket.listen(5)
             self.is_running = True
 
             # Register the timer callback
             if not self._timer_registered:
                 bpy.app.timers.register(self._tick, persistent=True)
                 self._timer_registered = True
+        except Exception:
+            self.is_running = False
+            self.socket.close()
+            self.socket = None
+            raise
 
-            print(f"MCP Server started on {self.host}:{self.port}")
-            return True
+        self._publish_instance()
+        print(f"MCP Server started on {self.host}:{self.port}")
+        return True
 
+    @staticmethod
+    def _text(value) -> str:
+        return value if isinstance(value, str) else ""
+
+    def _publish_instance(self) -> None:
+        """Tell the MCP server this Blender is here. A failure costs discovery, not the server."""
+        try:
+            version = self._text(getattr(bpy.app, "version_string", ""))
+            self._instance_path = wire.write_instance(
+                self.port,
+                {
+                    "addon": self._addon_version(),
+                    "blender": version or "unknown",
+                    "blend": self._text(getattr(bpy.data, "filepath", "")),
+                },
+            )
         except Exception as e:
-            print(f"Failed to start MCP server: {e}")
-            if self.socket:
-                self.socket.close()
-                self.socket = None
-            return False
+            print(f"Could not write the Meshwire instance file: {e}")
 
     @staticmethod
     def _load_token() -> str:
@@ -157,6 +236,10 @@ class MCPSocketServer:
             except Exception:
                 pass
             self.socket = None
+
+        if self._instance_path is not None:
+            wire.remove_instance(self.port)
+            self._instance_path = None
 
         # Unregister timer
         if self._timer_registered:

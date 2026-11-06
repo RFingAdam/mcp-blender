@@ -35,8 +35,7 @@ or the release ZIP. Enable it in Blender preferences.
     {
       "mcpServers": {
         "blender": {
-          "command": "meshwire",
-          "args": ["--port", "9876"]
+          "command": "meshwire"
         }
       }
     }

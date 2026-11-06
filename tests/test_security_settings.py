@@ -234,15 +234,16 @@ def test_start_reports_bind_failure(addon, monkeypatch):
             self.is_running = False
 
         def start(self):
-            return False
+            raise module.BindError("Port 9876 on 127.0.0.1 is already in use.")
 
     monkeypatch.setattr(module, "MCPSocketServer", Dead)
     op = types.SimpleNamespace(report=MagicMock())
     result = module.MCP_OT_StartServer.execute(op, MagicMock())
     assert result == {"CANCELLED"}
     assert module.get_server() is None
-    level = op.report.call_args[0][0]
+    level, message = op.report.call_args[0]
     assert level == {"ERROR"}
+    assert message == "Port 9876 on 127.0.0.1 is already in use."
 
 
 def test_toggle_python_operator_flips_the_flag(addon):

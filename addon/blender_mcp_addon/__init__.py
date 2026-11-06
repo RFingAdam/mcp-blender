@@ -18,15 +18,13 @@ _logger.info("Meshwire addon loaded, version %s", ".".join(map(str, bl_info["ver
 import bpy
 
 from . import security, wire
-from .socket_server import MCPSocketServer, TokenError
+from .socket_server import BindError, MCPSocketServer, TokenError
 
 # The id Blender files this add-on's preferences under. It is the package name, so it
 # follows the add-on when it is installed as an extension. Never spell it out elsewhere.
 ADDON_ID = __package__
 
 DEFAULT_HOST = "127.0.0.1"
-PORT_FIRST = 9876
-PORT_LAST = 9885
 
 # Global server instance
 _server: MCPSocketServer | None = None
@@ -71,7 +69,7 @@ class MeshwirePreferences(bpy.types.AddonPreferences):
     )
     port: bpy.props.IntProperty(
         name="Port",
-        description=f"0 picks the first free port from {PORT_FIRST} to {PORT_LAST}. Otherwise 1024 to 65535",
+        description=f"0 picks the first free port from {wire.PORT_FIRST} to {wire.PORT_LAST}. Otherwise 1024 to 65535",
         default=0,
         min=0,
         max=65535,
@@ -143,27 +141,16 @@ class MCP_OT_StartServer(bpy.types.Operator):
             return {"CANCELLED"}
 
         host, port = server_address()
-        if port and not 1024 <= port <= 65535:
-            self.report({"ERROR"}, "Port must be 0 (automatic) or 1024 to 65535")
+        server = MCPSocketServer(host=host, port=port)
+        try:
+            server.start()
+        except (BindError, TokenError) as e:
+            _server = None
+            self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
-        ports = [port] if port else range(PORT_FIRST, PORT_LAST + 1)
-        for candidate in ports:
-            server = MCPSocketServer(host=host, port=candidate)
-            try:
-                started = server.start()
-            except TokenError as e:
-                _server = None
-                self.report({"ERROR"}, str(e))  # not a port problem: do not try the next port
-                return {"CANCELLED"}
-            if started:
-                _server = server
-                self.report({"INFO"}, f"MCP server started on {host}:{candidate}")
-                return {"FINISHED"}
-
-        _server = None
-        where = f"{host}:{port}" if port else f"{host}, ports {PORT_FIRST} to {PORT_LAST}"
-        self.report({"ERROR"}, f"MCP server could not bind {where}. See the system console.")
-        return {"CANCELLED"}
+        _server = server
+        self.report({"INFO"}, f"MCP server started on {host}:{server.port}")
+        return {"FINISHED"}
 
 
 class MCP_OT_StopServer(bpy.types.Operator):
