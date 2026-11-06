@@ -55,17 +55,16 @@ socket and runs each command on Blender's main thread through `bpy.app.timers`.
 
 ### 1. Run the MCP server
 
-Meshwire is in alpha, so ask for pre-releases.
 With [uv](https://docs.astral.sh/uv/) there is nothing to install up front:
 
 ```bash
-uvx --prerelease allow meshwire --help
+uvx meshwire --help
 ```
 
 Or with pip:
 
 ```bash
-pip install --pre meshwire
+pip install meshwire
 ```
 
 ### 2. Install the Blender addon
@@ -99,7 +98,7 @@ click **Allow Python**. It stays on until Blender closes and is off again at eve
   "mcpServers": {
     "blender": {
       "command": "uvx",
-      "args": ["--prerelease", "allow", "meshwire"]
+      "args": ["meshwire"]
     }
   }
 }

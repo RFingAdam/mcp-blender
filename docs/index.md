@@ -15,10 +15,8 @@ Blender 4.2, 4.3, 4.4, 5.0 and 5.1 are tested nightly, best effort.
 
 ## Install
 
-Meshwire is in alpha, so ask for pre-releases.
-
 ```bash
-pip install --pre meshwire
+pip install meshwire
 ```
 
 Then download `meshwire-addon-<version>.zip` from the
