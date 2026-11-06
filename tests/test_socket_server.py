@@ -321,7 +321,9 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     counter = CountingSock(gate)
     client.sock = counter
     request(sock, "big")
-    tick(server)
+    # Loopback may take a few ticks to deliver the request (macOS does). The budget is
+    # not refilled meanwhile, so at most 128 KiB of the reply can leave before this.
+    pump(server, until=lambda: len(client.wbuf) > 0)
     assert len(client.wbuf) > 0, "a 32 MiB reply must not leave in one tick"
 
     got = bytearray()
