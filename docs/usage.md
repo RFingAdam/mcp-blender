@@ -15,7 +15,7 @@ Ollama vision model, and iterate until the score converges.
 ### Setup
 
 ```bash
-pip install --pre meshwire
+pip install meshwire
 ollama pull llava   # vision model
 ```
 

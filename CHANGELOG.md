@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
+### Security
+
+Every version before 0.5.0 let any program that could reach the add-on's port drive Blender and run
+Python as you, and a web page you opened could do it too (some browsers block or ask first). 0.5.0
+requires a token on every connection and keeps `execute_script` off until you click **Allow Python**.
+Upgrade, and remove the old `blender_mcp_addon` add-on. Details are in
+[SECURITY.md](https://github.com/RFingAdam/meshwire/blob/main/SECURITY.md).
+
 ### Added
 
 - **The add-on installs as a Blender extension.** The release ZIP is now `meshwire-addon-<version>.zip`,
@@ -566,6 +576,7 @@ the socket has no authentication yet. See the README status note.
 - Non-blocking socket server using `bpy.app.timers`
 - JSON-RPC 2.0 protocol for command communication
 
+[0.5.0]: https://github.com/RFingAdam/meshwire/releases/tag/v0.5.0
 [0.5.0a1]: https://github.com/RFingAdam/meshwire/releases/tag/v0.5.0a1
 [0.2.1]: https://github.com/RFingAdam/meshwire/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/RFingAdam/meshwire/compare/v0.1.0...v0.2.0
