@@ -272,3 +272,25 @@ async def test_reply_line_over_the_cap_is_refused():
             await client.disconnect()
     finally:
         blender_client.MAX_REPLY_LINE = old
+
+
+@pytest.mark.asyncio
+async def test_reconnect_during_disconnect_is_not_wiped_out(mock_server):
+    """A connect() that lands while disconnect() awaits wait_closed() keeps its writer."""
+    client = BlenderClient(mock_server.host, mock_server.port)
+    await client.connect()
+    real = client._writer
+
+    class Slow:
+        def close(self):
+            real.close()
+
+        async def wait_closed(self):
+            await client.connect()  # the reconnect happens inside the await
+            await real.wait_closed()
+
+    client._writer = Slow()
+    await client.disconnect()
+    assert client.connected
+    assert await client.ping() is True
+    await client.disconnect()

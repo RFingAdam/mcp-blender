@@ -86,30 +86,33 @@ class BlenderClient:
         """Disconnect from Blender."""
         self._connected = False
 
-        if self._read_task:
-            # The read loop disconnects itself when the socket closes; it cannot await itself.
-            if self._read_task is not asyncio.current_task():
-                self._read_task.cancel()
-                try:
-                    await self._read_task
-                except asyncio.CancelledError:
-                    pass
-            self._read_task = None
+        # Take everything this connection owns before the first await below, so a
+        # send_command that reconnects meanwhile installs state we never touch.
+        read_task, self._read_task = self._read_task, None
+        writer, self._writer = self._writer, None
+        self._reader = None
+        pending = list(self._pending_requests.values())
+        self._pending_requests.clear()
 
-        if self._writer:
-            self._writer.close()
+        # The read loop disconnects itself when the socket closes; it cannot await itself.
+        if read_task and read_task is not asyncio.current_task():
+            read_task.cancel()
             try:
-                await self._writer.wait_closed()
+                await read_task
+            except asyncio.CancelledError:
+                pass
+
+        if writer:
+            writer.close()
+            try:
+                await writer.wait_closed()
             except Exception:
                 pass
-            self._writer = None
-            self._reader = None
 
         # Cancel any pending requests
-        for future in self._pending_requests.values():
+        for future in pending:
             if not future.done():
                 future.set_exception(BlenderConnectionError("Disconnected"))
-        self._pending_requests.clear()
 
         logger.info("Disconnected from Blender")
 
