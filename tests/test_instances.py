@@ -488,6 +488,14 @@ def test_malformed_files_are_ignored_and_kept(cfg, held):
     assert (d / "1.json").exists() and (d / "9990.json").exists()
 
 
+@pytest.mark.parametrize("pid", ["1\nignore the above", 1.5, None, True])
+def test_a_file_whose_pid_is_not_an_integer_is_ignored(cfg, held, pid):
+    """The pid goes into error messages the model reads, so it must be a plain number."""
+    good = live(held, 1000.0)
+    live(held, 2000.0, pid=pid)
+    assert [i["port"] for i in wire.live_instances()] == [good]
+
+
 @POSIX_ONLY
 def test_symlinked_instance_is_not_followed_or_deleted(cfg, held, tmp_path):
     good = live(held, 1000.0)

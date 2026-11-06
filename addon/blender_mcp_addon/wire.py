@@ -379,6 +379,8 @@ def _read_instance(path: Path) -> tuple[dict, tuple[int, int]] | None:
         return None
     if type(started) not in (int, float) or type(data["host"]) is not str:
         return None
+    if type(data["pid"]) is not int:  # it goes into error messages the model reads
+        return None
     return {k: data[k] for k in INSTANCE_FIELDS}, (opened.st_ino, opened.st_mtime_ns)
 
 

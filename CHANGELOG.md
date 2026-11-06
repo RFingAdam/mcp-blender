@@ -27,9 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   crash stays until a Blender binds that port again), and connects to
   the most recently started live one. It looks again at every connection, and logs the port, Blender version
   and file it chose. It moves on to an older Blender only past a program that is not a Meshwire add-on with
-  your token (refused, closed, no valid proof). A newest Blender that is busy and does not answer in time,
-  one that is full, or one that needs updating gives an error naming its port and instance file, so a busy, full or
-  outdated Blender gives an error naming it instead of a switch. Pass `--port` or set `MESHWIRE_PORT` to pick one. The order is now `--port`, then the new `MESHWIRE_PORT` variable, then discovery, then
+  your token (connection refused, a reply that is not Meshwire's, or no valid proof). A newest Blender that
+  is busy, full, closes before answering, or needs updating gives an error naming its port, instance file
+  and process ID instead of a switch. Pass `--port` or set `MESHWIRE_PORT` to pick one. The order is now `--port`, then the new `MESHWIRE_PORT` variable, then discovery, then
   9876. Discovery runs only for a loopback `--host`. The `--port` default is no longer 9876, so a setup that
   relied on that exact default still works whenever Blender is on 9876, and finds the right Blender when it is not.
 - **Two Blenders no longer fight over a port.** The add-on binds the first free port from 9876 to 9885 when
