@@ -320,8 +320,9 @@ or a `.blend` file holds can. It resets whenever Blender starts.
   the network path can read or change them. For remote use, tunnel over SSH instead.
 - Don't run untrusted prompts or scripts against a Blender session with work you care about.
 
-Versions 0.2.0 to 0.5.0a1 had no authentication: any process that could reach the port could drive
-Blender, and `execute_script` ran any Python it was sent. Upgrade, and see [SECURITY.md](https://github.com/RFingAdam/meshwire/blob/main/SECURITY.md)
+Every version before 0.5.0 (the releases were 0.2.0, 0.3.0, 0.4.0 and 0.5.0a1) had no authentication:
+any process that could reach the port, including a web page sending an HTTP POST, could drive Blender,
+and `execute_script` ran any Python it was sent. Upgrade, and see [SECURITY.md](https://github.com/RFingAdam/meshwire/blob/main/SECURITY.md)
 for what was confirmed and how to report a problem.
 
 `blender_ai_configure_backend` accepts only `enabled`, `api_key`, `host` (an http or https URL),

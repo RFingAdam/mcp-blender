@@ -15,8 +15,9 @@ version and operating system you used, and how to reproduce the problem.
 
 ## What older versions exposed
 
-Versions 0.2.0, 0.3.0, 0.4.0 and 0.5.0a1 have no authentication on the add-on's socket. Any process
-that can connect to the port can send commands to Blender. The add-on binds to 127.0.0.1 by default, so
+Every version before 0.5.0 has no authentication on the add-on's socket. The published releases are
+0.2.0, 0.3.0, 0.4.0 and 0.5.0a1; an unpublished earlier version should be treated the same way. Any
+process that can connect to the port can send commands to Blender. The add-on binds to 127.0.0.1 by default, so
 in the default setup that means any program on the same machine, whoever it runs as. If the host was
 set to a non-loopback address, it means anything that can reach that address.
 
@@ -28,12 +29,21 @@ Version 0.5.0 fixes this with a token handshake and a panel switch for `execute_
 Upgrade, and remove the old `blender_mcp_addon` copy first. If you cannot upgrade yet, stop the add-on's
 server when you are not using it, keep the host at 127.0.0.1, and do not expose ports 9876 to 9885.
 
-What was confirmed by testing: on the commit just before authentication was added, a raw `object_create`
-sent with no handshake was served and the connection stayed open. Browser-based attacks through an HTTP
-POST were not confirmed on any released version. Earlier releases handled each newline-terminated line
-of the stream on its own and did not close the connection after a line that was not JSON, so a request
-whose body is a complete JSON-RPC line may have been processed. That is from reading the code, not from
-a run.
+What was confirmed by testing:
+
+- On the commit just before authentication was added, a raw `object_create` sent with no handshake was
+  served and the connection stayed open.
+- On v0.4.0, run in Blender 4.5.15, a raw `object_create` with no handshake created the object, and so
+  did an HTTP POST. The POST was the request a browser `fetch` with `Content-Type: text/plain` sends,
+  with a body of one JSON-RPC command line ending in a newline. The add-on answered the request and header
+  lines with parse errors, kept the connection open, and ran the body line. A web page could therefore
+  make Blender run a command, and with `execute_script`, any Python. v0.5.0a1 has the same socket code
+  (only a docstring differs), so it was not run separately. Some current browsers block or ask before a
+  public page requests a local address, so whether this works depends on the browser.
+
+A shared `.blend` could also carry the host. Before 0.5.0 the host and port were Scene properties, saved
+in the `.blend` file, so a file from someone else could hold a non-loopback host, and clicking Start would
+bind there. In 0.5.0 they are add-on Preferences, stored per user and not in the file.
 
 ## Threat model
 
@@ -45,7 +55,7 @@ against these:
   command runs.
 - **Websites in your browser.** A web page can send a request to a local port. Anything that is not a
   valid `hello` in the first 4 KiB within 2 seconds is closed with nothing run, and a web page cannot
-  read the token. The test suite sends an HTTP POST with a JSON-RPC body and checks that nothing runs.
+  read the token. The Blender socket tests in CI send an HTTP POST with a JSON-RPC body and check that nothing runs and the connection closes.
 - **The network, when the host is not loopback.** See the next section. The handshake keeps
   strangers from running commands, but it does not hide or protect the traffic.
 - **Prompts that try to make the model run code.** `execute_script` refuses every call until you click

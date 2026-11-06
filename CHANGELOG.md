@@ -34,12 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Only a client with the token can use the add-on's socket.** Until now any program on the machine could
   connect to the port and drive Blender, and `execute_script` ran any Python it was sent. This affects
-  every release before this one (v0.2.0, v0.3.0, v0.4.0 and v0.5.0a1); see `SECURITY.md`. What testing
-  confirmed: on the last commit before authentication, a raw `object_create` sent with no hello was served
-  and the connection stayed open (`unauthenticated_call_refused` fails there, on Blender 4.5.15). Whether a
-  web page could do the same with an HTTP POST was not confirmed on a released version. Those releases
-  handled each newline-terminated line on its own and did not close after a line that was not JSON, so a
-  POST body that is a full JSON-RPC line may have run; that comes from reading the code, not from a run.
+  every version before this one (the releases were v0.2.0, v0.3.0, v0.4.0 and v0.5.0a1); see `SECURITY.md`.
+  What testing confirmed: on the last commit before authentication, a raw `object_create` sent with no hello
+  was served and the connection stayed open (`unauthenticated_call_refused` fails there, on Blender 4.5.15).
+  On v0.4.0 in Blender 4.5.15, a raw `object_create` and an HTTP POST (as a browser `fetch` with
+  `Content-Type: text/plain` sends it, with one command line as the body) both created an object, so a web
+  page could make Blender run a command, and with `execute_script`, any Python. v0.5.0a1 has the same socket
+  code. Some current browsers block or ask before a public page requests a local address, so this depends
+  on the browser. The host was also a Scene property saved in the `.blend`, so a shared file could carry a
+  non-loopback host; it is now an add-on Preference.
   The add-on now makes a token in your Meshwire config folder (`~/.config/meshwire/token` on Linux, mode 0600). A connection
   must open with a `hello` and then a `hello_proof`, within 2 seconds, in lines of at most 4 KiB. The two
   sides prove they hold the token with HMAC-SHA256 over fresh nonces, so the token itself never crosses the
