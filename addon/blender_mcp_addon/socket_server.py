@@ -27,6 +27,9 @@ MAX_CLIENTS = 8  # authenticated clients, closing ones included
 MAX_PENDING = 16  # sockets that have not finished the handshake; the oldest is dropped past this
 READ_PER_TICK = 4 * 1024 * 1024  # most bytes read from one client per tick
 SEND_CHUNK = 1024 * 1024
+PRE_AUTH_DISCARD = (
+    64 * 1024
+)  # most a failing pre-auth client may make the add-on read after its error
 MAX_CLOSING = 16  # clients already told to go; past this a refusal closes with no reply
 CLOSE_GRACE = 2.0  # seconds a closing client has to read its last reply, drained or not
 WRITE_STALL = 30.0  # seconds a client may leave unsent reply bytes without taking any
@@ -115,6 +118,9 @@ class _Client:
         self.nonce_c = ""  # the client's nonce, kept for its proof
         self.nonce_s = ""  # this add-on's nonce for the connection
         self.deadline = 0.0  # monotonic time by which the current handshake step must finish; unused once authed
+        self.discard_left = (
+            PRE_AUTH_DISCARD  # input a failed pre-auth client may still make us read
+        )
         self.closing = False  # close once wbuf drains; read nothing more
         self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
         self.eof = False  # the peer shut its sending side; read nothing more
@@ -246,6 +252,13 @@ class MCPSocketServer:
                 pass
         self.clients.clear()
 
+        # Unpublish before the port is freed: once it is free, another Blender may bind it
+        # and publish its own file under the same name, which this must not delete.
+        if self._instance_path is not None:
+            wire.remove_instance(self.port)
+            self._instance_path = None
+        self.discovery_warning = ""
+
         # Close server socket
         if self.socket:
             try:
@@ -253,11 +266,6 @@ class MCPSocketServer:
             except Exception:
                 pass
             self.socket = None
-
-        if self._instance_path is not None:
-            wire.remove_instance(self.port)
-            self._instance_path = None
-        self.discovery_warning = ""
 
         # Unregister timer
         if self._timer_registered:
@@ -278,8 +286,12 @@ class MCPSocketServer:
         try:
             self._accept_clients()
             self._process_clients()
-        except Exception as e:
-            print(f"MCP Server tick error: {e}")
+        except KeyboardInterrupt:
+            raise
+        except BaseException as e:
+            # Not only Exception: a SystemExit that got this far would unregister the timer
+            # (or quit Blender) and leave the server deaf.
+            print(f"MCP Server tick error: {e!r}")
             traceback.print_exc()
 
         # Return interval in seconds (10ms)
@@ -304,8 +316,12 @@ class MCPSocketServer:
             pending = [sk for sk, c in self.clients.items() if not c.authed]
             if len(pending) >= MAX_PENDING:
                 # Sockets that have not proved the token cannot crowd out ones that can:
-                # the oldest of them goes, with no reply.
-                oldest = pending[0]
+                # the oldest of them goes, with no reply; handshakes not yet started first.
+                # One still at "hello" has cost its owner least, and a flood can fill the
+                # pool in the few ticks a real client is between hello and proof.
+                oldest = next(
+                    (sk for sk in pending if self.clients[sk].stage == "hello"), pending[0]
+                )
                 self._drop(oldest, self.clients[oldest])
             print(f"MCP client connected: {addr}")
             self.clients[sock] = client
@@ -348,6 +364,10 @@ class MCPSocketServer:
                 want = min(want, wire.HELLO_MAX + 1 - len(client.rbuf))
                 if want <= 0:
                     return
+            elif not client.authed:
+                # A failed pre-auth client has no token. It gets its error, then a bounded
+                # amount of its input is thrown away; past that it is cut off.
+                want = min(want, client.discard_left)
             try:
                 data = client.sock.recv(want)
             except (BlockingIOError, InterruptedError):
@@ -365,6 +385,11 @@ class MCPSocketServer:
             taken += len(data)
             if not client.closing:
                 client.rbuf += data
+            elif not client.authed:
+                client.discard_left -= len(data)
+                if client.discard_left <= 0:
+                    client.dead = True
+                    return
 
     def _run_lines(self, client: _Client):
         """Run each complete line in rbuf, one at a time, while no reply is waiting to leave.
@@ -672,11 +697,16 @@ class MCPSocketServer:
                 "result": result,
                 "id": msg_id,
             }
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             traceback.print_exc()
+            text = (
+                "A handler called exit(); Blender keeps running."
+                if isinstance(e, SystemExit)
+                else str(e)
+            )
             return {
                 "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
+                "error": {"code": -32603, "message": text},
                 "id": msg_id,
             }
 

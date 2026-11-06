@@ -95,6 +95,19 @@ def test_execute_script_runs_once_allowed(ai):
     assert res["result"] == 42
 
 
+@pytest.mark.parametrize(
+    "script",
+    ["exit()", "import sys\nsys.exit(2)", "raise SystemExit"],
+    ids=["exit", "sys", "raise"],
+)
+def test_a_script_that_exits_gets_an_error_and_keeps_its_output(ai, script):
+    ai.security.set_python_allowed(True)
+    res = ai.mixin._handle_execute_script({"script": "print('before')\n" + script})
+    assert res["success"] is False
+    assert res["stdout"] == "before\n"
+    assert res["error"] == "The script called exit() or sys.exit(); Blender keeps running."
+
+
 def test_only_the_panel_operator_and_harness_set_the_flag():
     offenders = []
     for base in (ROOT_DIR / "addon", ROOT_DIR / "src"):
