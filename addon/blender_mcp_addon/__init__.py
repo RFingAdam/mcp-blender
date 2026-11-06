@@ -145,10 +145,10 @@ class MeshwirePreferences(bpy.types.AddonPreferences):
         layout.prop(self, "hunyuan3d_model")
 
 
-class MCP_OT_StartServer(bpy.types.Operator):
+class MESHWIRE_OT_StartServer(bpy.types.Operator):
     """Start the MCP socket server"""
 
-    bl_idname = "mcp.start_server"
+    bl_idname = "meshwire.start_server"
     bl_label = "Start Server"
     bl_description = "Start the MCP socket server for AI integration"
 
@@ -177,10 +177,10 @@ class MCP_OT_StartServer(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MCP_OT_StopServer(bpy.types.Operator):
+class MESHWIRE_OT_StopServer(bpy.types.Operator):
     """Stop the MCP socket server"""
 
-    bl_idname = "mcp.stop_server"
+    bl_idname = "meshwire.stop_server"
     bl_label = "Stop Server"
     bl_description = "Stop the MCP socket server"
 
@@ -240,11 +240,11 @@ class MESHWIRE_OT_CopyToken(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class MCP_PT_ServerPanel(bpy.types.Panel):
+class MESHWIRE_PT_Server(bpy.types.Panel):
     """MCP Server control panel"""
 
     bl_label = "Meshwire"
-    bl_idname = "MCP_PT_server_panel"
+    bl_idname = "MESHWIRE_PT_server"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Meshwire"
@@ -273,7 +273,7 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
         global _server
         if _server is not None and _server.is_running:
             layout.label(text="Status: Running", icon="PLAY")
-            layout.operator("mcp.stop_server", icon="PAUSE")
+            layout.operator("meshwire.stop_server", icon="PAUSE")
             # Show connected clients count
             client_count = _server.client_count
             layout.label(text=f"Connected clients: {client_count}")
@@ -282,7 +282,7 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
             layout.operator("meshwire.copy_token", icon="COPYDOWN")
         else:
             layout.label(text="Status: Stopped", icon="SNAP_FACE")
-            layout.operator("mcp.start_server", icon="PLAY")
+            layout.operator("meshwire.start_server", icon="PLAY")
 
         # Python execution
         layout.separator()
@@ -300,11 +300,11 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
 
 classes = (
     MeshwirePreferences,
-    MCP_OT_StartServer,
-    MCP_OT_StopServer,
+    MESHWIRE_OT_StartServer,
+    MESHWIRE_OT_StopServer,
     MESHWIRE_OT_TogglePython,
     MESHWIRE_OT_CopyToken,
-    MCP_PT_ServerPanel,
+    MESHWIRE_PT_Server,
 )
 
 

@@ -379,6 +379,8 @@ def _read_instance(path: Path) -> tuple[dict, tuple[int, int]] | None:
         return None
     if type(started) not in (int, float) or type(data["host"]) is not str:
         return None
+    if type(data["pid"]) is not int:  # it goes into error messages the model reads
+        return None
     return {k: data[k] for k in INSTANCE_FIELDS}, (opened.st_ino, opened.st_mtime_ns)
 
 
@@ -419,14 +421,17 @@ def _delete_if_unchanged(path: str, ident: tuple[int, int]) -> None:
 
 
 def live_instances() -> list[dict]:
-    """The Blenders that are running now, newest first by ``started``.
+    """The Blenders that may be running, newest first by ``started``.
+
+    Each record carries ``probe``: "live" or "unknown".
 
     A file counts only if it is a plain file called ``<number>.json`` with every field,
     a port in range that matches its name, and an address this machine can reach
     (loopback or a wildcard; others are left alone, neither used nor deleted). The port
     is probed at the recorded address. "live" chooses the instance. "refused" means nothing
     listens: the file is stale and is deleted, if it is still the file that was read.
-    "unknown" (a timeout, say) keeps the file and skips the instance this time.
+    "unknown" (a timeout, say) keeps the file and still lists the instance, in its place: only
+    the handshake can say whether a busy Blender is there, and skipping it would pick an older one.
     Symlinks are never followed. On POSIX the Meshwire folder and the instances folder
     must be ours and closed to writes by others, as the token's folder must be; otherwise
     nothing is trusted and the result is empty.
@@ -458,16 +463,16 @@ def live_instances() -> list[dict]:
         if target is None:
             continue
         answer = _probe(target, record["port"], PROBE_SECONDS)
-        if answer == "live":
-            found.append(record)
-        elif answer == "refused":
+        if answer == "refused":
             _delete_if_unchanged(entry.path, ident)
-        else:
+            continue
+        if answer != "live":
             logger.info(
-                "Port %s did not answer within %.1f s; keeping %s and not using it this time",
+                "Port %s did not answer within %.1f s; keeping %s and leaving it to the handshake",
                 record["port"],
                 PROBE_SECONDS,
                 entry.name,
             )
+        found.append({**record, "probe": answer})
     found.sort(key=lambda r: (-r["started"], r["port"]))
     return found

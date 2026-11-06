@@ -16,13 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `network` and `files` permissions, and `bl_info` is gone. An older Meshwire add-on still enabled
   (installed from a pre-0.5.0 ZIP as `blender_mcp_addon`) makes the new one show a warning in its sidebar
   tab and refuse to start its server, so two servers never run together. Remove the old copy in
-  Preferences > Add-ons and restart Blender.
+  Preferences > Add-ons and restart Blender. The Start and Stop operators and the panel were renamed
+  (`meshwire.start_server`, `meshwire.stop_server`, `MESHWIRE_PT_server`) so they cannot collide with the old
+  copy's, which would otherwise replace them while both are enabled. A keymap entry or script that calls
+  `bpy.ops.mcp.start_server` or `bpy.ops.mcp.stop_server` must call the `meshwire` operator instead.
 - **Several Blenders at once.** Each running add-on now writes a small file, `instances/<port>.json`, in the
-  Meshwire config folder next to the token, and removes it when its server stops. The file names the port,
+  Meshwire config folder next to the token, and removes it when its server stops or Blender quits normally. The file names the port,
   process, Blender version, add-on version and `.blend` file, and holds no token. With no `--port`, the
-  server reads these files, tries each port, deletes the files of Blenders that are gone, and connects to
+  server reads these files, tries each port, deletes the files of Blenders it finds are gone (on Windows a file left by a
+  crash stays until a Blender binds that port again), and connects to
   the most recently started live one. It looks again at every connection, and logs the port, Blender version
-  and file it chose. The order is now `--port`, then the new `MESHWIRE_PORT` variable, then discovery, then
+  and file it chose. It moves on to an older Blender only past a program that is not a Meshwire add-on with
+  your token (connection refused, a reply that is not Meshwire's, or no valid proof). A newest Blender that
+  is busy, full, closes before answering, or needs updating gives an error naming its port, instance file
+  and process ID instead of a switch. Pass `--port` or set `MESHWIRE_PORT` to pick one. The order is now `--port`, then the new `MESHWIRE_PORT` variable, then discovery, then
   9876. Discovery runs only for a loopback `--host`. The `--port` default is no longer 9876, so a setup that
   relied on that exact default still works whenever Blender is on 9876, and finds the right Blender when it is not.
 - **Two Blenders no longer fight over a port.** The add-on binds the first free port from 9876 to 9885 when
@@ -50,12 +57,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection that reached a different address, so a program relaying the traffic from another port or
   address is caught (an SSH tunnel on purpose needs `MESHWIRE_ADDON_ADDRESS`). Anything else is closed at
   once; a wrong proof, or a client that does not speak `hello`, gets one error that says what to update. Sockets
-  that have not finished the handshake have their own pool, so idle ones cannot lock out the real client.
+  that have not finished the handshake have their own pool, so idle ones cannot lock out the real client, and
+  a flood evicts the oldest of them, and a client that is evicted gets a clear error instead of being sent to another Blender. A client that failed its
+  handshake can make the add-on read at most 64 KiB more from it. `SECURITY.md` now says how to rotate the
+  token: stop the server in every Blender that runs Meshwire (each keeps the token it started with), delete
+  the token file, start the servers again, and restart the MCP clients.
   The server reads the token file on every connect, so it needs no setup. For another machine, set
   `MESHWIRE_TOKEN` there (it overrides the file) and use **Copy token** in the Meshwire tab. After the
   handshake the traffic is neither encrypted nor integrity-protected, so a non-loopback host sends commands
   and results in plaintext; use an SSH tunnel for remote use. A new server
   against an older add-on, and the reverse, now say which side to update instead of hanging.
+- **`exit()` in a script no longer ends the session.** A script that calls `exit()`, `sys.exit()` or raises
+  `SystemExit` used to escape the add-on's timer, which could close Blender or leave the server deaf. It now
+  returns a normal error ("The script called exit() or sys.exit(); Blender keeps running.") with the output so
+  far, and any other handler that does the same gets an error reply.
 - **Large replies arrive whole, and bad requests get an answer.** The add-on used to cut off any reply
   bigger than the socket buffer; a 32 MiB reply now arrives complete. A malformed, non-object, non-UTF-8 or
   oversized request, and a client past the connection limit, now get an error reply that says what was wrong,
@@ -68,8 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ComfyUI workflow path are stored per user in Preferences, not inside the `.blend` file, so a shared file
   no longer carries them. Port 0, the new default, picks the first free port from 9876 to 9885. Starting the
   server now reports an error in Blender when it cannot bind, instead of claiming it started.
-- **`ai_configure_backend` takes only safe keys.** It accepts `enabled`, `api_key`, `host`, `timeout` and
-  `device`, and `host` must be an http or https URL with no user name or password. Any other key, such as
+- **`ai_configure_backend` takes only safe keys.** It accepts `enabled`, `api_key`, `host`, `timeout`, `device` and
+  `model` (an Ollama model name), and `host` must be an http or https URL with no user name or password. Any other key, such as
   `workflow`, `python_path`, `model_path` or `api_base_url`, is refused with a message that names it and
   points to Preferences (Meshwire add-on).
 - **An MCP client can now see that a tool failed.** A reply from Blender that carries an error, or reports

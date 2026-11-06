@@ -20,7 +20,7 @@ def main() -> None:
     package = sys.modules[module]
     # The extension's own module, not a source tree on sys.path.
     print(f"SMOKE_MODULE {module} {package.__file__}", flush=True)
-    result = bpy.ops.mcp.start_server()
+    result = bpy.ops.meshwire.start_server()
     if result != {"FINISHED"}:
         raise RuntimeError(f"start_server returned {result}")
     print(f"SMOKE_READY {package.get_server().port}", flush=True)

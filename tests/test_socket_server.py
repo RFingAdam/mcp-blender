@@ -34,6 +34,8 @@ class StubHandlers:
             return "x" * self.size
         if method == "boom":
             raise ValueError("handler failed")
+        if method == "quit":
+            raise SystemExit(3)
         return {"echo": method}
 
 
@@ -265,8 +267,9 @@ def read_all(srv, sock, seconds=10.0):
             data = sock.recv(1 << 20)
         except BlockingIOError:
             return False
-        except ConnectionResetError:
-            # The server closed a socket that still held unread bytes. That is a close.
+        except (ConnectionResetError, ConnectionAbortedError):
+            # The server closed a socket that still held unread bytes, or (Windows, WinError
+            # 10053) the test wrote to a socket the server had already closed. That is a close.
             data = b""
         if not data:
             state["eof"] = True
@@ -1359,7 +1362,7 @@ def test_a_closing_pre_auth_client_is_not_read_in_tiny_chunks(server, mod):
     assert not client.authed
     stub = client.sock = Chunked(client.sock, 2 * MIB)
     pump(server, until=lambda: stub.calls >= 1)
-    assert max(stub.wanted) > 64 * 1024
+    assert max(stub.wanted) > 32 * 1024  # a few big reads, inside the discard budget
 
 
 def test_protocol_mismatch_carries_the_addons_protocol_as_data(server, mod):
@@ -1367,3 +1370,129 @@ def test_protocol_mismatch_carries_the_addons_protocol_as_data(server, mod):
     sock.sendall(hello_line(protocol=2))
     data = read_all(server, sock)
     assert json.loads(data.split(b"\n", 1)[0])["error"]["data"] == {"protocol": 1}
+
+
+def test_a_failing_pre_auth_client_may_make_the_addon_read_only_64k(server, mod):
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line(protocol=2))
+    pump(server, until=lambda: server.client_count == 1)
+    client = only_client(server)
+    pump(server, until=lambda: client.closing and not client.wbuf)  # E_PROTOCOL sent
+    stub = client.sock = Chunked(client.sock, MIB)  # the peer now streams 1 MiB
+    pump(server, until=lambda: client not in server.clients.values())
+    assert MIB - stub.left <= 64 * 1024 + 4096
+    assert server.client_count == 0
+
+
+def test_a_mismatched_client_still_gets_its_error_and_a_clean_close(server, mod):
+    sock = connect(server, auth=False)
+    sock.sendall(hello_line(protocol=2))
+    data = read_all(server, sock)  # the reply, then EOF rather than a reset
+    assert json.loads(data.split(b"\n", 1)[0])["error"]["code"] == mod.wire.E_PROTOCOL
+
+
+def test_a_full_pool_evicts_the_oldest_pending_whatever_its_stage(server, mod):
+    real = connect(server, auth=False)
+    hello_only(server, real)  # the oldest, already at the proof stage
+    oldest = only_client(server)
+    flood = []
+    for _ in range(mod.MAX_PENDING):
+        flood.append(connect(server, auth=False))
+        tick(server)
+    assert oldest not in server.clients.values()  # dropped, not protected by its stage
+    assert server.client_count == mod.MAX_PENDING
+
+
+def test_the_listen_backlog_is_64(mod, monkeypatch):
+    seen = []
+    real = socket.socket.listen
+    monkeypatch.setattr(
+        socket.socket, "listen", lambda self, n=None: (seen.append(n), real(self, n))[1]
+    )
+    sock, _ = mod.bind_listener("127.0.0.1", free_port())
+    sock.close()
+    assert mod.LISTEN_BACKLOG == 64
+    assert seen == [64]
+
+
+def test_a_handler_raising_system_exit_gets_an_error_and_the_next_request_is_served(server):
+    sock = connect(server)
+    request(sock, "quit", req_id=5)
+    reply = read_line(server, sock)
+    assert reply["id"] == 5 and reply["error"]["code"] == -32603
+    request(sock, "ping", req_id=6)
+    assert read_line(server, sock)["result"] == {"echo": "ping"}
+
+
+@pytest.mark.parametrize("raised", [SystemExit(1), GeneratorExit(), RuntimeError("x")])
+def test_tick_survives_anything_but_a_keyboard_interrupt(server, monkeypatch, raised):
+    def explode():
+        raise raised
+
+    monkeypatch.setattr(server, "_process_clients", explode)
+    server._timer_registered = True
+    assert server._tick() == 0.01
+    assert server._timer_registered
+
+
+def test_tick_lets_a_keyboard_interrupt_through(server, monkeypatch):
+    def explode():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(server, "_process_clients", explode)
+    with pytest.raises(KeyboardInterrupt):
+        server._tick()
+
+
+def test_stop_unpublishes_the_instance_before_closing_the_listener(mod, monkeypatch):
+    order = []
+    real_remove = mod.wire.remove_instance
+    monkeypatch.setattr(
+        mod.wire, "remove_instance", lambda port: (order.append("unpublish"), real_remove(port))
+    )
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
+    assert srv.start()
+
+    class Spy:
+        def __init__(self, sock):
+            self._sock = sock
+
+        def close(self):
+            order.append("close")
+            self._sock.close()
+
+        def __getattr__(self, name):
+            return getattr(self._sock, name)
+
+    srv.socket = Spy(srv.socket)
+    srv.stop()
+    assert order == ["unpublish", "close"]
+
+
+def _watch_atexit(mod, monkeypatch):
+    registered, unregistered = [], []
+    monkeypatch.setattr(mod.atexit, "register", lambda fn, *a, **k: registered.append(fn) or fn)
+    monkeypatch.setattr(mod.atexit, "unregister", lambda fn: unregistered.append(fn))
+    return registered, unregistered
+
+
+def test_a_normal_quit_removes_the_instance_file(mod, monkeypatch):
+    registered, _ = _watch_atexit(mod, monkeypatch)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
+    assert srv.start()
+    path = mod.wire.instances_dir() / f"{srv.port}.json"
+    try:
+        assert path.exists() and len(registered) == 1
+        registered[0]()  # what Python runs at exit
+        assert not path.exists()
+        registered[0]()  # and it is safe to run twice
+    finally:
+        srv.stop()
+
+
+def test_stop_unregisters_the_exit_handler(mod, monkeypatch):
+    registered, unregistered = _watch_atexit(mod, monkeypatch)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
+    assert srv.start()
+    srv.stop()
+    assert unregistered == registered and len(registered) == 1

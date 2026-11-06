@@ -840,14 +840,18 @@ class AIHandlersMixin:
                 "result": result_data,
             }
 
-        except Exception as e:
-            stdout_str = stdout_capture.getvalue()
-            stderr_str = stderr_capture.getvalue()
+        except (Exception, SystemExit) as e:
+            # exit() and sys.exit() raise SystemExit, which is not an Exception. Left alone
+            # it would reach Blender's timer and could end the session.
+            if isinstance(e, SystemExit):
+                error = "The script called exit() or sys.exit(); Blender keeps running."
+            else:
+                error = f"{type(e).__name__}: {e}"
             return {
                 "success": False,
-                "stdout": stdout_str,
-                "stderr": stderr_str,
-                "error": f"{type(e).__name__}: {e}",
+                "stdout": stdout_capture.getvalue(),
+                "stderr": stderr_capture.getvalue(),
+                "error": error,
                 "result": None,
             }
 

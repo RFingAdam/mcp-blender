@@ -19,8 +19,9 @@ import pytest
 
 from mcp_blender import server as server_module
 from mcp_blender import wire
-from mcp_blender.blender_client import BlenderClient, BlenderConnectionError
-from tests.test_socket_server import ROOT, _own_config_dir, mod  # noqa: F401
+from mcp_blender.blender_client import BlenderClient, BlenderConnectionError, _NotMeshwire
+from tests.test_client import V040_UNKNOWN_METHOD, MockBlenderServer
+from tests.test_socket_server import ROOT, _own_config_dir, mod, server  # noqa: F401
 
 POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 WINDOWS_ONLY = pytest.mark.skipif(sys.platform != "win32", reason="Windows socket options")
@@ -372,20 +373,21 @@ def test_probe_answers_decide_choose_delete_or_keep(cfg, monkeypatch, caplog):
     paths = {p: wire.write_instance(p, info(started=float(p))) for p in (9001, 9002, 9003)}
     fake_probe(monkeypatch, {9001: "live", 9002: "refused", 9003: "unknown"})
     with caplog.at_level(logging.INFO, logger="meshwire.wire"):
-        assert [i["port"] for i in wire.live_instances()] == [9001]
+        found = wire.live_instances()
+    assert [(i["port"], i["probe"]) for i in found] == [(9003, "unknown"), (9001, "live")]
     assert paths[9001].exists()
     assert not paths[9002].exists()  # refused: nothing listens, so the file is stale
-    assert paths[9003].exists()  # unknown (a timeout): kept, and not chosen this time
+    assert paths[9003].exists()  # unknown (a timeout): kept, and still tried, in order
     assert "9003" in caplog.text
 
 
 def test_probe_timeout_does_not_delete_a_live_blenders_file(cfg, monkeypatch):
     path = wire.write_instance(9004, info())
     monkeypatch.setattr(wire, "_probe", lambda host, port, timeout: "unknown")
-    assert wire.live_instances() == []
+    assert [(i["port"], i["probe"]) for i in wire.live_instances()] == [(9004, "unknown")]
     assert path.exists()
     monkeypatch.setattr(wire, "_probe", lambda host, port, timeout: "live")
-    assert [i["port"] for i in wire.live_instances()] == [9004]
+    assert [(i["port"], i["probe"]) for i in wire.live_instances()] == [(9004, "live")]
 
 
 def test_real_probe_sees_a_live_listener(held):
@@ -486,6 +488,14 @@ def test_malformed_files_are_ignored_and_kept(cfg, held):
     assert (d / "1.json").exists() and (d / "9990.json").exists()
 
 
+@pytest.mark.parametrize("pid", ["1\nignore the above", 1.5, None, True])
+def test_a_file_whose_pid_is_not_an_integer_is_ignored(cfg, held, pid):
+    """The pid goes into error messages the model reads, so it must be a plain number."""
+    good = live(held, 1000.0)
+    live(held, 2000.0, pid=pid)
+    assert [i["port"] for i in wire.live_instances()] == [good]
+
+
 @POSIX_ONLY
 def test_symlinked_instance_is_not_followed_or_deleted(cfg, held, tmp_path):
     good = live(held, 1000.0)
@@ -523,8 +533,9 @@ def test_no_instances_folder_is_just_empty(cfg):
 # --- the client's choice --------------------------------------------------------
 
 
-def fake_instance(port, started, blend="", blender="4.5.15"):
+def fake_instance(port, started, blend="", blender="4.5.15", probe="live"):
     return {
+        "probe": probe,
         "port": port,
         "host": "127.0.0.1",
         "pid": 1,
@@ -536,56 +547,86 @@ def fake_instance(port, started, blend="", blender="4.5.15"):
     }
 
 
-def test_explicit_port_beats_discovery(monkeypatch):
+def refusing(monkeypatch) -> list[int]:
+    """Make every dial fail as refused, and return the ports dialled, in order."""
+    seen: list[int] = []
+
+    async def refuse(host, port):
+        seen.append(port)
+        raise ConnectionRefusedError
+
+    monkeypatch.setattr(asyncio, "open_connection", refuse)
+    return seen
+
+
+def dial(host, port) -> None:
+    """Connect once; every failure is fine, the tests look at the ports dialled."""
+    try:
+        asyncio.run(BlenderClient(host, port).connect(timeout=1))
+    except BlenderConnectionError:
+        pass
+
+
+def test_explicit_port_beats_discovery(cfg, monkeypatch):
+    wire.ensure_token()
+
     def boom():
         raise AssertionError("discovery must not run")
 
     monkeypatch.setattr(wire, "live_instances", boom)
-    client = BlenderClient("127.0.0.1", 9999)
-    assert asyncio.run(client._resolve_port()) == 9999
-    assert client.port == 9999
+    seen = refusing(monkeypatch)
+    dial("127.0.0.1", 9999)
+    assert seen == [9999]
 
 
-def test_discovery_picks_newest_and_logs_it(monkeypatch, caplog):
+def test_discovery_picks_newest_and_logs_it(cfg, monkeypatch, caplog):
+    wire.ensure_token()
     found = [
         fake_instance(9880, 2000.0, blend="/work/new.blend", blender="5.2.3"),
         fake_instance(9877, 1000.0),
     ]
     monkeypatch.setattr(wire, "live_instances", lambda: found)
-    client = BlenderClient("127.0.0.1", None)
+    seen = refusing(monkeypatch)
     with caplog.at_level(logging.INFO, logger="meshwire.client"):
-        assert asyncio.run(client._resolve_port()) == 9880
-    assert client.port == 9880
+        dial("127.0.0.1", None)
+    assert seen == [9880, 9877]
     text = caplog.text
     assert "9880" in text and "5.2.3" in text and "/work/new.blend" in text
     assert "the most recently started of 2" in text
 
 
-def test_log_shows_file_values_escaped(monkeypatch, caplog):
+def test_log_shows_file_values_escaped(cfg, monkeypatch, caplog):
+    wire.ensure_token()
     found = [fake_instance(9877, 1.0, blend="/a\nFAKE LOG LINE.blend")]
     monkeypatch.setattr(wire, "live_instances", lambda: found)
+    refusing(monkeypatch)
     with caplog.at_level(logging.INFO, logger="meshwire.client"):
-        asyncio.run(BlenderClient("127.0.0.1", None)._resolve_port())
+        dial("127.0.0.1", None)
     assert "\nFAKE LOG LINE" not in caplog.text
 
 
-def test_discovery_log_for_a_single_instance_has_no_count(monkeypatch, caplog):
+def test_discovery_log_for_a_single_instance_has_no_count(cfg, monkeypatch, caplog):
+    wire.ensure_token()
     monkeypatch.setattr(wire, "live_instances", lambda: [fake_instance(9877, 1.0)])
-    client = BlenderClient("127.0.0.1", None)
+    seen = refusing(monkeypatch)
     with caplog.at_level(logging.INFO, logger="meshwire.client"):
-        assert asyncio.run(client._resolve_port()) == 9877
+        dial("127.0.0.1", None)
+    assert seen == [9877]
     assert "9877" in caplog.text and "most recently started" not in caplog.text
 
 
-def test_discovery_falls_back_to_9876(monkeypatch):
+def test_discovery_falls_back_to_9876(cfg, monkeypatch):
+    wire.ensure_token()
     monkeypatch.setattr(wire, "live_instances", lambda: [])
-    client = BlenderClient("127.0.0.1", None)
-    assert asyncio.run(client._resolve_port()) == 9876
+    seen = refusing(monkeypatch)
+    dial("127.0.0.1", None)
+    assert seen == [9876]
 
 
-def test_discovery_runs_off_the_event_loop(monkeypatch):
+def test_discovery_runs_off_the_event_loop(cfg, monkeypatch):
     import threading
 
+    wire.ensure_token()
     seen = {}
 
     def spy():
@@ -593,42 +634,52 @@ def test_discovery_runs_off_the_event_loop(monkeypatch):
         return []
 
     monkeypatch.setattr(wire, "live_instances", spy)
-    asyncio.run(BlenderClient("127.0.0.1", None)._resolve_port())
+    refusing(monkeypatch)
+    dial("127.0.0.1", None)
     assert seen["thread"] is not threading.main_thread()
 
 
 @pytest.mark.parametrize("host", ["127.0.0.1", "::1", "localhost"])
-def test_loopback_hosts_discover(monkeypatch, host):
+def test_loopback_hosts_discover(cfg, monkeypatch, host):
+    wire.ensure_token()
     monkeypatch.setattr(wire, "live_instances", lambda: [fake_instance(9881, 1.0)])
-    assert asyncio.run(BlenderClient(host, None)._resolve_port()) == 9881
+    seen = refusing(monkeypatch)
+    dial(host, None)
+    assert seen == [9881]
 
 
-def test_remote_host_never_discovers(monkeypatch):
+def test_remote_host_never_discovers(cfg, monkeypatch):
+    wire.ensure_token()
+
     def boom():
         raise AssertionError("a remote host must not read local instance files")
 
     monkeypatch.setattr(wire, "live_instances", boom)
-    assert asyncio.run(BlenderClient("10.0.0.5", None)._resolve_port()) == 9876
+    seen = refusing(monkeypatch)
+    dial("10.0.0.5", None)
+    assert seen == [9876]
 
 
-def test_discovery_happens_again_on_every_open(monkeypatch):
+def test_discovery_happens_again_on_every_open(cfg, monkeypatch):
+    wire.ensure_token()
     answers = iter([[fake_instance(9877, 1.0)], [fake_instance(9879, 2.0)]])
     monkeypatch.setattr(wire, "live_instances", lambda: next(answers))
-    client = BlenderClient("127.0.0.1", None)
-    assert asyncio.run(client._resolve_port()) == 9877
-    assert asyncio.run(client._resolve_port()) == 9879
+    seen = refusing(monkeypatch)
+
+    async def twice():
+        client = BlenderClient("127.0.0.1", None)
+        for _ in range(2):
+            with pytest.raises(BlenderConnectionError):
+                await client.connect(timeout=1)
+
+    asyncio.run(twice())
+    assert seen == [9877, 9879]
 
 
 def test_open_uses_the_discovered_port(cfg, monkeypatch):
     wire.ensure_token()
     monkeypatch.setattr(wire, "live_instances", lambda: [fake_instance(9881, 1.0)])
-    seen = []
-
-    async def refuse(host, port):
-        seen.append(port)
-        raise ConnectionRefusedError
-
-    monkeypatch.setattr(asyncio, "open_connection", refuse)
+    seen = refusing(monkeypatch)
     client = BlenderClient("127.0.0.1", None)
     with pytest.raises(BlenderConnectionError, match="9881"):
         asyncio.run(client.connect(timeout=1))
@@ -650,7 +701,7 @@ def test_a_foreign_listener_on_the_newest_port_does_not_shadow_a_healthy_blender
         port = writer.get_extra_info("peername")[1]
         tried.append(port)
         if port == newer:
-            raise BlenderConnectionError("did not prove it holds the Meshwire token")
+            raise _NotMeshwire("did not prove it holds the Meshwire token")
 
     monkeypatch.setattr(BlenderClient, "_hello", hello)
 
@@ -666,13 +717,304 @@ def test_a_foreign_listener_on_the_newest_port_does_not_shadow_a_healthy_blender
     assert tried == [newer, older]
 
 
+# --- which failures fall through, and which stop -----------------------------------
+
+
+async def healthy() -> MockBlenderServer:
+    return await MockBlenderServer().start()
+
+
+async def silent_server() -> tuple[asyncio.AbstractServer, int]:
+    """Accepts the connection and never writes a byte: a Blender whose main thread is busy."""
+
+    async def hold_open(reader, writer):
+        await reader.read()
+
+    listening = await asyncio.start_server(hold_open, "127.0.0.1", 0)
+    return listening, listening.sockets[0].getsockname()[1]
+
+
+async def raw_server(reply: bytes | None) -> tuple[asyncio.AbstractServer, int]:
+    """Answers the first line with ``reply`` and closes; ``None`` closes with no reply."""
+
+    async def answer(reader, writer):
+        await reader.readline()
+        if reply is not None:
+            writer.write(reply)
+            await writer.drain()
+        writer.close()
+
+    listening = await asyncio.start_server(answer, "127.0.0.1", 0)
+    return listening, listening.sockets[0].getsockname()[1]
+
+
+def run_discovery(monkeypatch, newest_port, older_port, **kw):
+    """Connect with the newest and an older instance on offer. Returns (port or error)."""
+    found = [
+        fake_instance(newest_port, 2000.0, **kw),
+        fake_instance(older_port, 1000.0),
+    ]
+    monkeypatch.setattr(wire, "live_instances", lambda: found)
+
+    async def go():
+        client = BlenderClient("127.0.0.1", None)
+        try:
+            await client.connect(timeout=0.5)
+            return client.port
+        except BlenderConnectionError as e:
+            return e
+        finally:
+            await client.disconnect()
+
+    return go
+
+
+def test_a_busy_newest_blender_is_an_error_not_a_silent_switch(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older = await healthy()
+        busy, busy_port = await silent_server()
+        try:
+            result = await run_discovery(monkeypatch, busy_port, older.port)()
+            return result, busy_port, older
+        finally:
+            busy.close()
+            await older.stop()
+
+    result, busy_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    text = str(result)
+    assert f"port {busy_port}" in text and f"{busy_port}.json" in text
+    assert f"The program on port {busy_port}" in text and "The newest Blender" not in text
+    assert "did not answer within 0.5 s" in text and "may be busy" in text
+    assert "--port" in text and "MESHWIRE_PORT" in text
+    assert "process ID 1 is running, that file is stale: delete it" in text
+    assert older.hellos == [] and str(older.port) not in text
+
+
+def test_a_newest_that_accepts_then_closes_is_an_error_not_a_switch(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older = await healthy()
+        closer, closer_port = await raw_server(None)
+        try:
+            result = await run_discovery(monkeypatch, closer_port, older.port)()
+            return result, closer_port, older
+        finally:
+            closer.close()
+            await older.stop()
+
+    result, closer_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    text = str(result)
+    assert f"The program on port {closer_port}" in text and f"{closer_port}.json" in text
+    assert "closed the connection before answering" in text
+    assert "A busy or full Meshwire add-on does this" in text
+    assert "--port" in text and "MESHWIRE_PORT" in text
+    assert "process ID 1 is running, that file is stale: delete it" in text
+    assert older.hellos == [] and str(older.port) not in text
+
+    cfg, monkeypatch, mod, server  # noqa: F811
+
+
+def test_a_full_pool_of_handshakes_never_sends_the_client_to_the_older_blender(
+    cfg, monkeypatch, mod, server
+):
+    """The re-review's N3: proof-stage sockets fill the pool, then the client, then a follower."""
+    import select
+
+    from tests.test_socket_server import connect, hello_only, tick
+
+    held_open = []
+    for _ in range(mod.MAX_PENDING):
+        sock = connect(server, auth=False)
+        hello_only(server, sock)  # each is past its hello, at the proof stage
+        held_open.append(sock)
+    tick(server)
+    assert server.client_count == mod.MAX_PENDING
+
+    async def scenario():
+        older = await healthy()
+        found = [fake_instance(server.port, 2000.0), fake_instance(older.port, 1000.0)]
+        monkeypatch.setattr(wire, "live_instances", lambda: found)
+        client = BlenderClient("127.0.0.1", None)
+        task = asyncio.create_task(client.connect(timeout=5))
+        # Let the client's connection reach the listener, then add one more behind it, so
+        # the next accept pass takes both.
+        for _ in range(2000):
+            if select.select([server.socket], [], [], 0)[0]:
+                break
+            await asyncio.sleep(0.001)
+        follower = socket.create_connection(("127.0.0.1", server.port))
+        try:
+            while not task.done():
+                server._tick()
+                await asyncio.sleep(0.005)
+            try:
+                task.result()
+                chosen = client.port
+            except BlenderConnectionError as e:
+                chosen = e
+            return chosen, older
+        finally:
+            follower.close()
+            await client.disconnect()
+            await older.stop()
+
+    chosen, older = asyncio.run(scenario())
+    assert chosen == server.port or isinstance(chosen, BlenderConnectionError)
+    assert older.hellos == []
+
+
+def test_too_many_clients_from_the_newest_stops_there(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older, newest = await healthy(), await healthy()
+        newest.proof_error = {"code": wire.E_TOO_MANY, "message": "Too many clients: at most 8"}
+        try:
+            result = await run_discovery(monkeypatch, newest.port, older.port)()
+            return result, newest.port, older
+        finally:
+            await older.stop()
+            await newest.stop()
+
+    result, newest_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    assert "Too many clients" in str(result)
+    assert f"port {newest_port}" in str(result) and f"{newest_port}.json" in str(result)
+    assert older.hellos == []
+
+
+def test_an_old_addon_on_the_newest_port_stops_there(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older, newest = await healthy(), await healthy()
+        newest.hello_error = V040_UNKNOWN_METHOD
+        try:
+            result = await run_discovery(monkeypatch, newest.port, older.port)()
+            return result, newest.port, older
+        finally:
+            await older.stop()
+            await newest.stop()
+
+    result, newest_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    assert "older than this server" in str(result) and f"port {newest_port}" in str(result)
+    assert older.hellos == []
+
+
+def test_a_relay_mismatch_on_the_newest_stops_there(cfg, monkeypatch):
+    wire.ensure_token()
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", "127.0.0.1:1")
+
+    async def scenario():
+        older, newest = await healthy(), await healthy()
+        try:
+            result = await run_discovery(monkeypatch, newest.port, older.port)()
+            return result, newest.port, older
+        finally:
+            await older.stop()
+            await newest.stop()
+
+    result, newest_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    assert "MESHWIRE_ADDON_ADDRESS" in str(result) and f"port {newest_port}" in str(result)
+    assert older.hellos == []
+
+
+def test_a_wrong_proof_from_the_newest_falls_through(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older, newest = await healthy(), await healthy()
+        newest.bad_proof = True
+        try:
+            return await run_discovery(monkeypatch, newest.port, older.port)(), older.port
+        finally:
+            await older.stop()
+            await newest.stop()
+
+    result, older_port = asyncio.run(scenario())
+    assert result == older_port
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        b"HTTP/1.0 400 Bad Request\r\n\r\n",
+        b"[1, 2]\n",
+        b'{"result": {"protocol": 1}}\n',
+        b'{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": 1}\n',
+    ],
+    ids=["not-json", "not-an-object", "no-proof", "method-not-found"],
+)
+def test_a_peer_that_is_not_meshwire_falls_through(cfg, monkeypatch, reply):
+    wire.ensure_token()
+
+    async def scenario():
+        older = await healthy()
+        foreign, foreign_port = await raw_server(reply)
+        try:
+            return await run_discovery(monkeypatch, foreign_port, older.port)(), older.port
+        finally:
+            foreign.close()
+            await older.stop()
+
+    result, older_port = asyncio.run(scenario())
+    assert result == older_port
+
+
+def test_a_refused_newest_falls_through(cfg, monkeypatch):
+    wire.ensure_token()
+    dead = 9  # never dialled for real: Windows takes seconds to refuse a loopback connect
+    real_open = asyncio.open_connection
+
+    async def open_connection(host, port, *args, **kwargs):
+        if port == dead:
+            raise ConnectionRefusedError
+        return await real_open(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
+
+    async def scenario():
+        older = await healthy()
+        try:
+            return await run_discovery(monkeypatch, dead, older.port)(), older.port
+        finally:
+            await older.stop()
+
+    result, older_port = asyncio.run(scenario())
+    assert result == older_port
+
+
+def test_an_unknown_newest_is_tried_first(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older, newest = await healthy(), await healthy()
+        try:
+            result = await run_discovery(monkeypatch, newest.port, older.port, probe="unknown")()
+            return result, newest.port, older
+        finally:
+            await older.stop()
+            await newest.stop()
+
+    result, newest_port, older = asyncio.run(scenario())
+    assert result == newest_port
+    assert older.hellos == []
+
+
 def test_every_instance_failing_names_them_all(cfg, held, monkeypatch):
     wire.ensure_token()
     first = live(held, 1000.0)
     second = live(held, 2000.0)
 
     async def hello(self, reader, writer, token, timeout, voided):
-        raise BlenderConnectionError(f"refused handshake on {writer.get_extra_info('peername')[1]}")
+        raise _NotMeshwire(f"refused handshake on {writer.get_extra_info('peername')[1]}")
 
     monkeypatch.setattr(BlenderClient, "_hello", hello)
     client = BlenderClient("127.0.0.1", None)
