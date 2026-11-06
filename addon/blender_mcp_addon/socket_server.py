@@ -114,7 +114,7 @@ class _Client:
         self.stage = "hello"  # "hello", then "proof", then authed
         self.nonce_c = ""  # the client's nonce, kept for its proof
         self.nonce_s = ""  # this add-on's nonce for the connection
-        self.deadline = 0.0  # monotonic time by which the handshake must finish; unused once authed
+        self.deadline = 0.0  # monotonic time by which the current handshake step must finish; unused once authed
         self.closing = False  # close once wbuf drains; read nothing more
         self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
         self.eof = False  # the peer shut its sending side; read nothing more
@@ -315,12 +315,14 @@ class MCPSocketServer:
         now = self._now()
         for client in list(self.clients.values()):
             try:
-                if not client.authed and not client.closing and now >= client.deadline:
-                    client.dead = True  # no good hello in time: close, whatever it sent
-                    continue
                 self._read(client)
                 self._run_lines(client)
                 self._flush(client)
+                if not client.authed and not client.closing and now >= client.deadline:
+                    # Read first: the server cannot tell "sent late" from "read late", so a
+                    # stall of Blender's own main thread must not cost a client that answered.
+                    client.dead = True  # still no good step in time: close, no reply
+                    continue
                 self._expire(client, now)
             except Exception as e:
                 print(f"Error processing client: {e}")
@@ -474,6 +476,7 @@ class MCPSocketServer:
         client.nonce_c = nonce
         client.nonce_s = wire.new_nonce()
         client.stage = "proof"
+        client.deadline = self._now() + wire.HELLO_SECONDS  # the proof gets its own 2 s
         # The address these bytes actually arrived at. It is inside the proof, so a relay
         # that forwards the exchange from another address or port cannot keep it valid.
         local = client.sock.getsockname()

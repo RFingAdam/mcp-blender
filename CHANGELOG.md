@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the browser. The host was also a Scene property saved in the `.blend`, so a shared file could carry a
   non-loopback host; it is now an add-on Preference.
   The add-on now makes a token in your Meshwire config folder (`~/.config/meshwire/token` on Linux, mode 0600). A connection
-  must open with a `hello` and then a `hello_proof`, within 2 seconds, in lines of at most 4 KiB. The two
+  must open with a `hello` and then a `hello_proof`, each step within 2 seconds, in lines of at most 4 KiB. The two
   sides prove they hold the token with HMAC-SHA256 over fresh nonces, so the token itself never crosses the
   socket. The add-on's proof also covers the address it received the connection at, and the server refuses a
   connection that reached a different address, so a program relaying the traffic from another port or
