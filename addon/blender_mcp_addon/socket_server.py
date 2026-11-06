@@ -208,13 +208,11 @@ class MCPSocketServer:
                 client.dead = True
                 return
             if not data:
-                # The peer will send no more but may still read (a half-close). Answer
-                # every complete line it sent, drop a trailing partial one, then close,
-                # all inside CLOSE_GRACE.
+                # The peer will send no more but may still read (a half-close). It is
+                # served like a live client: every complete line it sent is answered
+                # under the usual backpressure and WRITE_STALL, a trailing partial line
+                # is dropped, and it closes once nothing is left to run or send.
                 client.eof = True
-                if not client.closing:
-                    client.closing = True
-                    client.close_at = self._now() + CLOSE_GRACE
                 return
             taken += len(data)
             if not client.closing:
@@ -320,8 +318,11 @@ class MCPSocketServer:
         """
         if client.dead:
             return
+        if client.eof and not client.wbuf and b"\n" not in client.rbuf:
+            client.dead = True  # every complete line was answered and sent
+            return
         if client.closing:
-            if now >= client.close_at or (client.eof and not client.wbuf):
+            if now >= client.close_at:
                 client.dead = True
             elif not client.wbuf and not client.half_closed:
                 client.half_closed = True

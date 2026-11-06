@@ -359,18 +359,28 @@ def with_clock(srv):
     return clock
 
 
+class BlockedSock:
+    """An accepted socket whose send never takes a byte."""
+
+    def __init__(self, sock):
+        self._sock = sock
+
+    def send(self, data):
+        raise BlockingIOError
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+
 def test_closing_client_that_never_reads_is_dropped_after_grace(server, mod):
     clock = with_clock(server)
-    server.handlers.size = 8 * MIB
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
-    # A big request, then a half-close: the client is closing with megabytes undrained.
-    request(sock, "big")
-    sock.shutdown(socket.SHUT_WR)
+    client.sock = BlockedSock(client.sock)
+    sock.sendall(b"{nope\n")  # an error close whose reply can never leave
     tick(server, 3)
-    assert client.closing and len(client.wbuf) > MIB
+    assert client.closing and len(client.wbuf) > 0
     clock.t += mod.CLOSE_GRACE - 0.1
     tick(server)
     assert server.client_count == 1
@@ -528,3 +538,60 @@ def test_requests_pipelined_behind_a_large_reply_are_answered_in_order(server):
         if len(ids) == 4:
             break
     assert ids == [1, 2, 3, 4]
+
+
+def slow_handler(srv, clock, seconds):
+    orig = srv.handlers.handle
+
+    def slow(method, params):
+        clock.t += seconds
+        return orig(method, params)
+
+    srv.handlers.handle = slow
+
+
+def small_sndbuf(srv):
+    tick(srv)
+    (client,) = srv.clients.values()
+    client.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    return client
+
+
+def test_half_closed_slow_handler_big_reply_arrives_whole(server):
+    clock = with_clock(server)
+    server.handlers.size = 8 * MIB
+    slow_handler(server, clock, 10)
+    sock = connect(server)
+    small_sndbuf(server)
+    request(sock, "big")
+    sock.shutdown(socket.SHUT_WR)
+    data = read_all(server, sock)
+    assert data.endswith(b"\n") and len(json.loads(data)["result"]) == 8 * MIB
+
+
+def test_half_closed_pipelined_big_then_small_arrive_in_order(server):
+    server.handlers.size = 2 * MIB
+    sock = connect(server)
+    small_sndbuf(server)
+    request(sock, "big", req_id=1)
+    request(sock, "ping", req_id=2)
+    sock.shutdown(socket.SHUT_WR)
+    data = read_all(server, sock)
+    assert [json.loads(x)["id"] for x in data.split(b"\n") if x] == [1, 2]
+
+
+def test_half_closed_client_that_never_reads_is_closed_after_write_stall(server, mod):
+    clock = with_clock(server)
+    server.handlers.size = 8 * MIB
+    sock = connect(server)
+    small_sndbuf(server)
+    request(sock, "big")
+    sock.shutdown(socket.SHUT_WR)
+    tick(server, 3)
+    assert server.client_count == 1
+    clock.t += mod.CLOSE_GRACE + 5  # the error-close grace does not apply to it
+    tick(server)
+    assert server.client_count == 1
+    clock.t += mod.WRITE_STALL
+    tick(server)
+    assert server.client_count == 0
