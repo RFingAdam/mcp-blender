@@ -166,8 +166,7 @@ class BlenderClient:
                 reason = str(e).splitlines()[0] if str(e) else type(e).__name__
                 failures.append((instance, reason))
         lines = [
-            f"  port {i['port']} ({wire.instances_dir() / (str(i['port']) + '.json')}, "
-            f"Blender {i['blender']!r}): {reason}"
+            f"  port {i['port']} ({wire.instances_dir() / (str(i['port']) + '.json')}): {reason}"
             for i, reason in failures
         ]
         raise BlenderConnectionError(

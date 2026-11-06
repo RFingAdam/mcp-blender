@@ -282,8 +282,9 @@ def write_instance(port: int, info: dict) -> Path:
     """Publish ``instances/<port>.json`` for this Blender and return its path.
 
     ``info`` supplies addon, blender, blend and host (the address the add-on bound).
-    pid, protocol and started are filled in unless given. There is no token in the file. It is written whole to a private temp
-    file in the same folder and renamed into place, so a reader never sees half of it.
+    pid, protocol and started are filled in unless given. There is no token in the file.
+    It is written whole to a private temp file in the same folder and renamed into
+    place, so a reader never sees half of it.
     The Meshwire folder and the instances folder are created at 0700 when missing and
     held to the same checks as the token's folder.
     """

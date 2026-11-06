@@ -57,6 +57,34 @@ class Throttled:
         return getattr(self._sock, name)
 
 
+class Budgeted:
+    """Stands in for an accepted socket with a byte budget the test refills.
+
+    ``send`` takes bytes until the budget is spent, then raises BlockingIOError, as a
+    socket whose peer has stopped reading does. How much the real kernel would buffer
+    cannot change what a test sees. The bytes taken go on to the real socket.
+    """
+
+    def __init__(self, sock, budget=0):
+        self._sock = sock
+        self.budget = budget
+
+    def send(self, data):
+        if self.budget <= 0:
+            raise BlockingIOError
+        sent = self._sock.send(data[: self.budget])
+        self.budget -= sent
+        return sent
+
+    def __getattr__(self, name):
+        return getattr(self._sock, name)
+
+
+def budget(client, amount=0):
+    client.sock = Budgeted(client.sock, amount)
+    return client.sock
+
+
 def throttle(client, limit):
     client.sock = Throttled(client.sock, limit)
     return client.sock
@@ -267,8 +295,9 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 64 * 1024)
     tick(server)  # accept
     (client,) = server.clients.values()
-    # Each send takes a slice of the reply, whatever the platform's buffers hold.
-    counter = CountingSock(Throttled(client.sock, 64 * 1024))
+    # The socket takes 128 KiB a tick, whatever the platform's buffers would hold.
+    gate = Budgeted(client.sock, 128 * 1024)
+    counter = CountingSock(gate)
     client.sock = counter
     request(sock, "big")
     tick(server)
@@ -277,6 +306,7 @@ def test_reply_larger_than_socket_buffers_arrives_whole(server):
     got = bytearray()
     ticks = 0
     while b"\n" not in got:
+        gate.budget = 128 * 1024
         tick(server)
         ticks += 1
         assert ticks < 200_000, "reply never completed"
@@ -390,11 +420,12 @@ def test_vanished_client_is_dropped_without_raising(server, capsys):
     gone = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    throttle(client, 4096)
+    gate = budget(client, 4096)
     request(gone, "big")
     tick(server, 3)
     assert len(client.wbuf) > 0
     gone.close()
+    gate.budget = 1 << 40  # the socket takes bytes again, so the dead peer shows up as an error
     pump(server, until=lambda: server.client_count == 0)
     assert not client.wbuf
     other = connect(server)
@@ -516,13 +547,14 @@ def test_trickle_reader_keeps_wbuf_within_the_cap(server, mod, monkeypatch):
     sock = connect(server)
     tick(server)
     (client,) = server.clients.values()
-    throttle(client, 100)  # the peer takes a trickle
+    gate = budget(client)  # the peer takes a trickle: 100 bytes a tick
     biggest = 0
     for _ in range(300):
         try:
             sock.send(b"{}\n" * 500)
         except BlockingIOError:
             pass
+        gate.budget = 100
         tick(server)
         biggest = max(biggest, len(client.wbuf))
         try:
@@ -920,7 +952,7 @@ def test_a_pre_auth_client_is_read_only_up_to_the_hello_limit(server, mod):
             return getattr(real, name)
 
     client.sock = Spy()
-    assert send_some(sock, b"x" * (2 * MIB)) > 0
+    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
     tick(server, 3)
     assert sizes and max(sizes) <= mod.wire.HELLO_MAX + 1
     assert sum(sizes) <= mod.wire.HELLO_MAX + 1 + len(sizes)  # at most one short read per tick
@@ -1234,7 +1266,7 @@ def test_a_closing_pre_auth_client_is_not_read_in_tiny_chunks(server, mod):
             return getattr(real, name)
 
     client.sock = Spy()
-    assert send_some(sock, b"x" * (2 * MIB)) > 0
+    assert send_some(sock, b"x" * (2 * MIB)) > mod.wire.HELLO_MAX + 1
     tick(server, 3)
     assert sizes and max(sizes) > 64 * 1024
 
