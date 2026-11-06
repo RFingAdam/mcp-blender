@@ -6,6 +6,7 @@ each complete request, queues the reply and sends as much of it as the socket wi
 take. Nothing here ever waits on a peer.
 """
 
+import atexit
 import errno
 import hmac
 import json
@@ -30,6 +31,7 @@ SEND_CHUNK = 1024 * 1024
 PRE_AUTH_DISCARD = (
     64 * 1024
 )  # most a failing pre-auth client may make the add-on read after its error
+LISTEN_BACKLOG = 64  # connections the kernel holds for a busy Blender; Windows refuses past it
 MAX_CLOSING = 16  # clients already told to go; past this a refusal closes with no reply
 CLOSE_GRACE = 2.0  # seconds a closing client has to read its last reply, drained or not
 WRITE_STALL = 30.0  # seconds a client may leave unsent reply bytes without taking any
@@ -89,7 +91,7 @@ def bind_listener(host: str, port: int) -> tuple[socket.socket, int]:
             _configure_listener(sock)
             sock.setblocking(False)
             sock.bind((host, candidate))
-            sock.listen(5)
+            sock.listen(LISTEN_BACKLOG)
             return sock, candidate
         except OSError as e:
             sock.close()
@@ -216,6 +218,9 @@ class MCPSocketServer:
                     "blend": self._text(getattr(bpy.data, "filepath", "")),
                 },
             )
+            # A normal quit does not always run stop(), and a file left behind is never
+            # cleaned up on Windows, where a refused probe is too slow to prove it stale.
+            atexit.register(self._unpublish_at_exit)
         except Exception as e:
             reason = e.strerror if isinstance(e, OSError) and e.strerror else e
             where = wire.instances_dir() / f"{self.port}.json"
@@ -224,6 +229,10 @@ class MCPSocketServer:
                 f"Clients need --port {self.port}."
             )
             print(self.discovery_warning)
+
+    def _unpublish_at_exit(self) -> None:
+        """Remove this server's instance file when Python exits with the server still up."""
+        wire.remove_instance(self.port)
 
     @staticmethod
     def _load_token() -> str:
@@ -256,6 +265,7 @@ class MCPSocketServer:
         # and publish its own file under the same name, which this must not delete.
         if self._instance_path is not None:
             wire.remove_instance(self.port)
+            atexit.unregister(self._unpublish_at_exit)
             self._instance_path = None
         self.discovery_warning = ""
 
@@ -316,12 +326,9 @@ class MCPSocketServer:
             pending = [sk for sk, c in self.clients.items() if not c.authed]
             if len(pending) >= MAX_PENDING:
                 # Sockets that have not proved the token cannot crowd out ones that can:
-                # the oldest of them goes, with no reply; handshakes not yet started first.
-                # One still at "hello" has cost its owner least, and a flood can fill the
-                # pool in the few ticks a real client is between hello and proof.
-                oldest = next(
-                    (sk for sk in pending if self.clients[sk].stage == "hello"), pending[0]
-                )
+                # the oldest of them goes, with no reply. The client sees a close before
+                # any reply and stops with an error; it never moves on to another Blender.
+                oldest = pending[0]
                 self._drop(oldest, self.clients[oldest])
             print(f"MCP client connected: {addr}")
             self.clients[sock] = client

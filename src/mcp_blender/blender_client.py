@@ -34,12 +34,25 @@ class _NotMeshwire(BlenderConnectionError):
     """
 
 
-class _NoAnswer(BlenderConnectionError):
-    """A connect or handshake step ran out of time; the Blender may be busy."""
+class _Unproven(BlenderConnectionError):
+    """A stop caused by a peer that has not proved it is a Meshwire add-on.
+
+    It may be a Blender that is busy, full or outdated, or a program squatting on a stale
+    port. The message calls it "the program", and names the instance file and its process
+    ID so that a stale file can be told from a busy Blender.
+    """
+
+
+class _NoAnswer(_Unproven):
+    """A connect or handshake step ran out of time."""
 
     def __init__(self, message: str, seconds: float):
         super().__init__(message)
         self.seconds = seconds
+
+
+class _ClosedEarly(_Unproven):
+    """Accepted, then closed or reset before any reply byte: an eviction or a full server."""
 
 
 class BlenderCommandError(Exception):
@@ -188,17 +201,32 @@ class BlenderClient:
         self, instance: dict, position: int, error: BlenderConnectionError, timeout: float
     ) -> BlenderConnectionError:
         """The one error for an instance that may be a real Meshwire: no switching to another."""
-        where = f"port {instance['port']}, instance file {self._instance_file(instance)}"
+        port, file = instance["port"], self._instance_file(instance)
         way_out = "pass --port or set MESHWIRE_PORT to pick one"
-        if isinstance(error, _NoAnswer):
-            which = "newest" if position == 0 else "next"
+        if not isinstance(error, _Unproven):
+            # The add-on proved itself, so this is a genuine Blender's own answer.
             return BlenderConnectionError(
-                f"The {which} Blender ({where}) did not answer within {error.seconds:g} s; "
-                f"it may be busy. Try again, or {way_out}."
+                f"{error}\nThis came from the Blender on port {port} (instance file {file}). "
+                f"Not trying another Blender, because this one is the right one. You can {way_out}."
+            )
+        stale = (
+            f"If no Blender with process ID {instance['pid']} is running, that file is stale: "
+            "delete it."
+        )
+        where = f"The program on port {port} (instance file {file})"
+        if isinstance(error, _NoAnswer):
+            return BlenderConnectionError(
+                f"{where} did not answer within {error.seconds:g} s; if it is a Blender, it may "
+                f"be busy. Try again, or {way_out}. {stale}"
+            )
+        if isinstance(error, _ClosedEarly):
+            return BlenderConnectionError(
+                f"{where} closed the connection before answering. A busy or full Meshwire "
+                f"add-on does this. Try again, or {way_out}. {stale}"
             )
         return BlenderConnectionError(
-            f"{error}\nThis came from the Blender on {where}. Not trying another Blender, "
-            f"because this one may be the right one. You can {way_out}."
+            f"{error}\nThis came from {where[0].lower() + where[1:]}. Not trying another "
+            f"Blender, because this one may be the right one. You can {way_out}. {stale}"
         )
 
     async def _connect_to(self, token: str, timeout: float, epoch: int) -> None:
@@ -275,7 +303,8 @@ class BlenderClient:
         except (ConnectionError, asyncio.IncompleteReadError):
             line = b""
         if not line.strip():
-            raise unproven(
+            closed = BlenderConnectionError if verified else _ClosedEarly
+            raise closed(
                 "Blender closed the connection during the handshake. "
                 f"Is this a Meshwire add-on? ({self.host}:{self.port})"
             )
@@ -413,11 +442,11 @@ class BlenderClient:
         else:
             side = "Update the Meshwire server and the add-on to the same release."
         if type(addon_protocol) is int:
-            return BlenderConnectionError(
+            return _Unproven(
                 f"The Meshwire add-on in Blender speaks protocol {addon_protocol}, this server "
                 f"speaks {wire.PROTOCOL}. {side}"
             )
-        return BlenderConnectionError(
+        return _Unproven(
             f"The Meshwire add-on in Blender and this server speak different protocols. {side}"
         )
 
@@ -435,9 +464,9 @@ class BlenderClient:
             return BlenderConnectionError(message or f"Blender refused the handshake ({code})")
         # Before that, a peer's text could be anything. Use codes and numbers only.
         # A v0.4.0 add-on has no hello: its dispatcher raises ValueError("Unknown
-        # method: hello") and the socket server wraps that as -32603. A -32601 is accepted too.
-        if code == -32601 or (code == -32603 and message.startswith("Unknown method")):
-            return BlenderConnectionError(
+        # method: hello") and the socket server wraps that as -32603.
+        if code == -32603 and message.startswith("Unknown method"):
+            return _Unproven(
                 "The Meshwire add-on in Blender is older than this server. Update the add-on."
             )
         if code == wire.E_PROTOCOL:

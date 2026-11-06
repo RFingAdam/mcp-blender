@@ -21,7 +21,7 @@ from mcp_blender import server as server_module
 from mcp_blender import wire
 from mcp_blender.blender_client import BlenderClient, BlenderConnectionError, _NotMeshwire
 from tests.test_client import V040_UNKNOWN_METHOD, MockBlenderServer
-from tests.test_socket_server import ROOT, _own_config_dir, mod  # noqa: F401
+from tests.test_socket_server import ROOT, _own_config_dir, mod, server  # noqa: F401
 
 POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 WINDOWS_ONLY = pytest.mark.skipif(sys.platform != "win32", reason="Windows socket options")
@@ -722,8 +722,8 @@ async def silent_server() -> tuple[asyncio.AbstractServer, int]:
     async def hold_open(reader, writer):
         await reader.read()
 
-    server = await asyncio.start_server(hold_open, "127.0.0.1", 0)
-    return server, server.sockets[0].getsockname()[1]
+    listening = await asyncio.start_server(hold_open, "127.0.0.1", 0)
+    return listening, listening.sockets[0].getsockname()[1]
 
 
 async def raw_server(reply: bytes | None) -> tuple[asyncio.AbstractServer, int]:
@@ -736,8 +736,8 @@ async def raw_server(reply: bytes | None) -> tuple[asyncio.AbstractServer, int]:
             await writer.drain()
         writer.close()
 
-    server = await asyncio.start_server(answer, "127.0.0.1", 0)
-    return server, server.sockets[0].getsockname()[1]
+    listening = await asyncio.start_server(answer, "127.0.0.1", 0)
+    return listening, listening.sockets[0].getsockname()[1]
 
 
 def run_discovery(monkeypatch, newest_port, older_port, **kw):
@@ -778,9 +778,86 @@ def test_a_busy_newest_blender_is_an_error_not_a_silent_switch(cfg, monkeypatch)
     assert isinstance(result, BlenderConnectionError)
     text = str(result)
     assert f"port {busy_port}" in text and f"{busy_port}.json" in text
+    assert f"The program on port {busy_port}" in text and "The newest Blender" not in text
     assert "did not answer within 0.5 s" in text and "may be busy" in text
     assert "--port" in text and "MESHWIRE_PORT" in text
+    assert "process ID 1 is running, that file is stale: delete it" in text
     assert older.hellos == [] and str(older.port) not in text
+
+
+def test_a_newest_that_accepts_then_closes_is_an_error_not_a_switch(cfg, monkeypatch):
+    wire.ensure_token()
+
+    async def scenario():
+        older = await healthy()
+        closer, closer_port = await raw_server(None)
+        try:
+            result = await run_discovery(monkeypatch, closer_port, older.port)()
+            return result, closer_port, older
+        finally:
+            closer.close()
+            await older.stop()
+
+    result, closer_port, older = asyncio.run(scenario())
+    assert isinstance(result, BlenderConnectionError)
+    text = str(result)
+    assert f"The program on port {closer_port}" in text and f"{closer_port}.json" in text
+    assert "closed the connection before answering" in text
+    assert "A busy or full Meshwire add-on does this" in text
+    assert "--port" in text and "MESHWIRE_PORT" in text
+    assert "process ID 1 is running, that file is stale: delete it" in text
+    assert older.hellos == [] and str(older.port) not in text
+
+    cfg, monkeypatch, mod, server  # noqa: F811
+
+
+def test_a_full_pool_of_handshakes_never_sends_the_client_to_the_older_blender(
+    cfg, monkeypatch, mod, server
+):
+    """The re-review's N3: proof-stage sockets fill the pool, then the client, then a follower."""
+    import select
+
+    from tests.test_socket_server import connect, hello_only, tick
+
+    held_open = []
+    for _ in range(mod.MAX_PENDING):
+        sock = connect(server, auth=False)
+        hello_only(server, sock)  # each is past its hello, at the proof stage
+        held_open.append(sock)
+    tick(server)
+    assert server.client_count == mod.MAX_PENDING
+
+    async def scenario():
+        older = await healthy()
+        found = [fake_instance(server.port, 2000.0), fake_instance(older.port, 1000.0)]
+        monkeypatch.setattr(wire, "live_instances", lambda: found)
+        client = BlenderClient("127.0.0.1", None)
+        task = asyncio.create_task(client.connect(timeout=5))
+        # Let the client's connection reach the listener, then add one more behind it, so
+        # the next accept pass takes both.
+        for _ in range(2000):
+            if select.select([server.socket], [], [], 0)[0]:
+                break
+            await asyncio.sleep(0.001)
+        follower = socket.create_connection(("127.0.0.1", server.port))
+        try:
+            while not task.done():
+                server._tick()
+                await asyncio.sleep(0.005)
+            try:
+                task.result()
+                chosen = client.port
+            except BlenderConnectionError as e:
+                chosen = e
+            return chosen, older
+        finally:
+            follower.close()
+            await client.disconnect()
+            await older.stop()
+
+    chosen, older = asyncio.run(scenario())
+    assert chosen == server.port or isinstance(chosen, BlenderConnectionError)
+    assert older.hellos == []
 
 
 def test_too_many_clients_from_the_newest_stops_there(cfg, monkeypatch):
@@ -859,8 +936,13 @@ def test_a_wrong_proof_from_the_newest_falls_through(cfg, monkeypatch):
 
 @pytest.mark.parametrize(
     "reply",
-    [None, b"HTTP/1.0 400 Bad Request\r\n\r\n", b"[1, 2]\n", b'{"result": {"protocol": 1}}\n'],
-    ids=["closed", "not-json", "not-an-object", "no-proof"],
+    [
+        b"HTTP/1.0 400 Bad Request\r\n\r\n",
+        b"[1, 2]\n",
+        b'{"result": {"protocol": 1}}\n',
+        b'{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": 1}\n',
+    ],
+    ids=["not-json", "not-an-object", "no-proof", "method-not-found"],
 )
 def test_a_peer_that_is_not_meshwire_falls_through(cfg, monkeypatch, reply):
     wire.ensure_token()
@@ -880,9 +962,15 @@ def test_a_peer_that_is_not_meshwire_falls_through(cfg, monkeypatch, reply):
 
 def test_a_refused_newest_falls_through(cfg, monkeypatch):
     wire.ensure_token()
-    with closing(socket.socket()) as probe:
-        probe.bind(("127.0.0.1", 0))
-        dead = probe.getsockname()[1]
+    dead = 9  # never dialled for real: Windows takes seconds to refuse a loopback connect
+    real_open = asyncio.open_connection
+
+    async def open_connection(host, port, *args, **kwargs):
+        if port == dead:
+            raise ConnectionRefusedError
+        return await real_open(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
 
     async def scenario():
         older = await healthy()

@@ -1390,28 +1390,28 @@ def test_a_mismatched_client_still_gets_its_error_and_a_clean_close(server, mod)
     assert json.loads(data.split(b"\n", 1)[0])["error"]["code"] == mod.wire.E_PROTOCOL
 
 
-def test_a_flood_evicts_unstarted_handshakes_before_one_in_progress(server, mod):
+def test_a_full_pool_evicts_the_oldest_pending_whatever_its_stage(server, mod):
     real = connect(server, auth=False)
-    nc, result = hello_only(server, real)  # its hello is answered; its proof is not sent yet
+    hello_only(server, real)  # the oldest, already at the proof stage
+    oldest = only_client(server)
     flood = []
     for _ in range(mod.MAX_PENDING):
         flood.append(connect(server, auth=False))
         tick(server)
-    real.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
-    assert read_line(server, real)["result"] == {"ok": True}
-    assert flood
+    assert oldest not in server.clients.values()  # dropped, not protected by its stage
+    assert server.client_count == mod.MAX_PENDING
 
 
-def test_a_flood_with_nothing_unstarted_evicts_the_oldest_in_progress(server, mod, monkeypatch):
-    monkeypatch.setattr(mod, "MAX_PENDING", 2)
-    first = connect(server, auth=False)
-    hello_only(server, first)
-    second = connect(server, auth=False)
-    hello_only(server, second)
-    third = connect(server, auth=False)
-    tick(server, 2)
-    assert read_all(server, first).count(b"\n") == 0  # first was dropped; its hello was read
-    assert second and third
+def test_the_listen_backlog_is_64(mod, monkeypatch):
+    seen = []
+    real = socket.socket.listen
+    monkeypatch.setattr(
+        socket.socket, "listen", lambda self, n=None: (seen.append(n), real(self, n))[1]
+    )
+    sock, _ = mod.bind_listener("127.0.0.1", free_port())
+    sock.close()
+    assert mod.LISTEN_BACKLOG == 64
+    assert seen == [64]
 
 
 def test_a_handler_raising_system_exit_gets_an_error_and_the_next_request_is_served(server):
@@ -1466,3 +1466,32 @@ def test_stop_unpublishes_the_instance_before_closing_the_listener(mod, monkeypa
     srv.socket = Spy(srv.socket)
     srv.stop()
     assert order == ["unpublish", "close"]
+
+
+def _watch_atexit(mod, monkeypatch):
+    registered, unregistered = [], []
+    monkeypatch.setattr(mod.atexit, "register", lambda fn, *a, **k: registered.append(fn) or fn)
+    monkeypatch.setattr(mod.atexit, "unregister", lambda fn: unregistered.append(fn))
+    return registered, unregistered
+
+
+def test_a_normal_quit_removes_the_instance_file(mod, monkeypatch):
+    registered, _ = _watch_atexit(mod, monkeypatch)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
+    assert srv.start()
+    path = mod.wire.instances_dir() / f"{srv.port}.json"
+    try:
+        assert path.exists() and len(registered) == 1
+        registered[0]()  # what Python runs at exit
+        assert not path.exists()
+        registered[0]()  # and it is safe to run twice
+    finally:
+        srv.stop()
+
+
+def test_stop_unregisters_the_exit_handler(mod, monkeypatch):
+    registered, unregistered = _watch_atexit(mod, monkeypatch)
+    srv = mod.MCPSocketServer("127.0.0.1", free_port())
+    assert srv.start()
+    srv.stop()
+    assert unregistered == registered and len(registered) == 1
