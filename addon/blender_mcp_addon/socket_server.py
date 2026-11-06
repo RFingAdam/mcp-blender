@@ -17,7 +17,6 @@ import traceback
 from pathlib import Path
 
 import bpy
-import tomllib
 
 from . import wire
 from .handlers import CommandHandlers
@@ -529,6 +528,12 @@ class MCPSocketServer:
     def _addon_version() -> str:
         """The version in the manifest that sits next to this package's files."""
         try:
+            try:
+                import tomllib
+            except (
+                ModuleNotFoundError
+            ):  # Blender's Python always has it; only 3.10 unit tests lack it
+                import tomli as tomllib
             path = Path(__file__).resolve().parent / "blender_manifest.toml"
             return str(tomllib.loads(path.read_text(encoding="utf-8"))["version"])
         except Exception:

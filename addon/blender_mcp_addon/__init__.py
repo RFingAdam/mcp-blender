@@ -57,7 +57,13 @@ def legacy_addon_enabled() -> bool:
         return False
     try:
         return LEGACY_ADDON_ID in bpy.context.preferences.addons
-    except Exception:
+    except Exception as e:
+        # Fail open: a broken check must not stop the server for everyone.
+        _logger.warning(
+            "Could not check whether the older Meshwire add-on (%s) is enabled: %s",
+            LEGACY_ADDON_ID,
+            e,
+        )
         return False
 
 

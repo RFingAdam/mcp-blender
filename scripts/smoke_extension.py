@@ -23,7 +23,10 @@ import time
 import zipfile
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, which only unit tests run on
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 BOOT = Path(__file__).resolve().parent / "smoke_extension_boot.py"
@@ -128,10 +131,12 @@ def main() -> int:
             os.killpg(proc.pid, signal.SIGTERM)
             proc.wait(timeout=20)
         except (ProcessLookupError, subprocess.TimeoutExpired):
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            pass
+        # xvfb-run can exit while Blender lingers in the same group, so always finish the group.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
     print("SMOKE OK", flush=True)
     return 0
 

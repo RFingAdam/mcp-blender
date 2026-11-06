@@ -320,3 +320,51 @@ def test_harness_name_never_warns_about_itself(addon):
     module.ADDON_ID = module.LEGACY_ADDON_ID
     bpy.context.preferences.addons = {module.LEGACY_ADDON_ID: object()}
     assert module.legacy_addon_enabled() is False
+
+
+def test_disabling_the_old_addon_clears_the_warning_and_start_works(addon, monkeypatch):
+    """No restart needed: the check reads Preferences on every draw and every Start."""
+    module, bpy = addon
+    bpy.context.preferences.addons = {module.LEGACY_ADDON_ID: object()}
+    assert module.legacy_addon_enabled() is True
+    layout = MagicMock()
+    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    assert module.LEGACY_WARNING in [c.kwargs.get("text") for c in layout.label.call_args_list]
+
+    bpy.context.preferences.addons = {}  # the user disabled the old copy
+    assert module.legacy_addon_enabled() is False
+    layout = MagicMock()
+    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    assert module.LEGACY_WARNING not in [c.kwargs.get("text") for c in layout.label.call_args_list]
+    layout.operator.assert_any_call("mcp.start_server", icon="PLAY")
+
+    class Live:
+        is_running = True
+        port = 9876
+        discovery_warning = ""
+
+        def __init__(self, host, port):
+            pass
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(module, "MCPSocketServer", Live)
+    op = types.SimpleNamespace(report=MagicMock())
+    try:
+        assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
+    finally:
+        module._server = None
+
+
+def test_legacy_check_fails_open_and_logs(addon, caplog):
+    module, bpy = addon
+
+    class Broken:
+        def __contains__(self, key):
+            raise RuntimeError("no preferences yet")
+
+    bpy.context.preferences.addons = Broken()
+    with caplog.at_level("WARNING"):
+        assert module.legacy_addon_enabled() is False
+    assert "could not check" in caplog.text.lower() and "no preferences yet" in caplog.text

@@ -8,10 +8,14 @@ import zipfile
 from pathlib import Path
 
 import pytest
-import tomllib
 
 import mcp_blender
 from mcp_blender import server
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, which only unit tests run on
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 

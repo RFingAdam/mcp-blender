@@ -80,6 +80,7 @@ jobs:
       # install it into a fresh Blender user folder, enable bl_ext.user_default.meshwire, start its
       # server, then run the full handshake and ping with the real client.
       - name: Test the built extension ZIP
+        timeout-minutes: 10
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         env:
           BLENDER_BIN: ${{ steps.fetch.outputs.bin }}
