@@ -512,7 +512,7 @@ def test_stalled_write_buffer_is_dropped(server, mod):
     (client,) = server.clients.values()
     throttle(client, 0)
     request(sock, "big")
-    tick(server, 3)
+    pump(server, until=lambda: len(client.wbuf) > 0)  # delivery can take ticks (macOS)
     assert client.wbuf and not client.closing
     clock.t += mod.WRITE_STALL - 1
     tick(server)
