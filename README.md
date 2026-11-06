@@ -303,19 +303,26 @@ Formats: `glb` (default), `gltf`, `fbx`, `obj`, `usdz`.
 
 ## Security
 
-The addon's socket has no authentication yet. `blender_execute_script` runs arbitrary Python inside
-Blender, so it is off by default: it refuses every call until you click **Allow Python** in the
-**Meshwire** sidebar tab. Only that button turns it on, and nothing a client sends or a `.blend` file
-holds can. It resets whenever Blender starts. While the socket has no authentication, any process on
-your machine that can reach the port can still use the other tools, and can run code as you once you
-allow Python.
+The add-on's socket needs a token. On first start the add-on makes one in the Meshwire config folder
+(`~/.config/meshwire/token` on Linux, mode 0600) and the server reads it on every connect, so on one
+machine there is nothing to set up. A connection must open with a `hello` within 2 seconds and prove it
+holds the token by HMAC-SHA256 over fresh nonces. The token itself never crosses the socket. Anything
+else is closed. For a server on another machine, set `MESHWIRE_TOKEN` there and use **Copy token** in the
+Meshwire tab.
 
-- Only start the server on a machine you trust, and stop it when you're done.
-- Keep the host set to localhost. Don't bind it to `0.0.0.0` or expose the add-on's ports (9876 to 9885).
+`blender_execute_script` runs arbitrary Python inside Blender, so it refuses every call until you click
+**Allow Python** in the **Meshwire** sidebar tab. Only that button turns it on, and nothing a client sends
+or a `.blend` file holds can. It resets whenever Blender starts.
+
+- The token does not stop other programs running as you. They can read the file, so they can connect.
+- After the handshake the traffic is not encrypted or integrity-protected. Keep the host at localhost.
+  If you bind the add-on to a non-loopback address, commands and results travel in plaintext, so anyone on
+  the network path can read or change them. For remote use, tunnel over SSH instead.
 - Don't run untrusted prompts or scripts against a Blender session with work you care about.
 
-Authentication is planned for the next stable release
-([#12](https://github.com/RFingAdam/meshwire/issues/12)).
+Versions 0.2.0 to 0.5.0a1 had no authentication: any process that could reach the port could drive
+Blender, and `execute_script` ran any Python it was sent. Upgrade, and see [SECURITY.md](https://github.com/RFingAdam/meshwire/blob/main/SECURITY.md)
+for what was confirmed and how to report a problem.
 
 `blender_ai_configure_backend` accepts only `enabled`, `api_key`, `host` (an http or https URL),
 `timeout` and `device`. Paths and endpoints (ComfyUI workflow, model paths, base URLs) are set in

@@ -33,8 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Only a client with the token can use the add-on's socket.** Until now any program on the machine could
-  connect to the port and drive Blender, and a web page could do it with a plain HTTP POST. The add-on now
-  makes a token in your Meshwire config folder (`~/.config/meshwire/token` on Linux, mode 0600). A connection
+  connect to the port and drive Blender, and `execute_script` ran any Python it was sent. This affects
+  every release before this one (v0.2.0, v0.3.0, v0.4.0 and v0.5.0a1); see `SECURITY.md`. What testing
+  confirmed: on the last commit before authentication, a raw `object_create` sent with no hello was served
+  and the connection stayed open (`unauthenticated_call_refused` fails there, on Blender 4.5.15). Whether a
+  web page could do the same with an HTTP POST was not confirmed on a released version. Those releases
+  handled each newline-terminated line on its own and did not close after a line that was not JSON, so a
+  POST body that is a full JSON-RPC line may have run; that comes from reading the code, not from a run.
+  The add-on now makes a token in your Meshwire config folder (`~/.config/meshwire/token` on Linux, mode 0600). A connection
   must open with a `hello` and then a `hello_proof`, within 2 seconds, in lines of at most 4 KiB. The two
   sides prove they hold the token with HMAC-SHA256 over fresh nonces, so the token itself never crosses the
   socket. The add-on's proof also covers the address it received the connection at, and the server refuses a
@@ -43,7 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once; a wrong proof, or a client that does not speak `hello`, gets one error that says what to update. Sockets
   that have not finished the handshake have their own pool, so idle ones cannot lock out the real client.
   The server reads the token file on every connect, so it needs no setup. For another machine, set
-  `MESHWIRE_TOKEN` there (it overrides the file) and use **Copy token** in the Meshwire tab. A new server
+  `MESHWIRE_TOKEN` there (it overrides the file) and use **Copy token** in the Meshwire tab. After the
+  handshake the traffic is neither encrypted nor integrity-protected, so a non-loopback host sends commands
+  and results in plaintext; use an SSH tunnel for remote use. A new server
   against an older add-on, and the reverse, now say which side to update instead of hanging.
 - **Large replies arrive whole, and bad requests get an answer.** The add-on used to cut off any reply
   bigger than the socket buffer; a 32 MiB reply now arrives complete. A malformed, non-object, non-UTF-8 or
