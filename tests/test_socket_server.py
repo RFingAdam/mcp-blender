@@ -6,6 +6,7 @@ tick callback. Nothing runs on a timer: each test calls ``_tick`` by hand.
 
 import importlib
 import json
+import select
 import socket
 import sys
 import time
@@ -688,6 +689,13 @@ def only_client(srv):
     return client
 
 
+def arrived(srv):
+    """Block until the add-on's side of the only client has bytes to read. A stall test
+    must not start until the line is really there (loopback delivery can lag on macOS)."""
+    ready, _, _ = select.select([only_client(srv).sock], [], [], 10.0)
+    assert ready, "the line never reached the add-on's socket"
+
+
 def hello_only(srv, sock, **kw):
     """Send a good hello and return (nc, hello result)."""
     nc = WIRE.new_nonce()
@@ -1005,6 +1013,7 @@ def test_hello_that_arrived_during_a_stall_is_answered(server, mod):
     sock = connect(server, auth=False)
     tick(server)
     sock.sendall(hello_line())
+    arrived(server)
     clock.t += mod.wire.HELLO_SECONDS + 1.0  # the stall: no tick in between
     assert read_line(server, sock)["result"]["protocol"] == 1
 
@@ -1015,6 +1024,7 @@ def test_proof_that_arrived_during_a_stall_authenticates(server, mod):
     tick(server)
     nc, result = hello_only(server, sock)
     sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    arrived(server)
     clock.t += mod.wire.HELLO_SECONDS + 1.0  # the stall
     pump(server, until=lambda: bool(server.clients) and only_client(server).authed)
     assert read_line(server, sock)["result"] == {"ok": True}
