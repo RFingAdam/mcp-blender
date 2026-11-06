@@ -70,19 +70,24 @@ pip install --pre meshwire
 
 ### 2. Install the Blender addon
 
-Download `blender_mcp_addon-<version>.zip` from [Releases](https://github.com/RFingAdam/meshwire/releases),
+Download `meshwire-addon-<version>.zip` from [Releases](https://github.com/RFingAdam/meshwire/releases),
 or build it from source:
 
 ```bash
 git clone https://github.com/RFingAdam/meshwire
 cd meshwire
 python scripts/package_addon.py
-# creates dist/blender_mcp_addon-<version>.zip
+# creates dist/meshwire-addon-<version>.zip
 ```
 
-In Blender, open **Edit > Preferences > Add-ons**, choose **Install from Disk** from the menu at
-the top right, select the ZIP, and enable **Meshwire**. Host, port and API keys are add-on
-preferences, stored per user, so a shared `.blend` file carries none of them.
+In Blender, open **Edit > Preferences > Get Extensions**, open the dropdown arrow at the top right,
+choose **Install from Disk...**, and select the ZIP. Blender installs it as an extension and enables
+**Meshwire**. Host, port and API keys are add-on preferences, stored per user, so a shared `.blend`
+file carries none of them. Do not unzip the file first.
+
+If you installed Meshwire before 0.5.0, remove the old copy first (Edit > Preferences > Add-ons,
+**Meshwire**, Remove) and restart Blender. Two copies enabled together would start two servers, so the
+new one shows a warning in its sidebar tab and does not start while the old one is enabled.
 
 `execute_script` is off until you turn it on. Open the **Meshwire** tab in the 3D Viewport sidebar and
 click **Allow Python**. It stays on until Blender closes and is off again at every start.
@@ -366,7 +371,7 @@ whenever Blender starts.
 runs on its own with `--help`, and check the client's MCP log.
 
 **Addon doesn't appear in Blender:** check Blender's system console for errors and try reinstalling
-the ZIP.
+the ZIP from Get Extensions > Install from Disk.
 
 **Poly Haven downloads fail:** check your connection, confirm the asset ID exists on polyhaven.com,
 and check disk space.

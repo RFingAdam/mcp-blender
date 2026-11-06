@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Package the Meshwire addon as a ZIP file for distribution.
+Package the Meshwire add-on as a Blender extension ZIP.
+
+Blender installs the ZIP from Edit > Preferences > Get Extensions > Install from Disk. The
+manifest and the package files sit at the root of the ZIP.
 
 Usage:
     python scripts/package_addon.py [--output OUTPUT_PATH]
@@ -11,76 +14,53 @@ import os
 import zipfile
 from pathlib import Path
 
+import tomllib
 
-def get_version():
-    """Get addon version from __init__.py."""
-    init_path = Path(__file__).parent.parent / "addon" / "blender_mcp_addon" / "__init__.py"
-    with open(init_path) as f:
-        for line in f:
-            if '"version":' in line:
-                # Extract version tuple from line like: "version": (0, 1, 0),
-                import re
-
-                match = re.search(r"\((\d+),\s*(\d+),\s*(\d+)\)", line)
-                if match:
-                    return f"{match.group(1)}.{match.group(2)}.{match.group(3)}"
-    return "0.0.0"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ADDON_DIR = PROJECT_ROOT / "addon" / "blender_mcp_addon"
 
 
-def package_addon(output_path: str | None = None):
-    """Create a ZIP file of the addon."""
-    project_root = Path(__file__).parent.parent
-    addon_dir = project_root / "addon" / "blender_mcp_addon"
+def get_version() -> str:
+    """The add-on version, read from the extension manifest."""
+    manifest = tomllib.loads((ADDON_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))
+    return manifest["version"]
 
-    if not addon_dir.exists():
-        print(f"ERROR: Addon directory not found: {addon_dir}")
+
+def _excluded(name: str) -> bool:
+    return (
+        name.startswith(".")
+        or name == "__pycache__"
+        or name.endswith((".pyc", ".pyo"))
+        or name.endswith(".egg-info")
+    )
+
+
+def package_addon(output_path: str | Path | None = None) -> bool:
+    """Create the extension ZIP."""
+    if not ADDON_DIR.exists():
+        print(f"ERROR: Addon directory not found: {ADDON_DIR}")
         return False
 
     version = get_version()
 
     if output_path is None:
-        dist_dir = project_root / "dist"
+        dist_dir = PROJECT_ROOT / "dist"
         dist_dir.mkdir(exist_ok=True)
-        output_path = dist_dir / f"blender_mcp_addon-{version}.zip"
+        output_path = dist_dir / f"meshwire-addon-{version}.zip"
     else:
         output_path = Path(output_path)
 
     print(f"Packaging addon version {version}")
     print(f"Output: {output_path}")
 
-    # Files to exclude
-    exclude_patterns = {
-        "__pycache__",
-        "*.pyc",
-        "*.pyo",
-        ".DS_Store",
-        "*.egg-info",
-        ".git",
-    }
-
-    def should_exclude(path: Path) -> bool:
-        """Check if a path should be excluded."""
-        for pattern in exclude_patterns:
-            if pattern.startswith("*"):
-                if path.name.endswith(pattern[1:]):
-                    return True
-            elif pattern in path.parts:
-                return True
-        return False
-
-    # Create ZIP file
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(addon_dir):
-            # Skip excluded directories
-            dirs[:] = [d for d in dirs if not should_exclude(Path(root) / d)]
-
-            for file in files:
-                file_path = Path(root) / file
-                if should_exclude(file_path):
+        for root, dirs, files in os.walk(ADDON_DIR):
+            dirs[:] = sorted(d for d in dirs if not _excluded(d))
+            for file in sorted(files):
+                if _excluded(file):
                     continue
-
-                # Archive path preserves the addon directory structure
-                arc_name = Path("blender_mcp_addon") / file_path.relative_to(addon_dir)
+                file_path = Path(root) / file
+                arc_name = file_path.relative_to(ADDON_DIR)
                 zf.write(file_path, arc_name)
                 print(f"  Added: {arc_name}")
 
@@ -95,7 +75,7 @@ def main():
     parser.add_argument(
         "--output",
         "-o",
-        help="Output ZIP file path (default: dist/blender_mcp_addon-VERSION.zip)",
+        help="Output ZIP file path (default: dist/meshwire-addon-VERSION.zip)",
     )
     args = parser.parse_args()
 

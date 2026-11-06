@@ -21,9 +21,10 @@ Meshwire is in alpha, so ask for pre-releases.
 pip install --pre meshwire
 ```
 
-Then install the Blender addon from
-[`addon/blender_mcp_addon/`](https://github.com/RFingAdam/meshwire/tree/main/addon/blender_mcp_addon)
-or the release ZIP. Enable it in Blender preferences.
+Then download `meshwire-addon-<version>.zip` from the
+[GitHub release](https://github.com/RFingAdam/meshwire/releases), or build it with
+`python scripts/package_addon.py`. In Blender, open **Edit > Preferences > Get Extensions**, open the
+dropdown arrow at the top right, choose **Install from Disk...** and select the ZIP. Do not unzip it.
 
 ## First call
 

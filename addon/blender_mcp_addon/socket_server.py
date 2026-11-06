@@ -14,8 +14,10 @@ import socket
 import sys
 import time
 import traceback
+from pathlib import Path
 
 import bpy
+import tomllib
 
 from . import wire
 from .handlers import CommandHandlers
@@ -525,11 +527,12 @@ class MCPSocketServer:
 
     @staticmethod
     def _addon_version() -> str:
-        info = getattr(sys.modules.get(__package__ or ""), "bl_info", None)
-        version = info.get("version") if isinstance(info, dict) else None
-        if isinstance(version, (tuple, list)):
-            return ".".join(map(str, version))
-        return "unknown"
+        """The version in the manifest that sits next to this package's files."""
+        try:
+            path = Path(__file__).resolve().parent / "blender_manifest.toml"
+            return str(tomllib.loads(path.read_text(encoding="utf-8"))["version"])
+        except Exception:
+            return "unknown"
 
     def _handle_line(self, client: _Client, line: bytes):
         try:

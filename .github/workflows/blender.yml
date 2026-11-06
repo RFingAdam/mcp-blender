@@ -76,6 +76,22 @@ jobs:
           --out "$RUNNER_TEMP/runs/driver-${{ matrix.series }}"
           --check-baseline tests/harness/baselines/blender-${{ matrix.series }}.json
 
+      # The release attaches this ZIP, so test the built ZIP and not the source tree: validate it,
+      # install it into a fresh Blender user folder, enable bl_ext.user_default.meshwire, start its
+      # server, then run the full handshake and ping with the real client.
+      - name: Test the built extension ZIP
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        env:
+          BLENDER_BIN: ${{ steps.fetch.outputs.bin }}
+          PYTHONPATH: src
+        run: |
+          set -e
+          uv run --locked --python 3.12 python scripts/package_addon.py --output "$RUNNER_TEMP/meshwire-addon.zip"
+          uv run --locked --python 3.12 python scripts/smoke_extension.py \
+            --blender "$BLENDER_BIN" \
+            --zip "$RUNNER_TEMP/meshwire-addon.zip" \
+            --work "$RUNNER_TEMP/extension-smoke-${{ matrix.series }}"
+
       # Runs even when the driver step failed so one failure does not hide the
       # other. The failed driver step still fails the job.
       - name: Run socket lane

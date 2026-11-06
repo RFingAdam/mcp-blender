@@ -256,3 +256,67 @@ def test_toggle_python_operator_flips_the_flag(addon):
         assert module.security.python_allowed() is False
     finally:
         module.security.set_python_allowed(False)
+
+
+# --- an older copy of the add-on --------------------------------------------------
+
+
+def test_legacy_id_is_the_old_module_name(addon):
+    module, _ = addon
+    assert module.LEGACY_ADDON_ID == "blender_mcp_addon"
+
+
+def test_old_addon_enabled_blocks_start_and_warns(addon, monkeypatch):
+    module, bpy = addon
+    bpy.context.preferences.addons = {module.LEGACY_ADDON_ID: object()}
+    started = []
+    monkeypatch.setattr(module, "MCPSocketServer", lambda *a, **k: started.append(1))
+    op = types.SimpleNamespace(report=MagicMock())
+    assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"CANCELLED"}
+    assert started == []
+    assert module.get_server() is None
+    level, message = op.report.call_args[0]
+    assert level == {"ERROR"}
+    assert module.LEGACY_WARNING in message
+
+    layout = MagicMock()
+    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    assert module.LEGACY_WARNING == (
+        "An older Meshwire add-on (blender_mcp_addon) is still enabled. "
+        "Remove it in Preferences > Add-ons, then restart Blender."
+    )
+    texts = [c.kwargs.get("text") for c in layout.label.call_args_list]
+    assert module.LEGACY_WARNING in texts
+    layout.operator.assert_not_called()
+
+
+def test_old_addon_absent_starts_normally(addon, monkeypatch):
+    module, bpy = addon
+    bpy.context.preferences.addons = {}
+    assert module.legacy_addon_enabled() is False
+
+    class Live:
+        is_running = True
+        port = 9876
+        discovery_warning = ""
+
+        def __init__(self, host, port):
+            pass
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(module, "MCPSocketServer", Live)
+    op = types.SimpleNamespace(report=MagicMock())
+    try:
+        assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
+    finally:
+        module._server = None
+
+
+def test_harness_name_never_warns_about_itself(addon):
+    """Loaded under the old name, the add-on is the old copy: it must not block itself."""
+    module, bpy = addon
+    module.ADDON_ID = module.LEGACY_ADDON_ID
+    bpy.context.preferences.addons = {module.LEGACY_ADDON_ID: object()}
+    assert module.legacy_addon_enabled() is False
