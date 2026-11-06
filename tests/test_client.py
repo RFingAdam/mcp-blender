@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import sys
 
 import pytest
 
@@ -863,3 +865,79 @@ async def test_disconnect_at_each_await_point_stops_the_open(mock_server, monkey
     if point < 3:
         assert mock_server.proofs == []  # the proof was never sent
     assert mock_server.commands == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+@pytest.mark.asyncio
+async def test_client_refuses_a_token_file_another_user_could_swap(mock_server):
+    os.chmod(wire.config_dir(), 0o777)
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    assert str(wire.config_dir()) in str(info.value) and "chmod 700" in str(info.value)
+    assert mock_server.hellos == []  # nothing was sent
+
+
+@pytest.mark.asyncio
+async def test_wrong_override_names_its_value(mock_server, monkeypatch):
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", "127.0.0.1:1")
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    assert str(info.value).startswith(
+        "MESHWIRE_ADDON_ADDRESS is set to 127.0.0.1:1, but the add-on that answered is "
+        f"listening on 127.0.0.1:{mock_server.port}."
+    )
+    assert mock_server.proofs == []
+
+
+@pytest.mark.parametrize(
+    "form", ["localhost:{p}", "127.0.0.1:{p}", "[::ffff:127.0.0.1]:{p}", "::ffff:127.0.0.1:{p}"]
+)
+@pytest.mark.asyncio
+async def test_override_is_normalised_and_hostnames_resolve(mock_server, monkeypatch, form):
+    monkeypatch.setenv("MESHWIRE_ADDON_ADDRESS", form.format(p=mock_server.port))
+    async with Relay(mock_server.port) as relay:
+        async with BlenderClient("127.0.0.1", relay.port) as client:
+            assert await client.ping() is True
+
+
+class _RawReplyServer:
+    def __init__(self, payload: bytes):
+        self.payload = payload
+
+    async def __aenter__(self):
+        self._server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
+        self.port = self._server.sockets[0].getsockname()[1]
+        return self
+
+    async def __aexit__(self, *exc):
+        self._server.close()
+        await self._server.wait_closed()
+
+    async def _handle(self, reader, writer):
+        await reader.readline()
+        writer.write(self.payload)
+        await writer.drain()
+        writer.close()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"id":1,"result":' + b"[" * 200000 + b"]" * 200000 + b"}\n",  # past the stream limit
+        b'{"id":1,"result":' + b"[" * 30000 + b"]" * 30000 + b"}\n",  # past the recursion limit
+        b'{"id":' + b"[" * 200000 + b"]" * 200000 + b"}\n",
+        b"{not json}\n",
+        b"[1, 2]\n",
+    ],
+)
+@pytest.mark.asyncio
+async def test_unparseable_handshake_reply_gets_the_fixed_text(payload):
+    async with _RawReplyServer(payload) as raw:
+        client = BlenderClient("127.0.0.1", raw.port)
+        with pytest.raises(BlenderConnectionError) as info:
+            await client.connect(timeout=5.0)
+    assert str(info.value) == (
+        f"The program on 127.0.0.1:{raw.port} did not complete the Meshwire handshake."
+    )

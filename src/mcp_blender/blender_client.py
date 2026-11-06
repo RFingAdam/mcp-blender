@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import socket
 import uuid
 from typing import Any
 
@@ -81,7 +82,10 @@ class BlenderClient:
         together, with no await after the last check, so a disconnect can never leave
         _connected True over a closed writer, or an open socket nobody owns.
         """
-        token = wire.read_token()
+        try:
+            token = wire.read_token()
+        except OSError as e:
+            raise BlenderConnectionError(str(e)) from None
         if not token:
             raise BlenderConnectionError(
                 f"No Meshwire token at {wire.token_path()}. Start the server in Blender's "
@@ -157,7 +161,9 @@ class BlenderClient:
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=timeout)
         except (ValueError, asyncio.LimitOverrunError):
-            raise BlenderConnectionError("Blender sent an unreadable reply during the handshake")
+            raise BlenderConnectionError(
+                f"The program on {peer} did not complete the Meshwire handshake."
+            )
         except (ConnectionError, asyncio.IncompleteReadError):
             line = b""
         if not line.strip():
@@ -167,11 +173,11 @@ class BlenderClient:
             )
         try:
             reply = json.loads(line.decode("utf-8"))
-        except ValueError:
+        except (ValueError, RecursionError):  # not JSON, or nested past the parser's limit
             reply = None
         if not isinstance(reply, dict):
             raise BlenderConnectionError(
-                f"Whatever answered on {self.host}:{self.port} is not a Meshwire add-on"
+                f"The program on {peer} did not complete the Meshwire handshake."
             )
         if reply.get("error") is not None:
             raise self._hello_error(reply["error"], peer, verified)
@@ -232,7 +238,16 @@ class BlenderClient:
         # The proof is genuine, so `seen` is where the real add-on received the bytes.
         # It must be where this connection went, or something is relaying it.
         override = os.environ.get("MESHWIRE_ADDON_ADDRESS", "").strip()
-        if seen != (override or peer):
+        voided()
+        if override:
+            if seen not in await self._override_endpoints(override):
+                raise BlenderConnectionError(
+                    f"MESHWIRE_ADDON_ADDRESS is set to {override}, but the add-on that answered "
+                    f"is listening on {seen}. That variable is what this server compared "
+                    f"against, not the address it connected to ({peer}). Set it to {seen} if "
+                    "that is the tunnel or port forward you meant."
+                )
+        elif seen != peer:
             raise BlenderConnectionError(
                 f"The Meshwire add-on that answered is listening on {seen}, but this server "
                 f"connected to {peer}. Another program may be relaying the connection. "
@@ -247,6 +262,33 @@ class BlenderClient:
         voided()
         if not (isinstance(ok, dict) and ok.get("ok") is True):
             raise BlenderConnectionError("The Meshwire add-on did not accept the handshake")
+
+    @staticmethod
+    async def _override_endpoints(value: str) -> set[str]:
+        """Every ``host:port`` MESHWIRE_ADDON_ADDRESS can mean, normalised like ``seen``.
+
+        A literal address is normalised (brackets, IPv4-mapped prefix). A hostname such as
+        ``localhost:9876`` is resolved and any of its addresses matches.
+        """
+        if value.startswith("["):
+            host, _, rest = value[1:].partition("]")
+            port_text = rest.lstrip(":")
+        elif value.count(":") == 1:
+            host, _, port_text = value.partition(":")
+        else:  # a bare IPv6 literal with the port after the last colon
+            host, _, port_text = value.rpartition(":")
+        if not port_text.isdigit():
+            return set()
+        port = int(port_text)
+        found = {wire.endpoint(host, port)}
+        try:
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host, port, type=socket.SOCK_STREAM
+            )
+        except OSError:
+            return found
+        found.update(wire.endpoint(str(info[4][0]), int(info[4][1])) for info in infos)
+        return found
 
     @staticmethod
     def _protocol_error(addon_protocol: Any) -> BlenderConnectionError:

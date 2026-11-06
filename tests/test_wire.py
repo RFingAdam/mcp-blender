@@ -401,3 +401,71 @@ def test_permission_error_is_not_called_a_symlink(wire):
 )
 def test_endpoint_is_host_colon_port(wire, host, port, expected):
     assert wire.endpoint(host, port) == expected
+
+
+# --- the reader applies the same checks as the writer ---------------------------
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
+def test_read_token_refuses_a_symlink(wire, tmp_path):
+    real = tmp_path / "elsewhere"
+    real.write_text("S" * 43 + "\n")
+    path = wire.token_path()
+    path.parent.mkdir(parents=True, mode=0o700)
+    path.symlink_to(real)
+    with pytest.raises(OSError) as info:
+        wire.read_token()
+    assert str(path) in str(info.value) and "symlink" in str(info.value)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ownership")
+def test_read_token_refuses_a_file_owned_by_someone_else(wire, monkeypatch):
+    wire.ensure_token()
+    monkeypatch.setattr(os, "getuid", lambda: os.stat(wire.token_path()).st_uid + 1)
+    with pytest.raises(OSError) as info:
+        wire.read_token()
+    assert "not owned by you" in str(info.value)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ownership")
+def test_read_token_refuses_a_writable_config_dir(wire):
+    wire.ensure_token()
+    os.chmod(wire.config_dir(), 0o770)
+    with pytest.raises(OSError) as info:
+        wire.read_token()
+    assert str(wire.config_dir()) in str(info.value) and "chmod 700" in str(info.value)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ownership")
+def test_read_token_with_the_env_variable_skips_the_file_checks(wire, monkeypatch):
+    wire.ensure_token()
+    os.chmod(wire.config_dir(), 0o777)
+    monkeypatch.setenv("MESHWIRE_TOKEN", "from-env")
+    assert wire.read_token() == "from-env"
+
+
+def test_read_token_without_a_file_or_dir_is_none(wire):
+    assert not wire.config_dir().exists()
+    assert wire.read_token() is None
+    wire.config_dir().mkdir(parents=True, mode=0o700)
+    assert wire.read_token() is None
+
+
+def test_read_and_ensure_use_one_wording(wire, monkeypatch):
+    wire.ensure_token()
+    os.chmod(wire.config_dir(), 0o777)
+    with pytest.raises(OSError) as read_error:
+        wire.read_token()
+    with pytest.raises(OSError) as ensure_error:
+        wire.ensure_token()
+    assert str(read_error.value) == str(ensure_error.value)
+
+
+def test_failed_temp_write_leaves_no_temp_file(wire, monkeypatch):
+    def boom(fd):
+        raise OSError(5, "I/O error")
+
+    monkeypatch.setattr(os, "fsync", boom)
+    with pytest.raises(OSError):
+        wire.ensure_token()
+    assert not list(wire.config_dir().glob(".token.*"))

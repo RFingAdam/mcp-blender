@@ -55,15 +55,31 @@ def instances_dir() -> Path:
 
 
 def read_token() -> str | None:
-    """The token to use: MESHWIRE_TOKEN if set, else the token file, else None."""
+    """The token to use: MESHWIRE_TOKEN if set, else the token file, else None.
+
+    The file is held to the same rules the writer enforces (no symlink, ours, in a
+    folder nobody else can write to), so a token another user could have swapped in is
+    refused with an OSError rather than trusted. MESHWIRE_TOKEN has no file to check.
+    """
     env = os.environ.get("MESHWIRE_TOKEN", "").strip()
     if env:
         return env
+    path = token_path()
     try:
-        text = token_path().read_text(encoding="utf-8").strip()
-    except OSError:
+        _check_dir(path.parent)
+    except FileNotFoundError:
         return None
+    _refuse_symlink(path)
+    text = _read_file_token(path)
+    if text is None:
+        return None
+    _check_file_owner(path)
     return text or None
+
+
+def _refuse_symlink(path: Path) -> None:
+    if path.is_symlink():
+        raise OSError(f"{path} is a symlink; Meshwire will not follow it. Remove it and retry")
 
 
 def _read_file_token(path: Path) -> str | None:
@@ -97,13 +113,19 @@ def _check_dir(directory: Path) -> None:
         )
 
 
+def _check_file_owner(path: Path) -> None:
+    if sys.platform == "win32" or not hasattr(os, "getuid"):
+        return
+    if os.stat(path).st_uid != os.getuid():
+        raise OSError(f"The Meshwire token file {path} is not owned by you. Delete it and retry")
+
+
 def _secure_file(path: Path) -> None:
     """POSIX: the token file must be ours and 0600. Tighten a looser one, or refuse it."""
     if sys.platform == "win32" or not hasattr(os, "getuid"):
         return
+    _check_file_owner(path)
     info = os.stat(path)
-    if info.st_uid != os.getuid():
-        raise OSError(f"The Meshwire token file {path} is not owned by you. Delete it and retry")
     mode = stat.S_IMODE(info.st_mode)
     if mode & 0o077:
         try:
@@ -153,8 +175,7 @@ def ensure_token() -> str:
     path = token_path()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     _check_dir(path.parent)
-    if path.is_symlink():
-        raise OSError(f"{path} is a symlink; Meshwire will not follow it. Remove it and retry")
+    _refuse_symlink(path)
     existing = _read_file_token(path)
     if existing is not None and len(existing) >= MIN_TOKEN:
         _secure_file(path)
@@ -163,8 +184,8 @@ def ensure_token() -> str:
     token = secrets.token_urlsafe(32)
     tmp = path.with_name(f".token.{os.getpid()}.{secrets.token_hex(4)}")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
-    _write_fsync(os.open(tmp, flags, 0o600), token)
     try:
+        _write_fsync(os.open(tmp, flags, 0o600), token)
         if existing is not None:
             # An empty or short file is stale (Meshwire does not leave one). Replace it,
             # which also replaces rather than follows anything at the path.
