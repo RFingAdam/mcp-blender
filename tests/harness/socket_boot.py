@@ -9,6 +9,7 @@ inspect scene state without leaning on the tools it is checking:
   harness_reset  reload the fixture scene
   harness_exec   run a snippet and return its ``result`` variable
 
+MESHWIRE_CONFIG_DIR must point at the run's own folder: the server makes its token there.
 The add-on is imported, not enabled through addon_utils, so Blender has no
 preferences entry for it and the add-on runs on its preference defaults.
 """
@@ -48,6 +49,11 @@ def main(argv):
 
     sys.path.insert(0, ADDON_DIR)
     sys.path.insert(0, HERE)
+
+    if not args.build_scene and not os.environ.get("MESHWIRE_CONFIG_DIR"):
+        # The server writes a token file on start. Never let a test run write the user's.
+        print("MESHWIRE_CONFIG_DIR must be set to this run's own folder", flush=True)
+        os._exit(3)
 
     if args.build_scene:
         import scene
