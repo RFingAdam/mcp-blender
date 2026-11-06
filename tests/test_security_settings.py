@@ -251,7 +251,7 @@ def test_start_reports_bind_failure(addon, monkeypatch):
 
     monkeypatch.setattr(module, "MCPSocketServer", Dead)
     op = types.SimpleNamespace(report=MagicMock())
-    result = module.MCP_OT_StartServer.execute(op, MagicMock())
+    result = module.MESHWIRE_OT_StartServer.execute(op, MagicMock())
     assert result == {"CANCELLED"}
     assert module.get_server() is None
     level, message = op.report.call_args[0]
@@ -285,7 +285,7 @@ def test_old_addon_enabled_blocks_start_and_warns(addon, monkeypatch):
     started = []
     monkeypatch.setattr(module, "MCPSocketServer", lambda *a, **k: started.append(1))
     op = types.SimpleNamespace(report=MagicMock())
-    assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"CANCELLED"}
+    assert module.MESHWIRE_OT_StartServer.execute(op, MagicMock()) == {"CANCELLED"}
     assert started == []
     assert module.get_server() is None
     level, message = op.report.call_args[0]
@@ -293,7 +293,7 @@ def test_old_addon_enabled_blocks_start_and_warns(addon, monkeypatch):
     assert module.LEGACY_WARNING in message
 
     layout = MagicMock()
-    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    module.MESHWIRE_PT_Server.draw(types.SimpleNamespace(layout=layout), MagicMock())
     assert module.LEGACY_WARNING == (
         "An older Meshwire add-on (blender_mcp_addon) is still enabled. "
         "Remove it in Preferences > Add-ons, then restart Blender."
@@ -322,7 +322,7 @@ def test_old_addon_absent_starts_normally(addon, monkeypatch):
     monkeypatch.setattr(module, "MCPSocketServer", Live)
     op = types.SimpleNamespace(report=MagicMock())
     try:
-        assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
+        assert module.MESHWIRE_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
     finally:
         module._server = None
 
@@ -341,15 +341,15 @@ def test_disabling_the_old_addon_clears_the_warning_and_start_works(addon, monke
     bpy.context.preferences.addons = {module.LEGACY_ADDON_ID: object()}
     assert module.legacy_addon_enabled() is True
     layout = MagicMock()
-    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    module.MESHWIRE_PT_Server.draw(types.SimpleNamespace(layout=layout), MagicMock())
     assert module.LEGACY_WARNING in [c.kwargs.get("text") for c in layout.label.call_args_list]
 
     bpy.context.preferences.addons = {}  # the user disabled the old copy
     assert module.legacy_addon_enabled() is False
     layout = MagicMock()
-    module.MCP_PT_ServerPanel.draw(types.SimpleNamespace(layout=layout), MagicMock())
+    module.MESHWIRE_PT_Server.draw(types.SimpleNamespace(layout=layout), MagicMock())
     assert module.LEGACY_WARNING not in [c.kwargs.get("text") for c in layout.label.call_args_list]
-    layout.operator.assert_any_call("mcp.start_server", icon="PLAY")
+    layout.operator.assert_any_call("meshwire.start_server", icon="PLAY")
 
     class Live:
         is_running = True
@@ -365,7 +365,7 @@ def test_disabling_the_old_addon_clears_the_warning_and_start_works(addon, monke
     monkeypatch.setattr(module, "MCPSocketServer", Live)
     op = types.SimpleNamespace(report=MagicMock())
     try:
-        assert module.MCP_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
+        assert module.MESHWIRE_OT_StartServer.execute(op, MagicMock()) == {"FINISHED"}
     finally:
         module._server = None
 
@@ -381,3 +381,29 @@ def test_legacy_check_fails_open_and_logs(addon, caplog):
     with caplog.at_level("WARNING"):
         assert module.legacy_addon_enabled() is False
     assert "could not check" in caplog.text.lower() and "no preferences yet" in caplog.text
+
+
+# What the v0.4.0 add-on registers (git show v0.4.0:addon/blender_mcp_addon/__init__.py).
+# Both copies can be enabled at once, and a shared idname makes the later one replace the
+# earlier one's panel or operator.
+V040_IDNAMES = {"mcp.start_server", "mcp.stop_server", "MCP_PT_server_panel"}
+V040_CLASS_NAMES = {
+    "MCP_OT_StartServer",
+    "MCP_OT_StopServer",
+    "MCP_PT_ServerPanel",
+    "MCPServerProperties",
+}
+
+
+def test_no_registered_name_collides_with_the_v040_addon(addon):
+    module, _ = addon
+    idnames = {cls.bl_idname for cls in module.classes if cls is not module.MeshwirePreferences}
+    assert idnames.isdisjoint(V040_IDNAMES)
+    assert {cls.__name__ for cls in module.classes}.isdisjoint(V040_CLASS_NAMES)
+    assert {
+        "meshwire.start_server",
+        "meshwire.stop_server",
+        "MESHWIRE_PT_server",
+    } <= idnames
+    for name in idnames:
+        assert name.startswith(("meshwire.", "MESHWIRE_"))
