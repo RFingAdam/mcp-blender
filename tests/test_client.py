@@ -5,11 +5,32 @@ import json
 
 import pytest
 
+from mcp_blender import wire
 from mcp_blender.blender_client import (
     BlenderClient,
     BlenderCommandError,
     BlenderConnectionError,
 )
+
+# What a v0.4.0 add-on really sends for a method it does not know: its dispatcher
+# raises ValueError("Unknown method: hello") and the socket server wraps it as -32603.
+V040_UNKNOWN_METHOD = {"code": -32603, "message": "Unknown method: hello"}
+
+
+@pytest.fixture(autouse=True)
+def token(monkeypatch, tmp_path):
+    """Each test gets its own config dir with a token in it, and no ambient override."""
+    monkeypatch.delenv("MESHWIRE_TOKEN", raising=False)
+    monkeypatch.setenv("MESHWIRE_CONFIG_DIR", str(tmp_path / "meshwire"))
+    return wire.ensure_token()
+
+
+def hello_ok(msg_id) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "result": {"protocol": wire.PROTOCOL, "addon": "0.5.0", "port": 1},
+        "id": msg_id,
+    }
 
 
 class MockBlenderServer:
@@ -20,6 +41,10 @@ class MockBlenderServer:
         self.port = port
         self._server = None
         self._responses: dict[str, dict] = {}
+        self.hello_error: dict | None = None  # answer every hello with this error
+        self.hello_gate: asyncio.Event | None = None  # hold the hello reply until set
+        self.hello_seen = asyncio.Event()
+        self.hellos: list[dict] = []
 
     async def start(self):
         """Start the mock server."""
@@ -57,12 +82,31 @@ class MockBlenderServer:
                     line, buffer = buffer.split(b"\n", 1)
                     if line.strip():
                         request = json.loads(line.decode("utf-8"))
+                        if request.get("method") == "hello":
+                            self.hellos.append(request)
+                            self.hello_seen.set()
+                            if self.hello_gate is not None:
+                                await self.hello_gate.wait()
+                            response = self._hello_reply(request)
+                            writer.write((json.dumps(response) + "\n").encode("utf-8"))
+                            await writer.drain()
+                            if "error" in response:
+                                return
+                            continue
                         response = self._process_request(request)
                         writer.write((json.dumps(response) + "\n").encode("utf-8"))
                         await writer.drain()
         finally:
             writer.close()
             await writer.wait_closed()
+
+    def _hello_reply(self, request: dict) -> dict:
+        if self.hello_error is not None:
+            return {"jsonrpc": "2.0", "error": self.hello_error, "id": request["id"]}
+        if request["params"].get("token") != wire.read_token():
+            error = {"code": wire.E_UNAUTHORIZED, "message": "Unauthorized"}
+            return {"jsonrpc": "2.0", "error": error, "id": request["id"]}
+        return hello_ok(request["id"])
 
     def _process_request(self, request: dict) -> dict:
         """Process a request and return response."""
@@ -217,6 +261,8 @@ class RawServer:
 
     async def _handle(self, reader, writer):
         try:
+            hello = json.loads(await reader.readline())
+            writer.write((json.dumps(hello_ok(hello["id"])) + "\n").encode())
             await reader.readline()
             writer.write(self.payload)
             await writer.drain()
@@ -320,3 +366,152 @@ async def test_concurrent_send_command_opens_one_connection(mock_server):
         await client.disconnect()
     assert first["pong"] and second["pong"]
     assert len(accepted) == 1
+
+
+# --- token and hello --------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hello_carries_the_token_and_protocol(mock_server, token):
+    async with BlenderClient(mock_server.host, mock_server.port):
+        pass
+    (hello,) = mock_server.hellos
+    assert hello["params"]["token"] == token
+    assert hello["params"]["protocol"] == wire.PROTOCOL
+    assert hello["params"]["client"].startswith("meshwire ")
+
+
+@pytest.mark.asyncio
+async def test_old_addon_reported_by_hello(mock_server):
+    mock_server.hello_error = V040_UNKNOWN_METHOD
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    assert str(info.value) == (
+        "The Meshwire add-on in Blender is older than this server. Update the add-on."
+    )
+    assert not client.connected
+
+
+@pytest.mark.asyncio
+async def test_wrong_token_error_names_the_token_path(mock_server, tmp_path):
+    wire.token_path().write_text("a-different-token\n")
+    # The mock accepts only the file's token, so make the client read another one.
+    mock_server.hello_error = {"code": wire.E_UNAUTHORIZED, "message": "Unauthorized"}
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    message = str(info.value)
+    assert str(wire.token_path()) in message
+    assert "Meshwire tab" in message
+    assert "restart the MCP client" in message
+    assert "a-different-token" not in message
+    assert "Disconnected" not in message
+    assert not client.connected
+
+
+@pytest.mark.asyncio
+async def test_wrong_env_token_error_says_the_variable_overrides(mock_server, monkeypatch):
+    monkeypatch.setenv("MESHWIRE_TOKEN", "secret-from-env")
+    mock_server.hello_error = {"code": wire.E_UNAUTHORIZED, "message": "Unauthorized"}
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    message = str(info.value)
+    assert "MESHWIRE_TOKEN" in message and "overrides" in message
+    assert "Restart the MCP client" in message
+    assert str(wire.token_path()) in message
+    assert "secret-from-env" not in message
+
+
+@pytest.mark.asyncio
+async def test_no_token_names_the_path_and_the_meshwire_tab(mock_server):
+    wire.token_path().unlink()
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError) as info:
+        await client.connect(timeout=5.0)
+    message = str(info.value)
+    assert str(wire.token_path()) in message
+    assert "Meshwire tab" in message and "first" in message
+    assert mock_server.hellos == []  # nothing was sent
+
+
+@pytest.mark.asyncio
+async def test_token_is_read_again_on_every_connect(mock_server):
+    client = BlenderClient(mock_server.host, mock_server.port)
+    await client.connect()
+    await client.disconnect()
+    wire.token_path().write_text("rotated-token\n")
+    await client.connect()  # the mock compares with the file, so this passes only if re-read
+    await client.disconnect()
+    assert [h["params"]["token"] for h in mock_server.hellos][-1] == "rotated-token"
+
+
+@pytest.mark.asyncio
+async def test_silent_server_does_not_hang_the_handshake(mock_server):
+    mock_server.hello_gate = asyncio.Event()  # never set
+    client = BlenderClient(mock_server.host, mock_server.port)
+    with pytest.raises(BlenderConnectionError, match="timed out"):
+        await client.connect(timeout=0.3)
+    assert not client.connected
+    assert client._writer is None
+    mock_server.hello_gate.set()
+
+
+@pytest.mark.asyncio
+async def test_server_that_hangs_up_during_hello_is_reported(mock_server):
+    async def hang_up(reader, writer):
+        writer.close()
+
+    mock_server._server.close()
+    await mock_server._server.wait_closed()
+    mock_server._server = await asyncio.start_server(hang_up, mock_server.host, 0)
+    port = mock_server._server.sockets[0].getsockname()[1]
+    client = BlenderClient(mock_server.host, port)
+    with pytest.raises(BlenderConnectionError, match="handshake"):
+        await client.connect(timeout=5.0)
+    assert not client.connected
+
+
+@pytest.mark.asyncio
+async def test_not_connected_until_the_hello_reply_arrives(mock_server):
+    mock_server.hello_gate = asyncio.Event()
+    client = BlenderClient(mock_server.host, mock_server.port)
+    task = asyncio.create_task(client.connect(timeout=5.0))
+    await asyncio.wait_for(mock_server.hello_seen.wait(), 5)
+    assert not client.connected and client._read_task is None
+    mock_server.hello_gate.set()
+    await task
+    assert client.connected
+    await client.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_during_hello_leaves_the_client_disconnected(mock_server):
+    mock_server.hello_gate = asyncio.Event()
+    client = BlenderClient(mock_server.host, mock_server.port)
+    task = asyncio.create_task(client.connect(timeout=5.0))
+    await asyncio.wait_for(mock_server.hello_seen.wait(), 5)
+    await client.disconnect()
+    mock_server.hello_gate.set()
+    with pytest.raises(BlenderConnectionError):
+        await task
+    assert not client.connected
+    assert client._writer is None and client._read_task is None
+
+
+@pytest.mark.asyncio
+async def test_disconnect_after_the_reply_is_read_voids_the_open(mock_server):
+    """The reply is already buffered when disconnect() runs; the open must still lose."""
+    client = BlenderClient(mock_server.host, mock_server.port)
+    original = client._hello
+
+    async def hello_then_disconnect(*args):
+        await original(*args)
+        await client.disconnect()  # lands after the good reply, before _connected is set
+
+    client._hello = hello_then_disconnect
+    with pytest.raises(BlenderConnectionError):
+        await client.connect(timeout=5.0)
+    assert not client.connected
+    assert client._read_task is None

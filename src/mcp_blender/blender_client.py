@@ -3,8 +3,11 @@
 import asyncio
 import json
 import logging
+import os
 import uuid
 from typing import Any
+
+from . import __version__, wire
 
 logger = logging.getLogger("meshwire.client")
 
@@ -42,6 +45,7 @@ class BlenderClient:
         self._connected = False
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._read_task: asyncio.Task | None = None
+        self._epoch = 0  # bumped by disconnect(); an _open() that straddles one is void
 
     @property
     def connected(self) -> bool:
@@ -68,31 +72,125 @@ class BlenderClient:
             await self._open(timeout)
 
     async def _open(self, timeout: float) -> None:
+        """Connect, say hello and read its one reply. Only then is the client connected.
+
+        The token is read afresh on every connect, so a token that changed since the
+        last connection is noticed here and not cached past a restart of Blender.
+        """
+        token = wire.read_token()
+        if not token:
+            raise BlenderConnectionError(
+                f"No Meshwire token found at {wire.token_path()}. "
+                "Start the server in Blender's Meshwire tab first."
+            )
+        epoch = self._epoch
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port),
                 timeout=timeout,
             )
+            reader, writer = self._reader, self._writer
+            await self._hello(reader, writer, token, timeout)
+            if epoch != self._epoch:
+                raise BlenderConnectionError("Disconnected")
+            # No await between here and the end: a disconnect() cannot slip in and
+            # leave _connected True over a closed writer.
             self._connected = True
             logger.info(f"Connected to Blender at {self.host}:{self.port}")
-
-            # Start background reader task
             self._read_task = asyncio.create_task(self._read_loop())
 
         except asyncio.TimeoutError:
+            await self._abandon(epoch)
             raise BlenderConnectionError(
                 f"Connection to Blender timed out ({self.host}:{self.port})"
             )
         except ConnectionRefusedError:
+            await self._abandon(epoch)
             raise BlenderConnectionError(
                 f"Connection refused. Is Blender running with MCP addon enabled? ({self.host}:{self.port})"
             )
+        except BlenderConnectionError:
+            await self._abandon(epoch)
+            raise
         except OSError as e:
+            await self._abandon(epoch)
             raise BlenderConnectionError(f"Connection failed: {e}")
+
+    async def _abandon(self, epoch: int) -> None:
+        """Close a half-open connection, unless a disconnect() already did."""
+        if epoch == self._epoch:
+            await self.disconnect()
+
+    async def _hello(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        token: str,
+        timeout: float,
+    ) -> None:
+        """Send the hello line and check the add-on's one reply."""
+        request = wire.hello_request(token, str(uuid.uuid4()), client=f"meshwire {__version__}")
+        writer.write((json.dumps(request) + "\n").encode("utf-8"))
+        await asyncio.wait_for(writer.drain(), timeout=timeout)
+        try:
+            line = await asyncio.wait_for(reader.readline(), timeout=timeout)
+        except (ValueError, asyncio.LimitOverrunError):
+            raise BlenderConnectionError("Blender sent an unreadable reply to the hello")
+        except (ConnectionError, asyncio.IncompleteReadError):
+            line = b""
+        if not line.strip():
+            raise BlenderConnectionError(
+                "Blender closed the connection during the handshake. "
+                f"Is this a Meshwire add-on? ({self.host}:{self.port})"
+            )
+        try:
+            reply = json.loads(line.decode("utf-8"))
+        except ValueError:
+            reply = None
+        if not isinstance(reply, dict):
+            raise BlenderConnectionError(
+                f"Whatever answered on {self.host}:{self.port} is not a Meshwire add-on"
+            )
+        error = reply.get("error")
+        if error is not None:
+            raise self._hello_error(error)
+        result = reply.get("result")
+        if not isinstance(result, dict) or result.get("protocol") != wire.PROTOCOL:
+            raise BlenderConnectionError(
+                "The Meshwire add-on in Blender speaks a different protocol "
+                f"({result.get('protocol') if isinstance(result, dict) else None!r}, "
+                f"this server speaks {wire.PROTOCOL}). Update the older side."
+            )
+
+    @staticmethod
+    def _hello_error(error: Any) -> BlenderConnectionError:
+        code = error.get("code") if isinstance(error, dict) else None
+        message = str(error.get("message", error)) if isinstance(error, dict) else str(error)
+        if code == wire.E_UNAUTHORIZED:
+            text = (
+                f"Blender refused the Meshwire token. The token must match the one in "
+                f"Blender's Meshwire tab; this server reads {wire.token_path()}."
+            )
+            if os.environ.get("MESHWIRE_TOKEN", "").strip():
+                text += (
+                    " MESHWIRE_TOKEN is set and overrides that file. "
+                    "Restart the MCP client after changing it."
+                )
+            else:
+                text += " If the token changed, restart the MCP client."
+            return BlenderConnectionError(text)
+        # A v0.4.0 add-on has no hello: its dispatcher raises ValueError("Unknown
+        # method: hello") and the server wraps that as -32603. A -32601 is accepted too.
+        if code == -32601 or (code == -32603 and message.startswith("Unknown method")):
+            return BlenderConnectionError(
+                "The Meshwire add-on in Blender is older than this server. Update the add-on."
+            )
+        return BlenderConnectionError(message)
 
     async def disconnect(self) -> None:
         """Disconnect from Blender."""
         self._connected = False
+        self._epoch += 1  # voids an _open() still waiting on its hello
 
         # Take everything this connection owns before the first await below, so a
         # send_command that reconnects meanwhile installs state we never touch.

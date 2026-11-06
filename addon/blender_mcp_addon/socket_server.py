@@ -6,8 +6,10 @@ each complete request, queues the reply and sends as much of it as the socket wi
 take. Nothing here ever waits on a peer.
 """
 
+import hmac
 import json
 import socket
+import sys
 import time
 import traceback
 
@@ -33,8 +35,8 @@ class _Client:
         self.sock = sock
         self.rbuf = bytearray()  # bytes received, not yet a complete line
         self.wbuf = bytearray()  # reply bytes not yet sent
-        self.authed = False  # token auth sets this (nothing checks it yet)
-        self.deadline = 0.0  # monotonic time by which auth must finish; 0 means none
+        self.authed = False  # set by a good hello; until then only a hello is read
+        self.deadline = 0.0  # monotonic time by which hello must succeed; unused once authed
         self.closing = False  # close once wbuf drains; read nothing more
         self.close_at = 0.0  # monotonic time a closing client is dropped, drained or not
         self.eof = False  # the peer shut its sending side; read nothing more
@@ -64,6 +66,7 @@ class MCPSocketServer:
         self.handlers = CommandHandlers()
         self._timer_registered = False
         self._now = time.monotonic  # one clock for every timer; tests replace it
+        self._token = ""  # the token a hello must carry; set by start()
 
     @property
     def client_count(self) -> int:
@@ -76,6 +79,7 @@ class MCPSocketServer:
             return False
 
         try:
+            self._token = wire.ensure_token()
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.setblocking(False)
@@ -159,6 +163,7 @@ class MCPSocketServer:
                 return
             sock.setblocking(False)
             client = _Client(sock)
+            client.deadline = self._now() + wire.HELLO_SECONDS
             if len(self.clients) >= MAX_CLIENTS:
                 closing = sum(1 for c in self.clients.values() if c.closing)
                 if closing >= MAX_CLOSING:
@@ -179,6 +184,9 @@ class MCPSocketServer:
         now = self._now()
         for client in list(self.clients.values()):
             try:
+                if not client.authed and not client.closing and now >= client.deadline:
+                    client.dead = True  # no good hello in time: close, whatever it sent
+                    continue
                 self._read(client)
                 self._run_lines(client)
                 self._flush(client)
@@ -226,6 +234,9 @@ class MCPSocketServer:
         """
         while not client.dead and not client.wbuf and (not client.closing or client.eof):
             end = client.rbuf.find(b"\n")
+            if not client.authed and (end if end >= 0 else len(client.rbuf)) > wire.HELLO_MAX:
+                client.dead = True  # a first line past HELLO_MAX is not a hello: close, no reply
+                return
             if end < 0:
                 if client.eof:
                     client.rbuf.clear()  # a partial last line is dropped
@@ -239,7 +250,10 @@ class MCPSocketServer:
             del client.rbuf[: end + 1]
             if not line.strip():
                 continue
-            self._handle_line(client, line)
+            if client.authed:
+                self._handle_line(client, line)
+            else:
+                self._handle_hello(client, line)
             self._flush(client)
 
     def _too_large(self, client: _Client):
@@ -248,6 +262,66 @@ class MCPSocketServer:
             wire.E_TOO_LARGE,
             f"Request too large: a line may be at most {MAX_LINE} bytes",
         )
+
+    def _handle_hello(self, client: _Client, line: bytes):
+        """The first line of a connection. One try: a bad hello gets one reply or none, then a close."""
+        try:
+            message = json.loads(line.decode("utf-8"))
+        except (ValueError, RecursionError):
+            client.dead = True  # HTTP, garbage, binary: not a Meshwire client, so no reply
+            return
+        if not isinstance(message, dict):
+            client.dead = True
+            return
+        msg_id = message.get("id")
+        if message.get("method") != "hello":
+            self._fail(
+                client,
+                wire.E_PROTOCOL,
+                "This Meshwire add-on needs a newer Meshwire server. "
+                "Update it, for example `uvx meshwire@latest`.",
+                msg_id,
+            )
+            return
+        params = message.get("params")
+        params = params if isinstance(params, dict) else {}
+        token = params.get("token")
+        good = isinstance(token, str) and hmac.compare_digest(
+            token.encode("utf-8"), self._token.encode("utf-8")
+        )
+        if not good:
+            self._fail(
+                client,
+                wire.E_UNAUTHORIZED,
+                "Unauthorized: the token is missing or wrong. It must match the token "
+                "in Blender's Meshwire tab.",
+                msg_id,
+            )
+            return
+        theirs = params.get("protocol")
+        if theirs != wire.PROTOCOL:
+            newer = isinstance(theirs, int) and theirs > wire.PROTOCOL
+            side = "the Meshwire add-on in Blender" if newer else "the Meshwire server"
+            self._fail(
+                client,
+                wire.E_PROTOCOL,
+                f"Protocol mismatch: this add-on speaks protocol {wire.PROTOCOL}, "
+                f"the client speaks {theirs!r}. Update {side}.",
+                msg_id,
+            )
+            return
+        client.authed = True
+        client.deadline = 0.0
+        result = {"protocol": wire.PROTOCOL, "addon": self._addon_version(), "port": self.port}
+        self._queue(client, {"jsonrpc": "2.0", "result": result, "id": msg_id}, msg_id)
+
+    @staticmethod
+    def _addon_version() -> str:
+        info = getattr(sys.modules.get(__package__ or ""), "bl_info", None)
+        version = info.get("version") if isinstance(info, dict) else None
+        if isinstance(version, (tuple, list)):
+            return ".".join(map(str, version))
+        return "unknown"
 
     def _handle_line(self, client: _Client, line: bytes):
         try:
@@ -263,12 +337,16 @@ class MCPSocketServer:
             return
         self._queue(client, self._handle_message(message), message.get("id"))
 
-    def _fail(self, client: _Client, code: int, text: str):
+    def _fail(self, client: _Client, code: int, text: str, msg_id=None):
         """Queue an error reply, then close once it has been sent."""
         client.rbuf.clear()
-        self._queue(client, _error(code, text), None)
+        self._queue(client, _error(code, text, msg_id), msg_id)
         client.closing = True
-        client.close_at = self._now() + CLOSE_GRACE
+        now = self._now()
+        client.close_at = now + CLOSE_GRACE
+        if not client.authed and client.deadline:
+            # Failing a hello must not extend the client's stay past its hello deadline.
+            client.close_at = min(client.close_at, max(client.deadline, now))
 
     def _queue(self, client: _Client, response: dict, msg_id):
         """Encode a reply into wbuf, never past MAX_WBUF: an overflowing reply becomes an error reply."""

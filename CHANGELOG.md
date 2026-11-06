@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Only a client with the token can use the add-on's socket.** Until now any program on the machine could
+  connect to the port and drive Blender, and a web page could do it with a plain HTTP POST. The add-on now
+  makes a token in your Meshwire config folder (`~/.config/meshwire/token` on Linux, mode 0600) and expects
+  every connection to open with a `hello` carrying it, within 2 seconds and 4 KiB. Anything else is closed
+  at once; a wrong token, or a client that does not speak `hello`, gets one error that says what to update.
+  The server reads the token file on every connect, so it needs no setup. For another machine, set
+  `MESHWIRE_TOKEN` there (it overrides the file) and use **Copy token** in the Meshwire tab. A new server
+  against an older add-on, and the reverse, now say which side to update instead of hanging.
 - **Large replies arrive whole, and bad requests get an answer.** The add-on used to cut off any reply
   bigger than the socket buffer; a 32 MiB reply now arrives complete. A malformed, non-object, non-UTF-8 or
   oversized request, and a client past the connection limit, now get an error reply that says what was wrong,
