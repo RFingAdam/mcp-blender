@@ -17,8 +17,8 @@ _logger.info("Meshwire addon loaded, version %s", ".".join(map(str, bl_info["ver
 
 import bpy
 
-from . import security
-from .socket_server import MCPSocketServer
+from . import security, wire
+from .socket_server import MCPSocketServer, TokenError
 
 # The id Blender files this add-on's preferences under. It is the package name, so it
 # follows the add-on when it is installed as an extension. Never spell it out elsewhere.
@@ -149,7 +149,13 @@ class MCP_OT_StartServer(bpy.types.Operator):
         ports = [port] if port else range(PORT_FIRST, PORT_LAST + 1)
         for candidate in ports:
             server = MCPSocketServer(host=host, port=candidate)
-            if server.start():
+            try:
+                started = server.start()
+            except TokenError as e:
+                _server = None
+                self.report({"ERROR"}, str(e))  # not a port problem: do not try the next port
+                return {"CANCELLED"}
+            if started:
                 _server = server
                 self.report({"INFO"}, f"MCP server started on {host}:{candidate}")
                 return {"FINISHED"}
@@ -196,6 +202,33 @@ class MESHWIRE_OT_TogglePython(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MESHWIRE_OT_CopyToken(bpy.types.Operator):
+    """Copy the Meshwire token to the clipboard"""
+
+    bl_idname = "meshwire.copy_token"
+    bl_label = "Copy token"
+    bl_description = (
+        "Copy the token a Meshwire server needs to connect, for setting MESHWIRE_TOKEN on "
+        "another machine. Anyone holding it can drive this Blender"
+    )
+
+    def execute(self, context):
+        if _server is not None and _server.is_running:
+            token = _server.token  # what the running server accepts, not whatever the file says now
+        else:
+            try:
+                token = wire.ensure_token()
+            except OSError as e:
+                self.report(
+                    {"ERROR"},
+                    f"Could not read or create the Meshwire token at {wire.token_path()}: {e}",
+                )
+                return {"CANCELLED"}
+        context.window_manager.clipboard = token
+        self.report({"INFO"}, "Token copied to the clipboard")
+        return {"FINISHED"}
+
+
 class MCP_PT_ServerPanel(bpy.types.Panel):
     """MCP Server control panel"""
 
@@ -228,6 +261,7 @@ class MCP_PT_ServerPanel(bpy.types.Panel):
             # Show connected clients count
             client_count = _server.client_count
             layout.label(text=f"Connected clients: {client_count}")
+            layout.operator("meshwire.copy_token", icon="COPYDOWN")
         else:
             layout.label(text="Status: Stopped", icon="SNAP_FACE")
             layout.operator("mcp.start_server", icon="PLAY")
@@ -251,6 +285,7 @@ classes = (
     MCP_OT_StartServer,
     MCP_OT_StopServer,
     MESHWIRE_OT_TogglePython,
+    MESHWIRE_OT_CopyToken,
     MCP_PT_ServerPanel,
 )
 

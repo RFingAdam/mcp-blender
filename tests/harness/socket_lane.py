@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import socket
@@ -80,6 +83,11 @@ class Budget:
         return self._end - time.monotonic()
 
 
+def proof(token: str, label: str, *parts: str) -> str:
+    """Same HMAC as wire.proof, spelled out so the lane checks the protocol, not the module."""
+    return hmac.new(token.encode(), "\n".join((label, *parts)).encode(), hashlib.sha256).hexdigest()
+
+
 def encode_request(req_id: int, method: str, params: dict) -> bytes:
     msg = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
     return json.dumps(msg).encode("utf-8") + b"\n"
@@ -118,11 +126,45 @@ def read_reply(sock: socket.socket, budget: Budget) -> dict:
 class Conn:
     """One client connection; every call draws on the check's budget."""
 
-    def __init__(self, port: int, budget: Budget):
+    def __init__(self, port: int, budget: Budget, token: str | None = None):
+        """Connect. With a token the connection also says hello; without one it is raw."""
         self.budget = budget
+        self.port = port
+        self.token = token
         self._next_id = 0
         left = max(budget.remaining(), 0.1)
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=left)
+        if token is not None:
+            try:
+                self.handshake(token)
+            except BaseException:
+                self.close()
+                raise
+
+    def hello(self) -> tuple[str, dict]:
+        """Send hello with a fresh nonce; return (nonce, the add-on's result)."""
+        nonce = secrets.token_urlsafe(32)
+        result = self.call("hello", {"protocol": 1, "client": "socket-lane", "nonce": nonce})
+        return nonce, result
+
+    def handshake(self, token: str) -> None:
+        """The whole mutual handshake. The token is only ever an HMAC key here."""
+        nonce_c, result = self.hello()
+        ns = result["nonce"]
+        seen = result["seen"]
+        if not hmac.compare_digest(
+            result["proof"], proof(token, "meshwire-addon", nonce_c, ns, seen)
+        ):
+            raise BadReply("the add-on's proof did not verify")
+        if seen != f"127.0.0.1:{self.port}":
+            raise BadReply(f"the add-on says it saw {seen}, but this lane dialed port {self.port}")
+        got = self.call("hello_proof", {"proof": proof(token, "meshwire-client", ns, nonce_c)})
+        if got != {"ok": True}:
+            raise BadReply(f"hello_proof was not accepted: {got!r}")
+
+    def fresh(self, authed: bool = True) -> "Conn":
+        """Another connection to the same server, with or without hello."""
+        return Conn(self.port, self.budget, self.token if authed else None)
 
     def close(self) -> None:
         try:
@@ -252,8 +294,20 @@ class BlenderSession:
         self.starts = 0
 
     @property
+    def config_dir(self) -> Path:
+        """This run's own Meshwire config folder, so the lane never touches the user's."""
+        return self.out_dir / "config"
+
+    def token(self) -> str:
+        """The token the add-on wrote for this run. Never printed or logged."""
+        return (self.config_dir / "token").read_text(encoding="utf-8").strip()
+
+    @property
     def env(self) -> dict[str, str]:
-        return blender_env(self.out_dir / "tmp")
+        env = blender_env(self.out_dir / "tmp")
+        env.pop("MESHWIRE_TOKEN", None)
+        env["MESHWIRE_CONFIG_DIR"] = str(self.config_dir)
+        return env
 
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
@@ -299,8 +353,8 @@ class BlenderSession:
         if not self.alive():
             return False
         try:
-            conn = Conn(self.port, Budget(PING_TIMEOUT))
-        except OSError:
+            conn = Conn(self.port, Budget(PING_TIMEOUT), self.token())
+        except (OSError, CheckFailed, ConnectionClosed, ReplyTimeout, BadReply):
             return False
         try:
             return bool(conn.call("ping").get("pong"))
@@ -329,7 +383,7 @@ class BlenderSession:
         return True
 
     def connect(self, budget: Budget) -> Conn:
-        return Conn(self.port, budget)
+        return Conn(self.port, budget, self.token())
 
 
 # --- baseline -------------------------------------------------------------------
@@ -1386,7 +1440,7 @@ def check_malformed_json_error_reply(ctx: Ctx) -> str:
     if code != -32700:
         raise CheckFailed(f"error code {code}, expected -32700 (parse error)")
     _expect_eof(ctx.conn.sock, ctx.conn.budget)
-    fresh = Conn(ctx.conn.sock.getpeername()[1], ctx.conn.budget)
+    fresh = ctx.conn.fresh()
     try:
         if fresh.call("ping").get("pong") is not True:
             raise CheckFailed("fresh connection unusable after a malformed request")
@@ -1396,8 +1450,7 @@ def check_malformed_json_error_reply(ctx: Ctx) -> str:
 
 
 def check_client_vanishes_mid_reply(ctx: Ctx) -> str:
-    port = ctx.conn.sock.getpeername()[1]
-    gone = Conn(port, ctx.conn.budget)
+    gone = ctx.conn.fresh()
     try:
         gone.send_raw(encode_request(1, "execute_script", {"script": BIG_SCRIPT}))
         gone.sock.settimeout(max(ctx.conn.budget.remaining(), 0.1))
@@ -1409,7 +1462,7 @@ def check_client_vanishes_mid_reply(ctx: Ctx) -> str:
         gone.close()
     if ctx.conn.call("ping").get("pong") is not True:
         raise CheckFailed("the surviving connection stopped answering")
-    fresh = Conn(port, ctx.conn.budget)
+    fresh = ctx.conn.fresh()
     try:
         res = fresh.call("execute_script", {"script": "result = 6 * 7"})
     finally:
@@ -1417,6 +1470,175 @@ def check_client_vanishes_mid_reply(ctx: Ctx) -> str:
     if res.get("result") != 42:
         raise CheckFailed(f"a new client got {res!r} after one vanished mid-reply")
     return "client reset mid-reply; the server kept running and served the next client"
+
+
+def _read_until_closed(sock: socket.socket, budget: Budget, what: str) -> bytes:
+    """Read until the peer closes and return every byte it sent first.
+
+    A reset counts as a close: the add-on drops a connection that still has unread
+    bytes in its receive queue, and the kernel then sends RST instead of FIN.
+    """
+    got = bytearray()
+    while True:
+        left = budget.remaining()
+        if left <= 0:
+            raise CheckFailed(f"the connection stayed open: {what}")
+        sock.settimeout(left)
+        try:
+            data = sock.recv(65536)
+        except (socket.timeout, TimeoutError):
+            raise CheckFailed(f"the connection stayed open: {what}") from None
+        except ConnectionResetError:
+            return bytes(got)
+        if not data:
+            return bytes(got)
+        got += data
+
+
+def _object_exists(ctx: Ctx, name: str) -> bool:
+    return bool(ctx.conn.exec(f"result = {name!r} in bpy.data.objects"))
+
+
+def check_http_post_rejected(ctx: Ctx) -> str:
+    """A web page can POST to a local port. The add-on must close and run nothing."""
+    name = "HttpPostCube"
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "object_create",
+            "params": {"type": "cube", "name": name},
+        }
+    ).encode("utf-8")
+    request = (
+        b"POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: text/plain\r\n"
+        + b"Content-Length: %d\r\n\r\n" % len(body)
+        + body
+        + b"\n"
+    )
+    raw = ctx.conn.fresh(authed=False)
+    try:
+        raw.send_raw(request)
+        sent = _read_until_closed(raw.sock, raw.budget, "after an HTTP POST")
+    finally:
+        raw.close()
+    if _object_exists(ctx, name):
+        raise CheckFailed("the HTTP POST created an object")
+    if sent:
+        raise CheckFailed(f"the add-on answered an HTTP POST with {len(sent)} bytes: {sent[:80]!r}")
+    return "HTTP POST closed with no reply and no object created"
+
+
+def check_unauthenticated_call_refused(ctx: Ctx) -> str:
+    name = "NoHelloCube"
+    raw = ctx.conn.fresh(authed=False)
+    try:
+        raw.send_raw(encode_request(1, "object_create", {"type": "cube", "name": name}))
+        sent = _read_until_closed(raw.sock, raw.budget, "after a call with no hello")
+    finally:
+        raw.close()
+    if _object_exists(ctx, name):
+        raise CheckFailed("a call with no hello created an object")
+    if b"-32002" not in sent:
+        raise CheckFailed(f"expected the E_PROTOCOL reply, got {sent[:80]!r}")
+    return "a call with no hello ran nothing and was told to update"
+
+
+def check_wrong_token_rejected(ctx: Ctx) -> str:
+    raw = ctx.conn.fresh(authed=False)
+    try:
+        nonce_c, result = raw.hello()
+        wrong = proof("not-the-token", "meshwire-client", result["nonce"], nonce_c)
+        raw.send_raw(
+            encode_request(7, "hello_proof", {"proof": wrong}) + encode_request(8, "ping", {})
+        )
+        data = _read_until_closed(raw.sock, raw.budget, "after a wrong proof")
+    finally:
+        raw.close()
+    lines = [json.loads(line) for line in data.split(b"\n") if line.strip()]
+    if len(lines) != 1:
+        raise CheckFailed(f"expected exactly one reply, got {len(lines)}")
+    error = lines[0].get("error") or {}
+    if error.get("code") != -32001 or lines[0].get("id") != 7:
+        raise CheckFailed(f"expected E_UNAUTHORIZED for id 7, got {lines[0]!r}")
+    if ctx.conn.call("ping").get("pong") is not True:
+        raise CheckFailed("the authenticated connection stopped answering")
+    return "wrong token got one -32001 reply, then a close; the real client kept working"
+
+
+def check_old_client_told_to_update(ctx: Ctx) -> str:
+    raw = ctx.conn.fresh(authed=False)
+    try:
+        raw.send_raw(encode_request(3, "ping", {}))
+        data = _read_until_closed(raw.sock, raw.budget, "after a request with no hello")
+    finally:
+        raw.close()
+    lines = [json.loads(line) for line in data.split(b"\n") if line.strip()]
+    if len(lines) != 1:
+        raise CheckFailed(f"expected exactly one reply, got {len(lines)}")
+    error = lines[0].get("error") or {}
+    if error.get("code") != -32002 or lines[0].get("id") != 3:
+        raise CheckFailed(f"expected E_PROTOCOL for id 3, got {lines[0]!r}")
+    if "newer Meshwire server" not in error.get("message", ""):
+        raise CheckFailed(f"the message does not say to update the server: {error!r}")
+    return "a client that never says hello was told to update the server, then closed"
+
+
+def check_hello_timeout_closes(ctx: Ctx) -> str:
+    started = time.monotonic()
+    silent = ctx.conn.fresh(authed=False)
+    try:
+        sent = _read_until_closed(silent.sock, Budget(6.0), "with no hello sent")
+    finally:
+        silent.close()
+    waited = time.monotonic() - started
+    if sent:
+        raise CheckFailed(f"a silent client was sent {sent[:80]!r}")
+    if not 1.5 <= waited <= 5.0:
+        raise CheckFailed(f"closed after {waited:.1f}s, expected about 2s")
+    # The deadline covers both lines: a hello with no hello_proof is closed too.
+    started = time.monotonic()
+    half = ctx.conn.fresh(authed=False)
+    try:
+        half.hello()
+        sent = _read_until_closed(half.sock, Budget(6.0), "after hello with no proof")
+    finally:
+        half.close()
+    if sent:
+        raise CheckFailed(f"a client that stalled after hello was sent {sent[:80]!r}")
+    if time.monotonic() - started > 5.0:
+        raise CheckFailed("a client that stalled after hello was held past the deadline")
+    # The deadline is for the handshake only: an authenticated client idle past it stays.
+    if ctx.conn.call("ping").get("pong") is not True:
+        raise CheckFailed("the authenticated connection was dropped")
+    return f"a silent client was closed after {waited:.1f}s; the authenticated one stayed"
+
+
+def check_copy_token_matches_running_server(ctx: Ctx) -> str:
+    """With the token file gone, Copy token must still give the token the server accepts."""
+    path = ctx.out_dir / "config" / "token"  # the run's own folder (BlenderSession)
+    saved = path.read_bytes()
+    path.unlink()
+    try:
+        copied = ctx.conn.exec(
+            "bpy.context.window_manager.clipboard = ''\n"
+            "r = bpy.ops.meshwire.copy_token()\n"
+            "result = [list(r), bpy.context.window_manager.clipboard]"
+        )
+        if copied[0] != ["FINISHED"] or not copied[1]:
+            raise CheckFailed(f"copy_token did not put a token on the clipboard: {copied[0]!r}")
+        if path.exists():
+            raise CheckFailed("copy_token wrote a new token file under a running server")
+        try:
+            Conn(ctx.conn.port, ctx.conn.budget, copied[1]).close()
+        except (CheckFailed, ConnectionClosed, BadReply, ReplyTimeout, OSError) as exc:
+            raise CheckFailed(
+                f"the server does not accept the copied token ({type(exc).__name__})"
+            ) from None
+    finally:
+        path.write_bytes(saved)
+        path.chmod(0o600)
+    return "Copy token yields the token the running server accepts, even with the file gone"
 
 
 BAKE_SIZE = 32
@@ -1980,6 +2202,12 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("reply_32mb_complete", check_reply_32mb_complete, CHECK_TIMEOUT),
     ("malformed_json_error_reply", check_malformed_json_error_reply, CHECK_TIMEOUT),
     ("client_vanishes_mid_reply", check_client_vanishes_mid_reply, CHECK_TIMEOUT),
+    ("http_post_rejected", check_http_post_rejected, CHECK_TIMEOUT),
+    ("unauthenticated_call_refused", check_unauthenticated_call_refused, CHECK_TIMEOUT),
+    ("wrong_token_rejected", check_wrong_token_rejected, CHECK_TIMEOUT),
+    ("old_client_told_to_update", check_old_client_told_to_update, CHECK_TIMEOUT),
+    ("hello_timeout_closes", check_hello_timeout_closes, CHECK_TIMEOUT),
+    ("copy_token_matches_running_server", check_copy_token_matches_running_server, CHECK_TIMEOUT),
     ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
     ("bake_leaves_material_clean", check_bake_leaves_material_clean, 150.0),
     ("bake_tricks_leave_material_clean", check_bake_tricks_leave_material_clean, 180.0),

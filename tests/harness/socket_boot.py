@@ -9,6 +9,7 @@ inspect scene state without leaning on the tools it is checking:
   harness_reset  reload the fixture scene
   harness_exec   run a snippet and return its ``result`` variable
 
+MESHWIRE_CONFIG_DIR must point at the run's own folder: the server makes its token there.
 The add-on is imported, not enabled through addon_utils, so Blender has no
 preferences entry for it and the add-on runs on its preference defaults.
 """
@@ -49,6 +50,11 @@ def main(argv):
     sys.path.insert(0, ADDON_DIR)
     sys.path.insert(0, HERE)
 
+    if not args.build_scene and not os.environ.get("MESHWIRE_CONFIG_DIR"):
+        # The server writes a token file on start. Never let a test run write the user's.
+        print("MESHWIRE_CONFIG_DIR must be set to this run's own folder", flush=True)
+        os._exit(3)
+
     if args.build_scene:
         import scene
 
@@ -57,7 +63,7 @@ def main(argv):
 
     try:
         import blender_mcp_addon
-        from blender_mcp_addon.socket_server import MCPSocketServer
+        from blender_mcp_addon.socket_server import MCPSocketServer, TokenError
 
         # Register first, as Blender does when the addon is enabled, so a break in
         # class or property registration turns the lane red.
@@ -66,9 +72,17 @@ def main(argv):
         blender_mcp_addon.security.set_python_allowed(True)
         server = MCPSocketServer(host="127.0.0.1", port=args.port)
         _install_harness_handlers(server, args.scene)
-        if not server.start():
+        try:
+            started = server.start()
+        except TokenError as exc:
+            # Not a taken port: exit with a different code so the lane does not retry.
+            print(str(exc), flush=True)
+            os._exit(3)
+        if not started:
             print(f"server failed to start on port {args.port}", flush=True)
             os._exit(BIND_FAILED_EXIT)
+        # The panel's operators find the running server here, as they do in a real session.
+        blender_mcp_addon._server = server
     except BaseException:
         traceback.print_exc()
         sys.stdout.flush()
