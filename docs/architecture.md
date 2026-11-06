@@ -12,7 +12,7 @@ How `meshwire` is built.
 │  │  (Python)      │                                              │
 │  └───────┬────────┘                                              │
 └──────────┼───────────────────────────────────────────────────────┘
-           │ TCP/JSON-RPC on localhost:9876-9885
+           │ TCP/JSON-RPC on localhost:9876-9885, token handshake
 ┌──────────▼───────────────────────────────────────────────────────┐
 │  Blender addon (runs inside Blender)                             │
 │  ┌────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
@@ -70,6 +70,11 @@ meshwire/
   Blender runs the addon as a TCP-listening helper. Keeps Blender out
   of the MCP message loop and makes the server safe to restart without
   losing Blender state.
+- **Token handshake, no transport encryption.** The first line on a connection must be `hello`,
+  followed by `hello_proof`, both within 2 seconds. Each side proves it holds the token with
+  HMAC-SHA256 over fresh nonces, so the token never crosses the socket, and `wire.py` holds the shared
+  code. After that the stream is plain newline-delimited JSON with no encryption or integrity check, so
+  the add-on belongs on a loopback address (use an SSH tunnel for remote use). See `SECURITY.md`.
 - **`bpy.app.timers` dispatch.** A timer polls the socket and runs each
   command inline on Blender's main thread.
 - **20-file handler package.** Originally a single `handlers.py`; was

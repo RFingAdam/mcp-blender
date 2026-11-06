@@ -233,8 +233,10 @@ metrics (model / texture / animation).
 `refine_iteration`, `refine_create_session`, `refine_get_session`,
 `refine_list_sessions`.
 
-`execute_script` refuses every call until the user turns on **Allow Python** in the Meshwire sidebar
-tab in Blender. The switch is off at every start and cannot be set by any tool.
+`execute_script` runs any Python it is sent, with Blender's rights. It refuses every call until the
+user turns on **Allow Python** in the Meshwire sidebar tab in Blender. The switch is off at every
+start and cannot be set by any tool, socket message or `.blend` file. Before 0.5.0 it had no switch
+and the socket had no token (see `SECURITY.md`).
 
 See [`usage.md`](usage.md#scenario-iterative-3d-refinement) for a
 full walkthrough.
