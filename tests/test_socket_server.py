@@ -267,8 +267,9 @@ def read_all(srv, sock, seconds=10.0):
             data = sock.recv(1 << 20)
         except BlockingIOError:
             return False
-        except ConnectionResetError:
-            # The server closed a socket that still held unread bytes. That is a close.
+        except (ConnectionResetError, ConnectionAbortedError):
+            # The server closed a socket that still held unread bytes, or (Windows, WinError
+            # 10053) the test wrote to a socket the server had already closed. That is a close.
             data = b""
         if not data:
             state["eof"] = True
