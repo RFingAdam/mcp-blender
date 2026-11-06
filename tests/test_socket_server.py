@@ -6,6 +6,7 @@ tick callback. Nothing runs on a timer: each test calls ``_tick`` by hand.
 
 import importlib
 import json
+import select
 import socket
 import sys
 import time
@@ -688,6 +689,13 @@ def only_client(srv):
     return client
 
 
+def arrived(srv):
+    """Block until the add-on's side of the only client has bytes to read. A stall test
+    must not start until the line is really there (loopback delivery can lag on macOS)."""
+    ready, _, _ = select.select([only_client(srv).sock], [], [], 10.0)
+    assert ready, "the line never reached the add-on's socket"
+
+
 def hello_only(srv, sock, **kw):
     """Send a good hello and return (nc, hello result)."""
     nc = WIRE.new_nonce()
@@ -971,22 +979,81 @@ def test_a_pre_auth_client_is_read_only_up_to_the_hello_limit(server, mod):
     assert sum(sizes) <= mod.wire.HELLO_MAX + 1 + len(sizes)  # at most one short read per tick
 
 
-def test_hello_after_deadline_closed(server, mod):
+def test_slow_hello_is_closed_before_it_is_sent(server, mod):
+    """The clock passes the deadline, the server ticks with nothing to read, and only then
+    does the client send. It gets no reply."""
     clock = with_clock(server)
     sock = connect(server, auth=False)
     tick(server)
     clock.t += mod.wire.HELLO_SECONDS + 0.01
+    tick(server)
+    assert not server.clients
     sock.sendall(hello_line())
     assert read_all(server, sock) == b""
 
 
-def test_proof_after_deadline_closed(server, mod):
-    """The deadline covers both lines: a slow second step is closed too."""
+def test_slow_proof_is_closed_before_it_is_sent(server, mod):
+    """Same for the second step: the proof's own 2 s run out with nothing to read."""
     clock = with_clock(server)
     sock = connect(server, auth=False)
     tick(server)
     nc, result = hello_only(server, sock)
     clock.t += mod.wire.HELLO_SECONDS + 0.01
+    tick(server)
+    assert not server.clients
+    sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert read_all(server, sock) == b""
+    assert server.client_count == 0
+
+
+def test_hello_that_arrived_during_a_stall_is_answered(server, mod):
+    """Blender stalls past the deadline after the hello arrived: the server cannot tell
+    late from read late, so the client is not charged for the stall."""
+    clock = with_clock(server)
+    sock = connect(server, auth=False)
+    tick(server)
+    sock.sendall(hello_line())
+    arrived(server)
+    clock.t += mod.wire.HELLO_SECONDS + 1.0  # the stall: no tick in between
+    assert read_line(server, sock)["result"]["protocol"] == 1
+
+
+def test_proof_that_arrived_during_a_stall_authenticates(server, mod):
+    clock = with_clock(server)
+    sock = connect(server, auth=False)
+    tick(server)
+    nc, result = hello_only(server, sock)
+    sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    arrived(server)
+    clock.t += mod.wire.HELLO_SECONDS + 1.0  # the stall
+    pump(server, until=lambda: bool(server.clients) and only_client(server).authed)
+    assert read_line(server, sock)["result"] == {"ok": True}
+    request(sock, "ping", req_id=7)
+    assert read_line(server, sock)["id"] == 7
+
+
+def test_proof_gets_two_seconds_from_the_hello_reply(server, mod):
+    clock = with_clock(server)
+    sock = connect(server, auth=False)
+    tick(server)
+    clock.t += mod.wire.HELLO_SECONDS - 0.1
+    nc, result = hello_only(server, sock)
+    clock.t += 0.5  # past the accept deadline, well inside the reply's 2 s
+    tick(server)
+    assert server.clients
+    sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
+    assert read_line(server, sock)["result"] == {"ok": True}
+    assert only_client(server).authed
+
+
+def test_proof_too_slow_after_the_reply_is_closed(server, mod):
+    clock = with_clock(server)
+    sock = connect(server, auth=False)
+    tick(server)
+    clock.t += mod.wire.HELLO_SECONDS - 0.1
+    nc, result = hello_only(server, sock)
+    clock.t += mod.wire.HELLO_SECONDS + 0.1  # past reply time + HELLO_SECONDS
+    tick(server)
     sock.sendall(proof_line(WIRE.proof(server.token, WIRE.CLIENT_LABEL, result["nonce"], nc)))
     assert read_all(server, sock) == b""
     assert server.client_count == 0
