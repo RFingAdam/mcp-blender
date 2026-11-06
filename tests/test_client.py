@@ -196,3 +196,127 @@ class TestBlenderClient:
         assert client.connected
 
         await client.disconnect()
+
+
+class RawServer:
+    """A server that writes exactly the bytes a test gives it after the first request."""
+
+    def __init__(self, payload: bytes):
+        self.payload = payload
+        self.port = 0
+        self._server = None
+
+    async def __aenter__(self):
+        self._server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
+        self.port = self._server.sockets[0].getsockname()[1]
+        return self
+
+    async def __aexit__(self, *exc):
+        self._server.close()
+        await self._server.wait_closed()
+
+    async def _handle(self, reader, writer):
+        try:
+            await reader.readline()
+            writer.write(self.payload)
+            await writer.drain()
+            await asyncio.sleep(0.3)
+        except ConnectionError:
+            pass
+        finally:
+            writer.close()
+
+
+@pytest.mark.asyncio
+async def test_client_reads_32mib_reply():
+    """A reply far past asyncio's 64 KiB stream limit still arrives whole."""
+    size = 32 * 1024 * 1024
+    big = "x" * size
+
+    class Echo(MockBlenderServer):
+        def _process_request(self, request):
+            return {"jsonrpc": "2.0", "result": big, "id": request["id"]}
+
+    async with Echo() as server:
+        async with BlenderClient(server.host, server.port) as client:
+            result = await client.send_command("big", timeout=60.0)
+    assert len(result) == size
+
+
+@pytest.mark.asyncio
+async def test_id_null_error_fails_pending_with_its_message():
+    """The add-on answers a bad line with id null, then closes; say why, not 'Disconnected'."""
+    error = {
+        "jsonrpc": "2.0",
+        "error": {"code": -32700, "message": "Parse error: nope"},
+        "id": None,
+    }
+    async with RawServer(json.dumps(error).encode() + b"\n") as server:
+        client = BlenderClient("127.0.0.1", server.port)
+        with pytest.raises(BlenderCommandError, match="Parse error: nope"):
+            await client.send_command("ping", timeout=5.0)
+        await client.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_reply_line_over_the_cap_is_refused():
+    from mcp_blender import blender_client
+
+    old = blender_client.MAX_REPLY_LINE
+    blender_client.MAX_REPLY_LINE = 100_000
+    try:
+        async with RawServer(b"x" * 300_000) as server:
+            client = BlenderClient("127.0.0.1", server.port)
+            with pytest.raises(BlenderConnectionError, match="too large"):
+                await client.send_command("ping", timeout=5.0)
+            await client.disconnect()
+    finally:
+        blender_client.MAX_REPLY_LINE = old
+
+
+@pytest.mark.asyncio
+async def test_reconnect_during_disconnect_is_not_wiped_out(mock_server):
+    """A connect() that lands while disconnect() awaits wait_closed() keeps its writer."""
+    client = BlenderClient(mock_server.host, mock_server.port)
+    await client.connect()
+    real = client._writer
+
+    class Slow:
+        def close(self):
+            real.close()
+
+        async def wait_closed(self):
+            await client.connect()  # the reconnect happens inside the await
+            await real.wait_closed()
+
+    client._writer = Slow()
+    await client.disconnect()
+    assert client.connected
+    assert await client.ping() is True
+    await client.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_send_command_opens_one_connection(mock_server):
+    accepted = []
+    original = mock_server._handle_client
+
+    async def counting(reader, writer):
+        accepted.append(1)
+        await original(reader, writer)
+
+    mock_server._server.close()
+    await mock_server._server.wait_closed()
+    mock_server._server = await asyncio.start_server(counting, mock_server.host, 0)
+    mock_server.port = mock_server._server.sockets[0].getsockname()[1]
+
+    client = BlenderClient(mock_server.host, mock_server.port)
+    try:
+        first, second = await asyncio.gather(
+            client.send_command("ping", timeout=5.0),
+            client.send_command("ping", timeout=5.0),
+        )
+    finally:
+        await client.disconnect()
+    assert first["pong"] and second["pong"]
+    assert len(accepted) == 1

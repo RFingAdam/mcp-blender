@@ -38,7 +38,7 @@ BIND_FAILED_EXIT = 4  # socket_boot.py exit code when the port was taken
 START_ATTEMPTS = 3
 RENDER_SIZE = 64
 SCREEN = "1280x800x24"
-BIG_REPLY_BYTES = 16 * 1024 * 1024
+BIG_REPLY_BYTES = 32 * 1024 * 1024
 
 
 # --- protocol -------------------------------------------------------------------
@@ -1341,11 +1341,15 @@ def check_execute_script_refused_when_off(ctx: Ctx) -> str:
     return "refused with the exact text and no object, ran again once the switch was on"
 
 
-def check_reply_16mb_complete(ctx: Ctx) -> str:
-    unit = "abcdefghijklmnopqrstuvwxyz0123456789"
-    expected = (unit * (BIG_REPLY_BYTES // len(unit) + 1))[:BIG_REPLY_BYTES]
-    script = f"unit = {unit!r}\nn = {BIG_REPLY_BYTES}\nresult = (unit * (n // len(unit) + 1))[:n]\n"
-    res = ctx.conn.call("execute_script", {"script": script})
+BIG_UNIT = "abcdefghijklmnopqrstuvwxyz0123456789"
+BIG_SCRIPT = (
+    f"unit = {BIG_UNIT!r}\nn = {BIG_REPLY_BYTES}\nresult = (unit * (n // len(unit) + 1))[:n]\n"
+)
+
+
+def check_reply_32mb_complete(ctx: Ctx) -> str:
+    expected = (BIG_UNIT * (BIG_REPLY_BYTES // len(BIG_UNIT) + 1))[:BIG_REPLY_BYTES]
+    res = ctx.conn.call("execute_script", {"script": BIG_SCRIPT})
     got = res.get("result")
     if not isinstance(got, str):
         raise CheckFailed(f"reply result is {type(got).__name__}, expected str")
@@ -1353,7 +1357,24 @@ def check_reply_16mb_complete(ctx: Ctx) -> str:
         raise CheckFailed(f"reply result is {len(got)} chars, expected {len(expected)}")
     if got != expected:
         raise CheckFailed("reply result has the right length but different content")
-    return "16 MiB reply arrived complete and intact"
+    return "32 MiB reply arrived complete and intact"
+
+
+def _expect_eof(sock: socket.socket, budget: Budget) -> None:
+    """Read until the peer closes. Anything but a clean close fails the check."""
+    while True:
+        left = budget.remaining()
+        if left <= 0:
+            raise CheckFailed("the connection stayed open after the error reply")
+        sock.settimeout(left)
+        try:
+            data = sock.recv(65536)
+        except (socket.timeout, TimeoutError):
+            raise CheckFailed("the connection stayed open after the error reply") from None
+        except OSError as exc:
+            raise CheckFailed(f"the connection broke instead of closing cleanly: {exc}") from exc
+        if not data:
+            return
 
 
 def check_malformed_json_error_reply(ctx: Ctx) -> str:
@@ -1364,9 +1385,38 @@ def check_malformed_json_error_reply(ctx: Ctx) -> str:
     code = reply["error"].get("code")
     if code != -32700:
         raise CheckFailed(f"error code {code}, expected -32700 (parse error)")
+    _expect_eof(ctx.conn.sock, ctx.conn.budget)
+    fresh = Conn(ctx.conn.sock.getpeername()[1], ctx.conn.budget)
+    try:
+        if fresh.call("ping").get("pong") is not True:
+            raise CheckFailed("fresh connection unusable after a malformed request")
+    finally:
+        fresh.close()
+    return "parse error reply, then close; a fresh connection works"
+
+
+def check_client_vanishes_mid_reply(ctx: Ctx) -> str:
+    port = ctx.conn.sock.getpeername()[1]
+    gone = Conn(port, ctx.conn.budget)
+    try:
+        gone.send_raw(encode_request(1, "execute_script", {"script": BIG_SCRIPT}))
+        gone.sock.settimeout(max(ctx.conn.budget.remaining(), 0.1))
+        if not gone.sock.recv(4096):
+            raise CheckFailed("the server closed before sending any of the reply")
+        # Reset the connection while most of the reply is still queued in Blender.
+        gone.sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    finally:
+        gone.close()
     if ctx.conn.call("ping").get("pong") is not True:
-        raise CheckFailed("connection unusable after a malformed request")
-    return "parse error reply, connection still usable"
+        raise CheckFailed("the surviving connection stopped answering")
+    fresh = Conn(port, ctx.conn.budget)
+    try:
+        res = fresh.call("execute_script", {"script": "result = 6 * 7"})
+    finally:
+        fresh.close()
+    if res.get("result") != 42:
+        raise CheckFailed(f"a new client got {res!r} after one vanished mid-reply")
+    return "client reset mid-reply; the server kept running and served the next client"
 
 
 BAKE_SIZE = 32
@@ -1927,8 +1977,9 @@ CHECKS: list[tuple[str, Callable[[Ctx], str], float]] = [
     ("failed_call_adds_no_undo_step", check_failed_call_adds_no_undo_step, CHECK_TIMEOUT),
     ("execute_script_stdout", check_execute_script_stdout, CHECK_TIMEOUT),
     ("execute_script_refused_when_off", check_execute_script_refused_when_off, CHECK_TIMEOUT),
-    ("reply_16mb_complete", check_reply_16mb_complete, CHECK_TIMEOUT),
+    ("reply_32mb_complete", check_reply_32mb_complete, CHECK_TIMEOUT),
     ("malformed_json_error_reply", check_malformed_json_error_reply, CHECK_TIMEOUT),
+    ("client_vanishes_mid_reply", check_client_vanishes_mid_reply, CHECK_TIMEOUT),
     ("bake_pbr_writes_image", check_bake_pbr_writes_image, 120.0),
     ("bake_leaves_material_clean", check_bake_leaves_material_clean, 150.0),
     ("bake_tricks_leave_material_clean", check_bake_tricks_leave_material_clean, 180.0),
